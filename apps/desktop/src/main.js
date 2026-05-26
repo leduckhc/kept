@@ -38,8 +38,8 @@ function renderTopBar() {
 
   const title = el('div', { className: 'inbox-title' });
   title.append(
-    el('p', { className: 'eyebrow', text: 'Inbox' }),
-    el('h1', { text: `${inboxCount} messages · ${unreadCount} unread` }),
+    el('h1', { text: 'Inbox' }),
+    el('span', { className: 'inbox-count', text: `${inboxCount} messages · ${unreadCount} unread` }),
   );
 
   const search = el('label', { className: 'search-box', ariaLabel: 'Ask or search mail' });
@@ -135,10 +135,7 @@ function renderThreadRow(thread, sectionId) {
   );
 
   const actions = el('div', { className: 'row-actions', ariaLabel: `Actions for ${thread.subject}` });
-  actions.append(
-    el('button', { type: 'button', text: 'Keep', ariaLabel: `Keep ${thread.subject}` }),
-    el('button', { type: 'button', text: 'Archive', ariaLabel: `Archive ${thread.subject}` }),
-  );
+  actions.append(el('button', { type: 'button', text: '⋯', ariaLabel: `More actions for ${thread.subject}` }));
   row.append(actions);
   return row;
 }
@@ -156,12 +153,12 @@ function renderAvatar(thread) {
 }
 
 function formatTime(value) {
-  return new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
+  const received = new Date(value);
+  const sameDay = received.toISOString().slice(0, 10) === inboxNow.toISOString().slice(0, 10);
+  if (sameDay) {
+    return new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' }).format(received);
+  }
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(received);
 }
 
 function el(tagName, options = {}) {
