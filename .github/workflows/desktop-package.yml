@@ -8,7 +8,6 @@ on:
   workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   KEPT_MACOS_VERSION: "0.1.0"
 
 jobs:
@@ -17,7 +16,7 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Confirm Apple Silicon runner
         run: |
@@ -25,7 +24,7 @@ jobs:
           test "$(uname -m)" = "arm64"
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -84,21 +83,21 @@ jobs:
           ls -lah "$APP_PATH" "$DMG_PATH" "$ZIP_DIR"
 
       - name: Upload macOS Apple Silicon app bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Kept-macos-apple-silicon-app
           path: apps/desktop/src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: error
 
       - name: Upload macOS Apple Silicon DMG
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Kept-macos-apple-silicon-dmg
           path: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - name: Upload macOS Apple Silicon app zip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Kept-macos-apple-silicon-app-zip
           path: |
