@@ -1,0 +1,1 @@
+{"name":"@kept/ai-core","version":"0.1.0","type":"module","private":true,"main":"src/index.js","scripts":{"typecheck":"node -c src/index.js","lint":"node -c src/index.js","build":"node -c src/index.js","demo:summary":"node scripts/demo-summary.mjs"}}
