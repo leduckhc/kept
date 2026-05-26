@@ -1,12 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createInMemorySearchIndex } from '../src/index.js';
+import { buildSearchRows, createInMemorySearchIndex, encryptionDecision, sqliteSchema } from '../src/index.js';
 
 test('search ranks matching local threads', () => {
   const index = createInMemorySearchIndex();
-  index.addThread({ subject: 'Invoice next week', sender: 'a', body: 'contract invoice next week' });
-  index.addThread({ subject: 'Dinner', sender: 'b', body: 'restaurant list' });
+  index.addThread({ id: 'a', subject: 'Invoice next week', sender: 'a', recipients: ['you@kept.local'], body: 'contract invoice next week', receivedAt: '2026-05-25T00:00:00Z' });
+  index.addThread({ id: 'b', subject: 'Dinner', sender: 'b', recipients: ['you@kept.local'], body: 'restaurant list', receivedAt: '2026-05-24T00:00:00Z' });
   const [first] = index.search('invoice next week');
   assert.equal(first.subject, 'Invoice next week');
   assert.equal(first.score, 3);
+});
+
+test('empty query returns no local results', () => {
+  const index = createInMemorySearchIndex();
+  index.addThread({ id: 'a', subject: 'Invoice', sender: 'a', body: 'body' });
+  assert.deepEqual(index.search('   '), []);
+});
+
+test('schema includes local email storage and FTS5 tables', () => {
+  for (const name of ['accounts', 'threads', 'messages', 'attachment_metadata', 'messages_fts']) {
+    assert.match(sqliteSchema, new RegExp(name));
+  }
+  assert.match(sqliteSchema, /fts5/i);
+});
+
+test('buildSearchRows keeps ciphertext placeholder separate from preview index', () => {
+  const rows = buildSearchRows({ id: 'thr1', subject: 'Subject', sender: 'sender@example.com', recipients: ['you@example.com'], body: 'private message body' });
+  assert.equal(rows.message.body_ciphertext, '[encrypted-body-placeholder]');
+  assert.equal(rows.fts.body_preview, 'private message body');
+});
+
+test('encryption decision records SQLCipher preference and fallback', () => {
+  assert.match(encryptionDecision.choice, /SQLCipher/);
+  assert.match(encryptionDecision.choice, /fallback/);
 });
