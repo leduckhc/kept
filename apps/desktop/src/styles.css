@@ -1,14 +1,14 @@
 * { box-sizing: border-box; }
 
 :root {
-  --paper: #f8f1e5;
-  --ink: #1e211b;
-  --muted: #6f725f;
-  --line: #e2d8c8;
-  --soft-line: #eee7dc;
-  --card: rgba(255, 255, 255, 0.82);
-  --card-strong: #fffdf8;
-  --accent-soft: #eef4df;
+  --paper: #fbfaff;
+  --ink: #1f1b2d;
+  --muted: #756f88;
+  --line: #e8e3f4;
+  --soft-line: #f4f1fb;
+  --card: rgba(255, 255, 255, 0.9);
+  --card-strong: #ffffff;
+  --accent-soft: #f7f4ff;
 }
 
 body {
@@ -16,8 +16,8 @@ body {
   min-width: 320px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at 12% 10%, rgba(234, 214, 187, 0.64), transparent 32%),
-    linear-gradient(135deg, #f5f5f1 0%, #f7efe3 100%);
+    radial-gradient(circle at 12% 10%, rgba(124, 92, 255, 0.08), transparent 30%),
+    linear-gradient(135deg, #ffffff 0%, #fbfaff 100%);
   color: var(--ink);
 }
 
@@ -34,7 +34,7 @@ button {
 button:focus-visible,
 input:focus-visible,
 .thread-row:focus-visible {
-  outline: 3px solid rgba(109, 123, 53, 0.26);
+  outline: 3px solid rgba(124, 92, 255, 0.24);
   outline-offset: 3px;
 }
 
@@ -48,10 +48,10 @@ input:focus-visible,
   max-width: 1524px;
   margin: 0 auto;
   padding: 34px clamp(32px, 7vw, 112px) 46px;
-  border: 1px solid rgba(226, 216, 200, 0.82);
+  border: 1px solid rgba(232, 227, 244, 0.9);
   border-radius: 34px;
-  background: rgba(255, 253, 248, 0.78);
-  box-shadow: 0 30px 90px rgba(78, 61, 37, 0.11);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 30px 90px rgba(68, 49, 113, 0.08);
 }
 
 .topbar {
@@ -121,9 +121,9 @@ h1 {
   padding: 0 12px 0 16px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.88);
   color: var(--muted);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .search-box input {
@@ -136,7 +136,7 @@ h1 {
 }
 
 .search-box input::placeholder {
-  color: #8a856f;
+  color: #948ca8;
 }
 
 .search-icon {
@@ -147,10 +147,10 @@ h1 {
 kbd {
   flex: none;
   padding: 4px 8px;
-  border: 1px solid #ddd1bf;
+  border: 1px solid #e8e3f4;
   border-radius: 9px;
-  background: #f8f2e8;
-  color: #625c4f;
+  background: #f4f1fb;
+  color: #756f88;
   font-size: 12px;
   font-weight: 800;
 }
@@ -158,7 +158,7 @@ kbd {
 .status-pill {
   justify-self: end;
   gap: 8px;
-  color: #5d6542;
+  color: #6d5ad7;
   font-size: 13px;
   white-space: nowrap;
 }
@@ -168,7 +168,7 @@ kbd {
   height: 9px;
   border-radius: 999px;
   background: var(--accent);
-  box-shadow: 0 0 0 5px rgba(109, 123, 53, 0.12);
+  box-shadow: 0 0 0 5px rgba(124, 92, 255, 0.12);
 }
 
 .new-senders,
@@ -183,7 +183,7 @@ kbd {
 }
 
 .section-header h2 {
-  color: #6d654f;
+  color: #756f88;
   font-size: 13px;
   font-weight: 900;
   letter-spacing: 0.14em;
@@ -191,7 +191,7 @@ kbd {
 }
 
 .section-header span {
-  color: #8a856f;
+  color: #948ca8;
   font-size: 13px;
 }
 
@@ -206,7 +206,7 @@ kbd {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.78);
-  color: #69634f;
+  color: #756f88;
   font-size: 21px;
   line-height: 1;
 }
@@ -230,7 +230,7 @@ kbd {
   border: 1px solid var(--soft-line);
   border-radius: 24px;
   background: var(--card);
-  box-shadow: 0 16px 45px rgba(75, 58, 35, 0.07);
+  box-shadow: 0 16px 45px rgba(68, 49, 113, 0.055);
 }
 
 .avatar {
@@ -240,7 +240,7 @@ kbd {
   width: 34px;
   height: 34px;
   border-radius: 13px;
-  color: #34362d;
+  color: #1f1b2d;
   font-size: 12px;
   font-weight: 900;
 }
@@ -304,9 +304,9 @@ kbd {
 
 .sender-actions .block,
 .row-actions button {
-  border: 1px solid #ded4c3;
-  background: #f8f2e9;
-  color: #5f5a4a;
+  border: 1px solid #e8e3f4;
+  background: #f4f1fb;
+  color: #756f88;
 }
 
 .thread-section + .thread-section {
@@ -324,15 +324,15 @@ kbd {
   min-height: 44px;
   gap: 11px;
   padding: 5px 10px;
-  border: 1px solid rgba(232, 224, 211, 0.9);
+  border: 1px solid rgba(232, 227, 244, 0.92);
   border-radius: 17px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 7px 22px rgba(75, 58, 35, 0.035);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 7px 22px rgba(68, 49, 113, 0.035);
 }
 
 .thread-row.priority {
-  border-color: rgba(109, 123, 53, 0.22);
-  background: linear-gradient(90deg, rgba(238, 244, 223, 0.92), rgba(255, 255, 255, 0.72));
+  border-color: rgba(124, 92, 255, 0.2);
+  background: linear-gradient(90deg, rgba(247, 244, 255, 0.96), rgba(255, 255, 255, 0.86));
 }
 
 .thread-row.unread .sender-name,
@@ -414,7 +414,7 @@ kbd {
   border: 1px dashed var(--line);
   border-radius: 17px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.44);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 @media (max-width: 980px) {
