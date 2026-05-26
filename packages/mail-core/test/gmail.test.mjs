@@ -46,20 +46,26 @@ test('gmail ingestion maps recent messages into local thread rows and sync curso
   assert.match(result.rows[0].message.body_preview, /Welcome to Kept/);
 });
 
-test('redaction removes message bodies and OAuth secrets from logs', () => {
+test('redaction removes message bodies, snippets, and OAuth secrets from logs', () => {
   const body = 'private phrase about payroll and medical mail';
+  const snippet = 'short inbox preview about medical mail';
   const logLine = redactForLogs({
     email: 'milan@example.com',
     access_token: 'ya29.secret-token',
     refresh_token: '1//refresh-secret',
+    authorization_code: '4/0-auth-code-secret',
+    code_verifier: 'pkce-verifier-secret',
     body,
-    snippet: 'short inbox preview',
+    snippet,
   });
 
   assert.doesNotMatch(logLine, /milan@example.com/);
   assert.doesNotMatch(logLine, /secret-token/);
   assert.doesNotMatch(logLine, /refresh-secret/);
+  assert.doesNotMatch(logLine, /auth-code-secret/);
+  assert.doesNotMatch(logLine, /pkce-verifier-secret/);
   assert.doesNotMatch(logLine, /payroll and medical/);
+  assert.doesNotMatch(logLine, /short inbox preview/);
   assert.match(logLine, /\[email-redacted\]/);
   assert.match(logLine, /\[secret-redacted\]/);
   assert.match(logLine, /\[body-redacted\]/);

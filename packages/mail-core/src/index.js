@@ -100,7 +100,7 @@ export function redactForLogs(value) {
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email-redacted]')
     .replace(/ya29\.[A-Za-z0-9._-]+/g, '[secret-redacted]')
     .replace(/1\/\/[A-Za-z0-9._-]+/g, '[secret-redacted]')
-    .replace(/(access_token|refresh_token|id_token|client_secret)":"[^"]+"/gi, '$1":"[secret-redacted]"');
+    .replace(/(access_token|refresh_token|id_token|client_secret|authorization_code|code_verifier)":"[^"]+"/gi, '$1":"[secret-redacted]"');
 }
 
 const fakeGmailMessages = [
@@ -134,8 +134,8 @@ function redactStructuredValue(value) {
 
   return Object.fromEntries(
     Object.entries(value).map(([key, nested]) => {
-      if (/body|raw|payload/i.test(key)) return [key, '[body-redacted]'];
-      if (/token|secret|codeVerifier/i.test(key)) return [key, '[secret-redacted]'];
+      if (/body|raw|payload|snippet/i.test(key)) return [key, '[body-redacted]'];
+      if (/token|secret|codeVerifier|code_verifier|authorization_code/i.test(key)) return [key, '[secret-redacted]'];
       return [key, redactStructuredValue(nested)];
     }),
   );
