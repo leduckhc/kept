@@ -4,27 +4,41 @@
 
 The MVP local model is SQLite-first:
 
-- `accounts`: provider account identity.
-- `threads`: cross-message grouping and updated timestamp.
-- `messages`: sender/recipients/subject plus encrypted body payload and a bounded preview for search.
-- `attachment_metadata`: filename, MIME type, size only; attachment bytes are not in the MVP search index.
-- `messages_fts`: FTS5 index over subject, sender, recipients, and bounded body preview.
+- `accounts`: local mail account identity.
+- `threads`: provider thread IDs and encrypted thread subject.
+- `messages`: provider message IDs, timestamps, encrypted sender, recipients, subject, and body.
+- `attachments`: metadata only: filename, MIME type, size, optional content ID. Attachment bytes are not in the MVP search index.
+- `messages_fts`: FTS5 index over subject, body, sender, and recipients for local-only lookup.
 
-The SQL text is exported from `packages/search-core/src/index.js` as `sqliteSchema` so the implementation and tests cannot drift from docs.
+The SQL text is exported from `packages/search-core/src/index.js` as `sqliteSchema` so docs/tests can check the real schema surface.
+
+## Local DB location
+
+The search package exposes `getDefaultKeptDatabasePath()` for the desktop app to use:
+
+- macOS: `~/Library/Application Support/Kept/kept.sqlite`
+- Windows: `%APPDATA%\Kept\kept.sqlite`
+- Linux: `~/.local/share/Kept/kept.sqlite`
+
+Tests and the demo command use temporary database files so they do not touch a real mailbox.
 
 ## Encryption decision
 
-CEO call: prefer **SQLCipher** for the Tauri desktop app because full-database encryption is cleaner for user trust and operational simplicity. Keep an app-layer encrypted body blob fallback if SQLCipher packaging blocks release velocity.
+Decision for this JS-only spike: use app-layer AES-256-GCM encrypted blobs for canonical message fields, while keeping FTS5 derived text local to the same SQLite file.
+
+Production preference remains **SQLCipher** if Tauri packaging can absorb the native dependency.
 
 Tradeoff:
 
-- SQLCipher: strongest simple story, fewer accidental plaintext files, extra native packaging work.
-- App-layer blobs: easier JS-only spike, but more surfaces to audit and FTS previews need stricter minimization.
+- SQLCipher: strongest trust story; protects tables, FTS terms, WAL pages, and metadata together; requires native packaging work.
+- App-layer blobs: no new dependency for the spike; message bodies/subjects/senders/recipients are encrypted in canonical tables; FTS terms remain plaintext-derived inside the local DB and must be disclosed/audited.
 
 ## Demo
 
 ```bash
-npm run seed:demo -w @kept/search-core
+npm --workspace @kept/search-core run demo -- "boarding pass"
+# legacy alias also works:
+npm run seed:demo -w @kept/search-core -- "boarding pass"
 ```
 
-The demo seeds synthetic mail locally and returns ranked results for `invoice next week`. There is no network dependency.
+The demo seeds synthetic non-sensitive mail into a temporary SQLite database and returns ranked results. There is no network dependency.

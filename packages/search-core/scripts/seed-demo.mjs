@@ -1,10 +1,23 @@
-import { sampleThreads } from '../../mail-core/src/index.js';
-import { buildSearchRows, createInMemorySearchIndex } from '../src/index.js';
+#!/usr/bin/env node
+import { mkdtemp } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import {
+  createKeptSearchStore,
+  createLocalEncryptionKey,
+  seedSampleEmails,
+} from '../src/index.js';
 
-const index = createInMemorySearchIndex();
-index.seed(sampleThreads);
-console.log(JSON.stringify({
-  seeded: sampleThreads.map(buildSearchRows),
-  demoQuery: 'invoice next week',
-  results: index.search('invoice next week').map(({ id, subject, sender, score }) => ({ id, subject, sender, score })),
-}, null, 2));
+const query = process.argv.slice(2).join(' ') || 'boarding pass';
+const dir = await mkdtemp(join(tmpdir(), 'kept-search-demo-'));
+const databasePath = join(dir, 'kept.sqlite');
+const encryptionKey = createLocalEncryptionKey('local demo key - do not use in production');
+const store = createKeptSearchStore({ databasePath, encryptionKey });
+
+try {
+  seedSampleEmails(store);
+  const results = store.searchMessages(query);
+  console.log(JSON.stringify({ databasePath, query, results }, null, 2));
+} finally {
+  store.close();
+}
