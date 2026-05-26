@@ -1,0 +1,19 @@
+{
+  "name": "kept",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node apps/desktop/scripts/serve.mjs",
+    "build": "npm run build --workspaces --if-present && node scripts/check-tauri-scaffold.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "node --test packages/*/test/*.test.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+  },
+  "devDependencies": {}
+}
