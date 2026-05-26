@@ -7,7 +7,9 @@
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "typecheck": "node scripts/typecheck.mjs",
-    "lint": "node scripts/lint.mjs"
+    "lint": "node scripts/lint.mjs",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {}
 }

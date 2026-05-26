@@ -7,3 +7,4 @@ dist/
 .env.*
 !.env.example
 .gstack/
+apps/desktop/src-tauri/target/

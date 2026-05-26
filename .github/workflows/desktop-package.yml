@@ -1,0 +1,53 @@
+name: Desktop Package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  macos-apple-silicon:
+    name: macOS Apple Silicon package
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Confirm Apple Silicon runner
+        run: |
+          uname -m
+          test "$(uname -m)" = "arm64"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Verify web workspace
+        run: npm run verify
+
+      - name: Build Kept desktop package
+        run: npm run tauri:build
+
+      - name: Upload macOS Apple Silicon app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kept-macos-apple-silicon-app
+          path: apps/desktop/src-tauri/target/release/bundle/macos/*.app
+          if-no-files-found: error
+
+      - name: Upload macOS Apple Silicon DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kept-macos-apple-silicon-dmg
+          path: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error

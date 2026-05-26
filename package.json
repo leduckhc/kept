@@ -13,7 +13,11 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "node --test packages/*/test/*.test.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "tauri:dev": "npm run tauri:dev -w @kept/desktop",
+    "tauri:build": "npm run tauri:build -w @kept/desktop"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2"
+  }
 }

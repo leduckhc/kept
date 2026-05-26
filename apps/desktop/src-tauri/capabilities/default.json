@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-window",
+  "description": "Default Kept desktop window capability. Keep native APIs minimal until Gmail sync and local storage need explicit permissions.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

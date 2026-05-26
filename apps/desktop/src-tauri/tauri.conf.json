@@ -10,7 +10,28 @@
     "devUrl": "http://127.0.0.1:5173"
   },
   "app": {
-    "windows": [{ "title": "Kept", "width": 1200, "height": 820 }],
-    "security": { "csp": null }
+    "windows": [
+      {
+        "title": "Kept",
+        "width": 1200,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' asset: https://asset.localhost; font-src 'self'; connect-src 'self' http://127.0.0.1:* ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "Productivity",
+    "shortDescription": "Local-first BYO-AI email client",
+    "longDescription": "Kept is a local-first desktop email client for fast personal mail, private local search, and bring-your-own AI.",
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
   }
 }
