@@ -56,7 +56,7 @@ input:focus-visible,
 
 .topbar {
   display: grid;
-  grid-template-columns: auto minmax(150px, 1fr) minmax(260px, 430px) auto;
+  grid-template-columns: auto minmax(210px, 1fr) minmax(260px, 380px) auto;
   gap: 20px;
   align-items: center;
 }
@@ -87,13 +87,18 @@ input:focus-visible,
   display: block;
 }
 
-.inbox-title .eyebrow {
-  margin: 0 0 2px;
+.inbox-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.inbox-count {
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 h1,
@@ -103,7 +108,7 @@ p {
 }
 
 h1 {
-  font-size: clamp(24px, 3vw, 38px);
+  font-size: clamp(24px, 2.4vw, 34px);
   line-height: 1;
   letter-spacing: -0.06em;
   white-space: nowrap;
@@ -285,6 +290,13 @@ kbd {
   font-weight: 850;
 }
 
+.row-actions button {
+  min-width: 32px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
 .sender-actions .accept {
   background: var(--accent);
   color: white;
@@ -309,9 +321,9 @@ kbd {
 .thread-row {
   position: relative;
   min-width: 0;
-  min-height: 46px;
+  min-height: 44px;
   gap: 11px;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border: 1px solid rgba(232, 224, 211, 0.9);
   border-radius: 17px;
   background: rgba(255, 255, 255, 0.72);
@@ -369,7 +381,7 @@ kbd {
 
 .time {
   flex: none;
-  width: 108px;
+  width: 96px;
   text-align: right;
   font-size: 12px;
   white-space: nowrap;
@@ -460,11 +472,11 @@ kbd {
   }
 
   .thread-row {
-    min-height: 58px;
-    gap: 9px;
+    min-height: 52px;
+    gap: 8px;
     padding: 8px;
-    align-items: flex-start;
-    flex-wrap: wrap;
+    align-items: center;
+    flex-wrap: nowrap;
   }
 
   .thread-row .avatar {
@@ -474,13 +486,14 @@ kbd {
   }
 
   .sender-name {
-    flex: 1 1 calc(100% - 78px);
+    flex: 0 1 78px;
   }
 
   .subject {
-    order: 5;
-    flex: 1 1 calc(100% - 74px);
-    margin-left: 56px;
+    order: initial;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 0;
   }
 
   .snippet {
@@ -490,16 +503,11 @@ kbd {
   .time {
     width: auto;
     margin-left: auto;
+    font-size: 11px;
   }
 
   .row-actions {
-    position: static;
-    order: 6;
-    width: 100%;
-    margin-left: 56px;
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
+    display: none;
   }
 
   .thread-row:hover .time,
