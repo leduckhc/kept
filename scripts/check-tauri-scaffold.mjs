@@ -26,4 +26,12 @@ if (!distIndex.includes('./src/main.js')) {
   throw new Error('desktop dist index must load the Kept runtime script');
 }
 
+const distMain = await readFile('apps/desktop/dist/src/main.js', 'utf8');
+if (distMain.includes("from '/packages/")) {
+  throw new Error('desktop dist runtime must not use root-absolute package imports; Tauri packaged app needs relative imports');
+}
+if (!distMain.includes("from '../packages/")) {
+  throw new Error('desktop dist runtime must load packaged workspace modules with relative imports');
+}
+
 console.log('Tauri scaffold check passed');
