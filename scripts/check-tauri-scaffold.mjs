@@ -33,5 +33,8 @@ if (distMain.includes("from '/packages/")) {
 if (!distMain.includes("from '../packages/")) {
   throw new Error('desktop dist runtime must load packaged workspace modules with relative imports');
 }
+if (distMain.includes('sampleInboxThreads') || distMain.includes('Synthetic preview:')) {
+  throw new Error('desktop dist must not ship the inbox as mock-only sample data');
+}
 
 console.log('Tauri scaffold check passed');

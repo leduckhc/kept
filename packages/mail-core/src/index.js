@@ -279,10 +279,21 @@ export function gmailMessageToThread(message, accountId) {
     sender: message.from || 'unknown sender',
     recipients: message.to ? [message.to] : [],
     body: message.textBody || message.snippet || '',
+    snippet: message.snippet || summarizeBody(message.textBody || ''),
     receivedAt: message.receivedAt || new Date(0).toISOString(),
     providerMessageId: message.id,
     historyId: message.historyId,
+    isSynthetic: false,
   };
+}
+
+export function parseMboxToThreads(mboxText, { accountId = 'acct_local_import' } = {}) {
+  if (!mboxText || !mboxText.includes('\nFrom:')) return [];
+
+  return splitMboxMessages(mboxText)
+    .map((message, index) => parseMboxMessage(message, { accountId, index }))
+    .filter(Boolean)
+    .sort((left, right) => new Date(right.receivedAt).getTime() - new Date(left.receivedAt).getTime());
 }
 
 export function redactForLogs(value) {
@@ -330,6 +341,122 @@ function redactStructuredValue(value) {
       return [key, redactStructuredValue(nested)];
     }),
   );
+}
+
+function splitMboxMessages(mboxText) {
+  const normalized = mboxText.replace(/\r\n/g, '\n');
+  return normalized
+    .split(/\n(?=From [^\n]+\n)/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.startsWith('From '));
+}
+
+function parseMboxMessage(rawMessage, { accountId, index }) {
+  const lines = rawMessage.split('\n');
+  if (!lines[0]?.startsWith('From ')) return null;
+
+  const headerLines = [];
+  let bodyStart = -1;
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i] === '') {
+      bodyStart = i + 1;
+      break;
+    }
+    headerLines.push(lines[i]);
+  }
+  if (bodyStart === -1) return null;
+
+  const headers = parseMboxHeaders(headerLines);
+  const body = cleanMboxBody(lines.slice(bodyStart).join('\n'));
+  const from = headers.from || 'unknown sender';
+  const parsedSender = parseMailbox(from);
+  const subject = decodeHeader(headers.subject || '(no subject)');
+  const receivedAt = parseMboxDate(headers.date, lines[0]);
+  const messageId = headers['message-id'] || `local-mbox-${index}`;
+
+  return {
+    id: stableLocalMessageId(messageId, index),
+    accountId,
+    subject,
+    sender: parsedSender.name,
+    senderEmail: parsedSender.email,
+    recipients: headers.to ? [headers.to] : [],
+    body,
+    snippet: summarizeBody(body),
+    receivedAt,
+    providerMessageId: messageId,
+    historyId: null,
+    isPriority: false,
+    isUnread: false,
+    isNewSender: false,
+    isSynthetic: false,
+    avatarInitials: initialsFor(parsedSender.name),
+    avatarColor: '#ddd7f2',
+  };
+}
+
+function parseMboxHeaders(headerLines) {
+  const unfolded = [];
+  headerLines.forEach((line) => {
+    if (/^[\t ]/.test(line) && unfolded.length > 0) {
+      unfolded[unfolded.length - 1] += ` ${line.trim()}`;
+    } else {
+      unfolded.push(line);
+    }
+  });
+
+  return Object.fromEntries(
+    unfolded
+      .map((line) => {
+        const separator = line.indexOf(':');
+        if (separator === -1) return null;
+        return [line.slice(0, separator).trim().toLowerCase(), line.slice(separator + 1).trim()];
+      })
+      .filter(Boolean),
+  );
+}
+
+function parseMailbox(value) {
+  const decoded = decodeHeader(value);
+  const match = decoded.match(/^(.*?)\s*<([^>]+)>$/);
+  if (!match) return { name: decoded, email: decoded.includes('@') ? decoded : '' };
+  const name = match[1].replace(/^"|"$/g, '').trim() || match[2];
+  return { name, email: match[2].trim() };
+}
+
+function parseMboxDate(dateHeader, fromLine) {
+  const parsed = new Date(dateHeader || fromLine.replace(/^From\s+\S+\s+/, ''));
+  return Number.isNaN(parsed.getTime()) ? new Date(0).toISOString() : parsed.toISOString();
+}
+
+function cleanMboxBody(body) {
+  return body
+    .replace(/\n--[^\n]+\n[\s\S]*$/m, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function summarizeBody(body) {
+  const compact = body.replace(/\s+/g, ' ').trim();
+  if (!compact) return '';
+  return compact.length > 160 ? `${compact.slice(0, 157)}…` : compact;
+}
+
+function decodeHeader(value) {
+  return value.replace(/=\?UTF-8\?Q\?([^?]+)\?=/gi, (_, encoded) => encoded.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (__, hex) => String.fromCharCode(Number.parseInt(hex, 16))));
+}
+
+function initialsFor(name) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || '??';
+}
+
+function stableLocalMessageId(messageId, index) {
+  return `local_${index}_${messageId.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 48)}`;
 }
 
 function compareInboxEntries(left, right) {

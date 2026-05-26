@@ -176,6 +176,113 @@ kbd {
   margin-top: 34px;
 }
 
+.import-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-top: 26px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(247, 244, 255, 0.72);
+}
+
+.import-status strong,
+.import-status span {
+  display: block;
+}
+
+.import-status strong {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.import-status span,
+.import-help {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.import-actions {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  align-items: center;
+}
+
+.import-button,
+.clear-import {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.import-button {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(124, 92, 255, 0.16);
+}
+
+.clear-import {
+  border: 1px solid #e8e3f4;
+  background: #fff;
+  color: #756f88;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.empty-import {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  max-width: 680px;
+  margin: 88px auto 0;
+  padding: 44px;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background: linear-gradient(135deg, #fff, #fbfaff);
+  box-shadow: 0 24px 70px rgba(68, 49, 113, 0.07);
+}
+
+.empty-import .eyebrow {
+  color: #6d5ad7;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.empty-import h2 {
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 0.98;
+  letter-spacing: -0.07em;
+}
+
+.empty-import > p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.import-help {
+  margin-top: 0;
+}
+
 .section-header {
   justify-content: space-between;
   gap: 14px;
@@ -433,9 +540,19 @@ kbd {
   }
 
   .search-box,
-  .status-pill {
+  .status-pill,
+  .import-status {
     grid-column: 1 / -1;
     justify-self: stretch;
+  }
+
+  .import-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .import-actions {
+    flex-wrap: wrap;
   }
 
   .sender-rail {
