@@ -17,7 +17,7 @@ Kept is a Tauri local-first email client for private multi-account search and BY
 apps/desktop          Tauri + web app shell
 packages/ui           Brand tokens and shared UI primitives
 packages/mail-core    Provider-neutral mail models and redaction helpers
-packages/search-core  Local search/index API; FTS5-backed implementation follows this contract
+packages/search-core  Local SQLite storage/search API with FTS5, seeded demo data, and encrypted canonical message blobs
 packages/ai-core      BYO AI provider contract and prompt audit model
 docs/                 Architecture, privacy, and MVP demo notes
 ```
@@ -28,6 +28,7 @@ docs/                 Architecture, privacy, and MVP demo notes
 npm install
 npm run dev       # local desktop web preview at http://127.0.0.1:5173
 npm run verify    # typecheck, lint, tests, and scaffold build checks
+npm --workspace @kept/search-core run demo -- "boarding pass"  # seed local sample mail and search it
 ```
 
 The Rust/Tauri files are present under `apps/desktop/src-tauri`. This environment does not have Cargo installed, so CI should run the JavaScript verification now and add a Tauri binary build once Rust is available.

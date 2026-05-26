@@ -9,7 +9,9 @@
 
 ## Local storage baseline
 
-The MVP uses SQLite with FTS5. Encryption decision is tracked in the storage spike: prefer SQLCipher if build/distribution friction is acceptable; otherwise encrypt sensitive message blobs at the application layer and keep searchable derived terms scoped to the local device.
+The MVP spike in `packages/search-core` uses SQLite with FTS5 and app-layer AES-256-GCM encrypted blobs for canonical message fields. The default local DB path is documented in `docs/storage-search.md`; tests and demos use temporary DB files.
+
+Encryption decision: prefer SQLCipher before production if Tauri packaging can absorb the native dependency, because it protects FTS terms, WAL pages, and metadata together. The current spike keeps message bodies, subjects, senders, and recipients encrypted in the main tables, while acknowledging that local FTS5 stores searchable derived text in the same device-local DB file.
 
 ## Prompt audit
 
