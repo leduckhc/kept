@@ -47,18 +47,26 @@ export function createInMemorySearchIndex() {
     addThread(thread) { rows.push(normalizeThread(thread)); },
     seed(threads) { threads.forEach((thread) => this.addThread(thread)); },
     search(query) {
-      const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+      const terms = normalizeSearchTerms(query);
       if (terms.length === 0) return [];
       return rows
         .map((thread) => {
-          const haystack = `${thread.subject} ${thread.sender} ${thread.recipients.join(' ')} ${thread.body}`.toLowerCase();
+          const haystack = `${thread.subject} ${thread.sender} ${thread.senderEmail} ${thread.recipients.join(' ')} ${thread.snippet} ${thread.body}`.toLowerCase();
           const score = terms.reduce((sum, term) => sum + (haystack.includes(term) ? 1 : 0), 0);
-          return { ...thread, score, snippet: thread.body.slice(0, 140) };
+          return { ...thread, score, snippet: (thread.snippet || thread.body).slice(0, 140) };
         })
         .filter((row) => row.score > 0)
         .sort((a, b) => b.score - a.score || b.receivedAt.localeCompare(a.receivedAt));
     },
   };
+}
+
+export function normalizeSearchTerms(query) {
+  return String(query || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.replace(/^[^\p{L}\p{N}@._-]+|[^\p{L}\p{N}@._-]+$/gu, ''))
+    .filter(Boolean);
 }
 
 export function normalizeThread(thread) {
@@ -67,7 +75,9 @@ export function normalizeThread(thread) {
     accountId: thread.accountId || 'acct_demo_gmail',
     subject: thread.subject || '(no subject)',
     sender: thread.sender || 'unknown sender',
+    senderEmail: thread.senderEmail || '',
     recipients: Array.isArray(thread.recipients) ? thread.recipients : [],
+    snippet: thread.snippet || '',
     body: thread.body || '',
     receivedAt: thread.receivedAt || new Date(0).toISOString(),
   };
@@ -94,9 +104,9 @@ export function buildSearchRows(thread) {
     },
     fts: {
       subject: normalized.subject,
-      sender: normalized.sender,
+      sender: normalized.senderEmail ? `${normalized.sender} <${normalized.senderEmail}>` : normalized.sender,
       recipients: normalized.recipients.join(' '),
-      body_preview: normalized.body.slice(0, 512),
+      body_preview: (normalized.snippet || normalized.body).slice(0, 512),
     },
   };
 }

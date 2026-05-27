@@ -7,8 +7,13 @@ import {
   canonicalMailStateMatrix,
   createLocalMailRepository,
   createRepositoryCorruptionError,
+  getLocalMailSearchState,
+  localMailSearchStates,
   normalizeLocalAccount,
   normalizeLocalMessage,
+  parseMboxToThreads,
+  searchLocalMailRepository,
+  upsertThreadsIntoLocalRepository,
 } from '../src/index.js';
 
 async function withTempRepo(fn) {
@@ -84,7 +89,7 @@ test('search index can be rebuilt from the durable store and queries message bod
     const repo = await createLocalMailRepository({ path: storePath });
     await repo.upsertAccount({ id: 'acct', provider: 'local', email: 'you@example.com' });
     await repo.upsertThread({ id: 'thr_invoice', accountId: 'acct', subject: 'Invoice', updatedAt: '2026-05-27T10:00:00Z' });
-    await repo.upsertMessage({ id: 'msg_invoice', accountId: 'acct', threadId: 'thr_invoice', providerMessageId: 'local-1', sender: 'bookkeeper@example.com', recipients: ['you@example.com'], subject: 'Invoice', body: 'The private catering invoice arrives next week.', receivedAt: '2026-05-27T10:00:00Z' });
+    await repo.upsertMessage({ id: 'msg_invoice', accountId: 'acct', threadId: 'thr_invoice', providerMessageId: 'local-1', sender: { name: 'Casey Ledger', email: 'bookkeeper@example.com' }, recipients: ['you@example.com'], subject: 'Invoice', body: 'The private catering invoice arrives next week.', snippet: 'Catering invoice', receivedAt: '2026-05-27T10:00:00Z' });
     await repo.close();
 
     const reopened = await createLocalMailRepository({ path: storePath });
@@ -94,7 +99,58 @@ test('search index can be rebuilt from the durable store and queries message bod
     assert.equal(results[0].messageId, 'msg_invoice');
     assert.equal(results[0].threadId, 'thr_invoice');
     assert.equal(results[0].score, 2);
+    assert.equal((await rebuilt.search('BOOKKEEPER@example.com'))[0].messageId, 'msg_invoice');
   });
+});
+
+test('offline repository search covers Gmail and mbox imports from the same index after restart', async () => {
+  await withTempRepo(async (storePath) => {
+    const repo = await createLocalMailRepository({ path: storePath });
+    await upsertThreadsIntoLocalRepository({
+      repository: repo,
+      account: { id: 'acct_gmail', provider: 'gmail', email: 'owner@example.com' },
+      threads: [{ id: 'gmail_thr', providerMessageId: 'gmail-msg-1', sender: 'Mara Vale', senderEmail: 'mara@northstar.example', recipients: ['owner@example.com'], subject: 'Northstar Sushi Plan', snippet: 'Lunch omakase note', body: 'Body says bring the wasabi invoice.', receivedAt: '2026-05-27T10:00:00Z', isUnread: true }],
+    });
+    const mboxThreads = parseMboxToThreads(`From takeout@example.com Tue May 26 09:00:00 2026\nFrom: José Bento <jose@example.com>\nTo: owner@example.com\nSubject: Crème brûlée follow-up\nDate: Tue, 26 May 2026 09:00:00 GMT\nMessage-ID: <mbox-1@example.com>\n\nPlease review the brûlée torch notes and café receipt.\n`, { accountId: 'acct_mbox' });
+    await upsertThreadsIntoLocalRepository({
+      repository: repo,
+      account: { id: 'acct_mbox', provider: 'mbox', email: 'owner@example.com' },
+      threads: mboxThreads,
+    });
+    await repo.close();
+
+    const reopened = await createLocalMailRepository({ path: storePath });
+
+    assert.deepEqual((await searchLocalMailRepository({ repository: reopened, query: 'northstar WASABI' })).results.map((row) => row.threadId), ['gmail_thr']);
+    assert.deepEqual((await searchLocalMailRepository({ repository: reopened, query: 'jose@example.com' })).results.map((row) => row.threadId), [mboxThreads[0].id]);
+    assert.deepEqual((await searchLocalMailRepository({ repository: reopened, query: 'brûlée café' })).results.map((row) => row.threadId), [mboxThreads[0].id]);
+    assert.equal((await searchLocalMailRepository({ repository: reopened, query: 'invoice?' })).results[0].threadId, 'gmail_thr');
+    assert.equal((await searchLocalMailRepository({ repository: reopened, query: 'does-not-exist' })).state.status, 'no-results');
+  });
+});
+
+test('local search state exposes disabled, indexing, ready, stale, no-results, and error labels', () => {
+  assert.deepEqual(localMailSearchStates, ['disabled', 'indexing', 'ready', 'stale', 'no-results', 'error']);
+  assert.equal(getLocalMailSearchState({ enabled: false }).status, 'disabled');
+  assert.equal(getLocalMailSearchState({ indexing: true }).status, 'indexing');
+  assert.equal(getLocalMailSearchState({ query: '', resultCount: 0 }).status, 'ready');
+  assert.equal(getLocalMailSearchState({ query: 'missing', resultCount: 0 }).status, 'no-results');
+  assert.equal(getLocalMailSearchState({ index: { sourceUpdatedAt: '2026-05-27T09:00:00Z' }, repositoryUpdatedAt: '2026-05-27T10:00:00Z' }).status, 'stale');
+  assert.equal(getLocalMailSearchState({ error: new Error('search failed for owner@example.com') }).status, 'error');
+  assert.doesNotMatch(getLocalMailSearchState({ error: new Error('search failed for owner@example.com') }).detail, /owner@example.com/);
+});
+
+test('repository search failure returns error state instead of throwing', async () => {
+  const result = await searchLocalMailRepository({
+    repository: {
+      async getSearchMetadata() { throw new Error('bad index for owner@example.com'); },
+    },
+    query: 'anything',
+  });
+
+  assert.equal(result.state.status, 'error');
+  assert.deepEqual(result.results, []);
+  assert.doesNotMatch(result.state.detail, /owner@example.com/);
 });
 
 test('repository file never stores tokens or API keys and redacts sensitive corrupt-store errors', async () => {

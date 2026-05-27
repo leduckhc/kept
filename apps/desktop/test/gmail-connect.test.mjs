@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   combineInboxThreads,
   filterInboxThreads,
+  getInboxSearchState,
   getSyncedGmailThreads,
 } from '../src/gmail-connect.js';
 
@@ -54,9 +55,20 @@ test('combineInboxThreads keeps real synced Gmail rows before local import rows 
 });
 
 test('filterInboxThreads searches synced local inbox fields without remote calls', () => {
-  const rows = [gmailThread, localThread];
+  const rows = [gmailThread, localThread, { ...localThread, id: 'unicode-thread', sender: 'José Bento', senderEmail: 'jose@example.com', subject: 'Crème brûlée', snippet: 'Café receipt', body: 'Torch invoice body' }];
 
   assert.deepEqual(filterInboxThreads(rows, 'mara alpha').map((thread) => thread.id), ['gmail-thread']);
   assert.deepEqual(filterInboxThreads(rows, 'takeout').map((thread) => thread.id), ['local-thread']);
-  assert.deepEqual(filterInboxThreads(rows, '').map((thread) => thread.id), ['gmail-thread', 'local-thread']);
+  assert.deepEqual(filterInboxThreads(rows, 'jose@example.com café').map((thread) => thread.id), ['unicode-thread']);
+  assert.deepEqual(filterInboxThreads(rows, 'invoice?').map((thread) => thread.id), ['unicode-thread']);
+  assert.deepEqual(filterInboxThreads(rows, '').map((thread) => thread.id), ['gmail-thread', 'local-thread', 'unicode-thread']);
+});
+
+test('getInboxSearchState exposes user-facing search states', () => {
+  assert.equal(getInboxSearchState({ totalCount: 0 }).status, 'disabled');
+  assert.equal(getInboxSearchState({ totalCount: 2, indexing: true }).status, 'indexing');
+  assert.equal(getInboxSearchState({ totalCount: 2, visibleCount: 2 }).status, 'ready');
+  assert.equal(getInboxSearchState({ totalCount: 2, stale: true }).status, 'stale');
+  assert.equal(getInboxSearchState({ totalCount: 2, query: 'missing', visibleCount: 0 }).status, 'no-results');
+  assert.equal(getInboxSearchState({ totalCount: 2, errorMessage: 'Could not search local mail.' }).status, 'error');
 });

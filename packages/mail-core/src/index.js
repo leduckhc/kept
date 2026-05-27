@@ -1,4 +1,4 @@
-import { buildSearchRows } from '../../search-core/src/index.js';
+import { buildSearchRows, normalizeSearchTerms } from '../../search-core/src/index.js';
 
 export const sampleThreads = [
   {
@@ -817,6 +817,77 @@ export function normalizeAiAuditEntry(entry = {}) {
   };
 }
 
+export const localMailSearchStates = Object.freeze(['disabled', 'indexing', 'ready', 'stale', 'no-results', 'error']);
+
+export function getLocalMailSearchState({ enabled = true, indexing = false, query = '', resultCount = null, index = null, repositoryUpdatedAt = null, error = null } = {}) {
+  if (!enabled) return { status: 'disabled', label: 'Search disabled', detail: 'Local search is unavailable until mail storage is enabled.' };
+  if (error) return { status: 'error', label: 'Search error', detail: userSafeSearchError(error) };
+  if (indexing) return { status: 'indexing', label: 'Indexing local mail', detail: 'Kept is preparing local mail search on this device.' };
+  if (index && repositoryUpdatedAt && Date.parse(repositoryUpdatedAt) > Date.parse(index.sourceUpdatedAt || '')) {
+    return { status: 'stale', label: 'Search updating', detail: 'Recent local mail is saved; search is catching up.' };
+  }
+  if (String(query || '').trim() && resultCount === 0) {
+    return { status: 'no-results', label: 'No search results', detail: 'No synced or imported local mail matches that search.' };
+  }
+  return { status: 'ready', label: 'Search ready', detail: 'Search runs offline over synced and imported local mail.' };
+}
+
+export async function searchLocalMailRepository({ repository, query, enabled = true } = {}) {
+  if (!enabled || !repository) {
+    return { state: getLocalMailSearchState({ enabled: false }), results: [], query: String(query || '') };
+  }
+
+  try {
+    const metadata = await repository.getSearchMetadata();
+    const index = await repository.rebuildSearchIndex();
+    const results = await index.search(query);
+    return {
+      state: getLocalMailSearchState({ query, resultCount: results.length, index, repositoryUpdatedAt: metadata.repositoryUpdatedAt }),
+      results,
+      query: String(query || ''),
+      index,
+    };
+  } catch (error) {
+    return { state: getLocalMailSearchState({ error }), results: [], query: String(query || '') };
+  }
+}
+
+export async function upsertThreadsIntoLocalRepository({ repository, account, threads, provider = account?.provider || 'local' } = {}) {
+  requireField('repository', repository);
+  requireField('account', account);
+  const normalizedAccount = await repository.upsertAccount({ ...account, provider });
+  const savedMessages = [];
+
+  for (const thread of threads || []) {
+    const rawThreadId = thread.id || thread.threadId || thread.providerMessageId;
+    requireField('thread.id', rawThreadId);
+    const threadId = String(rawThreadId);
+    await repository.upsertThread({
+      id: threadId,
+      accountId: normalizedAccount.id,
+      subject: thread.subject || '(no subject)',
+      updatedAt: thread.updatedAt || thread.receivedAt || new Date(0).toISOString(),
+      messageIds: [`${threadId}:msg0`],
+    });
+    savedMessages.push(await repository.upsertMessage({
+      id: `${threadId}:msg0`,
+      accountId: normalizedAccount.id,
+      threadId,
+      providerMessageId: thread.providerMessageId || thread.messageId || thread.id || threadId,
+      sender: { name: thread.sender || 'unknown sender', email: thread.senderEmail || '' },
+      recipients: normalizeThreadRecipients(thread.recipients),
+      subject: thread.subject || '(no subject)',
+      body: thread.body || thread.textBody || thread.snippet || '',
+      snippet: thread.snippet || summarizeBody(thread.body || thread.textBody || ''),
+      receivedAt: thread.receivedAt || new Date(0).toISOString(),
+      flags: { read: !thread.isUnread, starred: Boolean(thread.isPriority), archived: false },
+      metadata: { source: thread.source || provider },
+    }));
+  }
+
+  return { account: normalizedAccount, messageCount: savedMessages.length, messages: savedMessages };
+}
+
 export async function createLocalMailRepository({ path: storePath, initialData, bodyEncryptionKey } = {}) {
   requireField('path', storePath);
   const bodyEncryption = await createBodyEncryptionContext({ storePath, bodyEncryptionKey });
@@ -887,6 +958,15 @@ export async function createLocalMailRepository({ path: storePath, initialData, 
         .sort((left, right) => right.receivedAt.localeCompare(left.receivedAt))
         .map(clone);
     },
+    async getSearchMetadata() {
+      const repositoryUpdatedAt = Object.values(state.messages)
+        .map((message) => message.receivedAt)
+        .concat(Object.values(state.threads).map((thread) => thread.updatedAt))
+        .filter(Boolean)
+        .sort()
+        .at(-1) || new Date(0).toISOString();
+      return { messageCount: Object.keys(state.messages).length, repositoryUpdatedAt };
+    },
     async setFlags(messageId, flags) {
       requireField('messageId', messageId);
       if (!state.messages[messageId]) throw new Error(`Local message not found: ${messageId}`);
@@ -914,16 +994,19 @@ export async function createLocalMailRepository({ path: storePath, initialData, 
         .map(clone);
     },
     async rebuildSearchIndex() {
+      const metadata = await this.getSearchMetadata();
       const rows = Object.values(state.messages).map((message) => ({
         messageId: message.id,
         threadId: message.threadId,
         subject: message.subject,
         sender: message.sender.name || message.sender.email,
+        senderEmail: message.sender.email || '',
         recipients: message.recipients.map((recipient) => recipient.email || recipient.name),
+        snippet: message.snippet || '',
         body: message.body,
         receivedAt: message.receivedAt,
       }));
-      return createRebuiltSearchIndex(rows);
+      return createRebuiltSearchIndex(rows, metadata);
     },
     exportState() { return clone(state); },
   };
@@ -1054,17 +1137,19 @@ function maxIsoTimestamp(left, right) {
   return rightValue > leftValue ? right : left;
 }
 
-function createRebuiltSearchIndex(rows) {
+function createRebuiltSearchIndex(rows, { repositoryUpdatedAt = new Date(0).toISOString() } = {}) {
   return {
     rows: rows.map(clone),
+    sourceUpdatedAt: repositoryUpdatedAt,
+    builtAt: new Date(0).toISOString(),
     async search(query) {
-      const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+      const terms = normalizeSearchTerms(query);
       if (terms.length === 0) return [];
       return rows
         .map((row) => {
-          const haystack = `${row.subject} ${row.sender} ${row.recipients.join(' ')} ${row.body}`.toLowerCase();
+          const haystack = `${row.subject} ${row.sender} ${row.senderEmail} ${row.recipients.join(' ')} ${row.snippet} ${row.body}`.toLowerCase();
           const score = terms.reduce((sum, term) => sum + (haystack.includes(term) ? 1 : 0), 0);
-          return { ...clone(row), score, snippet: row.body.slice(0, 160) };
+          return { ...clone(row), score, snippet: (row.snippet || row.body).slice(0, 160) };
         })
         .filter((row) => row.score > 0)
         .sort((left, right) => right.score - left.score || right.receivedAt.localeCompare(left.receivedAt));
@@ -1085,6 +1170,15 @@ function normalizeMailContact(contact) {
 function normalizeRecipients(recipients) {
   if (!Array.isArray(recipients)) return [];
   return recipients.map((recipient) => normalizeMailContact(recipient));
+}
+
+function normalizeThreadRecipients(recipients) {
+  if (!Array.isArray(recipients)) return [];
+  return recipients.map((recipient) => (typeof recipient === 'string' ? recipient : (recipient.email || recipient.name || ''))).filter(Boolean);
+}
+
+function userSafeSearchError(error) {
+  return redactForLogs(error?.message || 'Local search could not finish.');
 }
 
 function normalizeLocalFlags(flags = {}) {

@@ -6,6 +6,7 @@ import {
   combineInboxThreads,
   createLocalStorageAdapter,
   filterInboxThreads,
+  getInboxSearchState,
   getSyncedGmailThreads,
 } from './gmail-connect.js';
 
@@ -56,17 +57,25 @@ function renderApp() {
   const visibleCount = visibleThreads.length;
   const unreadCount = visibleThreads.filter((thread) => thread.isUnread).length;
   const newSenders = getNewSenders(visibleThreads);
+  const searchState = getInboxSearchState({
+    enabled: inboxCount > 0,
+    indexing: state.gmail.status === 'syncing',
+    errorMessage: state.gmail.status === 'sync-error' ? state.gmail.errorMessage : '',
+    query: state.searchQuery,
+    totalCount: inboxCount,
+    visibleCount,
+  });
 
-  root.replaceChildren(renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders }));
+  root.replaceChildren(renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState }));
   wireGmailControls();
   wireImportControls();
   wireSearchControl();
 }
 
-function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders }) {
+function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState }) {
   const shell = el('main', { className: 'shell', ariaLabel: 'Kept inbox' });
   const surface = el('section', { className: 'inbox-surface' });
-  surface.append(renderTopBar({ inboxCount, visibleCount, unreadCount }), renderGmailStatus());
+  surface.append(renderTopBar({ inboxCount, visibleCount, unreadCount, searchState }), renderGmailStatus());
   if (inboxCount === 0) {
     surface.append(renderEmptyGmailState());
   } else if (visibleCount === 0) {
@@ -78,7 +87,7 @@ function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, new
   return shell;
 }
 
-function renderTopBar({ inboxCount, visibleCount, unreadCount }) {
+function renderTopBar({ inboxCount, visibleCount, unreadCount, searchState }) {
   const topbar = el('header', { className: 'topbar' });
 
   const brand = el('div', { className: 'brand' });
@@ -106,10 +115,10 @@ function renderTopBar({ inboxCount, visibleCount, unreadCount }) {
     el('kbd', { text: '⌘K' }),
   );
 
-  const status = el('div', { className: 'status-pill', ariaLabel: 'Local-first and bring your own AI status' });
+  const status = el('div', { className: 'status-pill', ariaLabel: 'Local-first, bring your own AI, and search status' });
   status.append(
     el('span', { className: 'status-dot', ariaHidden: 'true' }),
-    el('span', { text: `Local mail · BYO AI ${disabledProvider.status}` }),
+    el('span', { text: `Local mail · ${searchState.label} · BYO AI ${disabledProvider.status}` }),
   );
 
   topbar.append(brand, title, search, status);

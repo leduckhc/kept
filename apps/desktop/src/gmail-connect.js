@@ -1,5 +1,6 @@
 export const GMAIL_ACCOUNT_ID = 'acct_local_gmail';
 export const GMAIL_SYNC_STORAGE_KEY = 'kept.gmail.sync.v1';
+export const inboxSearchStates = Object.freeze(['disabled', 'indexing', 'ready', 'stale', 'no-results', 'error']);
 
 export function getSyncedGmailThreads(syncState, { accountId = GMAIL_ACCOUNT_ID } = {}) {
   const accounts = syncState?.accounts && typeof syncState.accounts === 'object' ? syncState.accounts : {};
@@ -21,7 +22,7 @@ export function combineInboxThreads(gmailThreads, localThreads) {
 }
 
 export function filterInboxThreads(threads, query) {
-  const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = normalizeInboxSearchTerms(query);
   if (terms.length === 0) return threads;
   return threads.filter((thread) => {
     const haystack = [
@@ -29,10 +30,21 @@ export function filterInboxThreads(threads, query) {
       thread.senderEmail,
       thread.subject,
       thread.snippet,
+      thread.body,
+      thread.textBody,
       ...(Array.isArray(thread.recipients) ? thread.recipients : []),
     ].filter(Boolean).join(' ').toLowerCase();
     return terms.every((term) => haystack.includes(term));
   });
+}
+
+export function getInboxSearchState({ enabled = true, indexing = false, stale = false, errorMessage = '', query = '', totalCount = 0, visibleCount = 0 } = {}) {
+  if (!enabled || totalCount === 0) return { status: 'disabled', label: 'Search disabled', detail: 'Connect Gmail or import mbox to search local mail.' };
+  if (errorMessage) return { status: 'error', label: 'Search error', detail: errorMessage };
+  if (indexing) return { status: 'indexing', label: 'Indexing', detail: 'Kept is refreshing local search.' };
+  if (stale) return { status: 'stale', label: 'Search updating', detail: 'Saved mail is available; new rows are catching up.' };
+  if (String(query || '').trim() && visibleCount === 0) return { status: 'no-results', label: 'No results', detail: 'No synced or imported local mail matches.' };
+  return { status: 'ready', label: 'Search ready', detail: 'Offline local search is ready.' };
 }
 
 export function createLocalStorageAdapter(storage) {
@@ -41,6 +53,14 @@ export function createLocalStorageAdapter(storage) {
     async setItem(key, value) { storage.setItem(key, value); },
     async removeItem(key) { storage.removeItem(key); },
   };
+}
+
+function normalizeInboxSearchTerms(query) {
+  return String(query || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.replace(/^[^\p{L}\p{N}@._-]+|[^\p{L}\p{N}@._-]+$/gu, ''))
+    .filter(Boolean);
 }
 
 function compareNewestFirst(left, right) {

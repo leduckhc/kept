@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSearchRows, createInMemorySearchIndex, encryptionDecision, sqliteSchema } from '../src/index.js';
+import { buildSearchRows, createInMemorySearchIndex, encryptionDecision, normalizeSearchTerms, sqliteSchema } from '../src/index.js';
 
 test('search ranks matching local threads', () => {
   const index = createInMemorySearchIndex();
@@ -15,6 +15,17 @@ test('empty query returns no local results', () => {
   const index = createInMemorySearchIndex();
   index.addThread({ id: 'a', subject: 'Invoice', sender: 'a', body: 'body' });
   assert.deepEqual(index.search('   '), []);
+});
+
+test('search is case-insensitive and includes sender email, snippet, unicode, and trimmed query punctuation', () => {
+  const index = createInMemorySearchIndex();
+  index.addThread({ id: 'a', subject: 'Crème brûlée receipt', sender: 'José Bento', senderEmail: 'jose@example.com', snippet: 'Café torch notes', recipients: ['you@kept.local'], body: 'Dessert invoice body', receivedAt: '2026-05-25T00:00:00Z' });
+
+  assert.equal(index.search('JOSÉ')[0].id, 'a');
+  assert.equal(index.search('jose@example.com')[0].id, 'a');
+  assert.equal(index.search('café')[0].id, 'a');
+  assert.equal(index.search('invoice?')[0].id, 'a');
+  assert.deepEqual(normalizeSearchTerms('  (invoice?) café!  '), ['invoice', 'café']);
 });
 
 test('schema includes local email storage and FTS5 tables', () => {
