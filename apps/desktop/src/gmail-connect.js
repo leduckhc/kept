@@ -43,6 +43,23 @@ export function filterInboxThreads(threads, query) {
   });
 }
 
+export function repositoryMessagesToInboxThreads(messages = []) {
+  return messages.map((message) => ({
+    id: message.threadId || message.id,
+    providerMessageId: message.providerMessageId || message.id,
+    sender: message.sender?.name || message.sender?.email || 'unknown sender',
+    senderEmail: message.sender?.email || '',
+    subject: message.subject || '(no subject)',
+    snippet: message.snippet || '',
+    recipients: (message.recipients || []).map((recipient) => recipient.email || recipient.name).filter(Boolean),
+    receivedAt: message.receivedAt,
+    isPriority: false,
+    isUnread: !message.flags?.read,
+    isNewSender: false,
+    source: 'gmail',
+  }));
+}
+
 export function createLocalStorageAdapter(storage) {
   return {
     async getItem(key) { return storage.getItem(key); },

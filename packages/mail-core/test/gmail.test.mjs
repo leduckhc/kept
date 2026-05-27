@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   createLocalMailRepository,
+  createBrowserLocalMailRepository,
   createFakeGmailConnector,
   createGmailApiConnector,
   createGmailOAuthUrl,
@@ -202,6 +204,37 @@ test('local JSON mail store persists synced Gmail state and reloads without plai
   assert.doesNotMatch(raw, /ya29|refresh-token/);
 });
 
+
+test('browser-safe local repository persists Gmail readonly sync without plaintext body or tokens in storage', async () => {
+  const storage = createMemoryJsonStorage();
+  const repo = await createBrowserLocalMailRepository({
+    storage,
+    key: 'kept.browser.repo.test',
+    cryptoImpl: webcrypto,
+  });
+  const connector = createFakeGmailConnector([
+    {
+      id: 'gmail_msg_browser_1',
+      threadId: 'gmail_thr_browser_1',
+      historyId: 'history-browser-1',
+      subject: 'Desktop browser repository sync',
+      from: 'Mara Vale <mara@example.com>',
+      to: 'you@example.com',
+      textBody: 'Browser repository body stays encrypted at rest.',
+      snippet: 'Browser repository body stays encrypted at rest.',
+      receivedAt: '2026-05-27T09:00:00Z',
+    },
+  ]);
+
+  await syncGmailInbox({ connector, accountId: 'acct_local_gmail', repository: repo, accountEmail: 'you@example.com' });
+  const raw = storage.entries.get('kept.browser.repo.test');
+  assert.doesNotMatch(raw, /Browser repository body stays encrypted/);
+  assert.doesNotMatch(raw, /ya29|refresh-token|access_token|refresh_token/);
+
+  const reopened = await createBrowserLocalMailRepository({ storage, key: 'kept.browser.repo.test', cryptoImpl: webcrypto });
+  assert.equal((await reopened.getMessage('gmail_msg_browser_1')).body, 'Browser repository body stays encrypted at rest.');
+  assert.equal((await reopened.getSyncState('acct_local_gmail')).historyId, 'history-browser-1');
+});
 
 test('gmail sync writes real messages into the durable local repository and reloads as inbox rows', async () => {
   await withTempRepo(async (storePath) => {

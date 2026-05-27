@@ -1,5 +1,5 @@
 import { brandTokens, renderPipMark } from '/packages/ui/src/index.js';
-import { createJsonMailStore, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
+import { createBrowserLocalMailRepository, createJsonMailStore, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
 import { disabledProvider } from '/packages/ai-core/src/index.js';
 import {
   GMAIL_ACCOUNT_ID,
@@ -8,13 +8,19 @@ import {
   filterInboxThreads,
   getGmailSyncStatus,
   getSyncedGmailThreads,
+  repositoryMessagesToInboxThreads,
 } from './gmail-connect.js';
 
 const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
 const root = document.querySelector('#root');
 const gmailAdapter = window.__KEPT_GMAIL_CONNECT__ || null;
-const mailStore = createJsonMailStore({ storage: createLocalStorageAdapter(localStorage) });
+const storageAdapter = createLocalStorageAdapter(localStorage);
+const mailStore = createJsonMailStore({ storage: storageAdapter });
+const mailRepositoryPromise = createBrowserLocalMailRepository({
+  storage: storageAdapter,
+  key: 'kept.localMailRepository.v1',
+});
 
 const state = {
   threads: loadThreads(),
@@ -42,9 +48,16 @@ window.addEventListener('keydown', (event) => {
 });
 
 async function initializeGmailState() {
-  const syncState = await mailStore.loadSyncState();
-  state.gmail.threads = getSyncedGmailThreads(syncState, { accountId: state.gmail.accountId });
-  state.gmail.status = getGmailSyncStatus(syncState, { accountId: state.gmail.accountId });
+  const repository = await mailRepositoryPromise;
+  const repositoryMessages = await repository.listMessages({ accountId: state.gmail.accountId });
+  if (repositoryMessages.length > 0) {
+    state.gmail.threads = repositoryMessagesToInboxThreads(repositoryMessages);
+    state.gmail.status = (await repository.getSyncState(state.gmail.accountId))?.status || 'connected';
+  } else {
+    const syncState = await mailStore.loadSyncState();
+    state.gmail.threads = getSyncedGmailThreads(syncState, { accountId: state.gmail.accountId });
+    state.gmail.status = getGmailSyncStatus(syncState, { accountId: state.gmail.accountId });
+  }
   renderApp();
 }
 
@@ -418,8 +431,10 @@ async function syncGmail() {
 
   try {
     const connector = await getGmailConnector();
-    const result = await syncGmailInbox({ connector, accountId: state.gmail.accountId, mailStore, maxResults: 25 });
-    state.gmail.threads = result.threads.map(toPersistedThread);
+    const repository = await mailRepositoryPromise;
+    const result = await syncGmailInbox({ connector, accountId: state.gmail.accountId, repository, mailStore, maxResults: 25 });
+    const repositoryMessages = await repository.listMessages({ accountId: state.gmail.accountId });
+    state.gmail.threads = repositoryMessagesToInboxThreads(repositoryMessages).map(toPersistedThread);
     state.gmail.status = result.status || (state.gmail.threads.length > 0 ? 'connected' : 'connected-empty');
     renderApp();
   } catch (error) {
