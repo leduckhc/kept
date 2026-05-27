@@ -10,6 +10,14 @@ export function getSyncedGmailThreads(syncState, { accountId = GMAIL_ACCOUNT_ID 
     .sort(compareNewestFirst);
 }
 
+export function getGmailSyncStatus(syncState, { accountId = GMAIL_ACCOUNT_ID } = {}) {
+  const accounts = syncState?.accounts && typeof syncState.accounts === 'object' ? syncState.accounts : {};
+  const account = accounts[accountId] || Object.values(accounts).find((entry) => entry?.provider === 'gmail');
+  if (!account) return 'never-connected';
+  if (account.status) return account.status;
+  return Array.isArray(account.threads) && account.threads.length > 0 ? 'connected' : 'connected-empty';
+}
+
 export function combineInboxThreads(gmailThreads, localThreads) {
   const seen = new Set();
   return [...gmailThreads, ...localThreads].filter((thread) => {

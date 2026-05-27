@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   combineInboxThreads,
   filterInboxThreads,
+  getGmailSyncStatus,
   getSyncedGmailThreads,
 } from '../src/gmail-connect.js';
 
@@ -45,6 +46,14 @@ test('getSyncedGmailThreads loads Gmail account threads newest first', () => {
 
   assert.deepEqual(threads.map((thread) => thread.id), ['gmail-thread', 'older']);
   assert.ok(threads.every((thread) => thread.source === 'gmail'));
+});
+
+
+test('getGmailSyncStatus exposes the canonical Gmail connection states', () => {
+  assert.equal(getGmailSyncStatus(null), 'never-connected');
+  assert.equal(getGmailSyncStatus({ accounts: { acct_local_gmail: { provider: 'gmail', threads: [] } } }), 'connected-empty');
+  assert.equal(getGmailSyncStatus({ accounts: { acct_local_gmail: { provider: 'gmail', status: 'sync-error', threads: [gmailThread] } } }), 'sync-error');
+  assert.equal(getGmailSyncStatus({ accounts: { acct_local_gmail: { provider: 'gmail', status: 'auth-revoked', threads: [] } } }), 'auth-revoked');
 });
 
 test('combineInboxThreads keeps real synced Gmail rows before local import rows and dedupes', () => {

@@ -111,13 +111,11 @@ test('startOAuth uses readonly OAuth config, loopback callback parsing, and keyc
   assert.deepEqual(result, { accountId, stored: 'keychain' });
   assert.equal(savedTokens.length, 1);
   assert.equal(savedTokens[0].accountId, accountId);
-  assert.deepEqual(savedTokens[0].tokens, {
-    accessToken: 'access-value',
-    refreshToken: 'refresh-value',
-    expiresAt: 3600,
-    tokenType: 'Bearer',
-    scope: 'https://www.googleapis.com/auth/gmail.readonly',
-  });
+  assert.equal(savedTokens[0].tokens.accessToken, 'access-value');
+  assert.equal(savedTokens[0].tokens.refreshToken, 'refresh-value');
+  assert.equal(savedTokens[0].tokens.tokenType, 'Bearer');
+  assert.equal(savedTokens[0].tokens.scope, 'https://www.googleapis.com/auth/gmail.readonly');
+  assert.match(savedTokens[0].tokens.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.deepEqual(invocations.map((entry) => entry.command), [
     'gmail_oauth_config',
     'gmail_start_oauth',
@@ -146,19 +144,18 @@ test('exchangeAuthorizationCode normalizes Google snake_case tokens for the mail
     verifier: 'verifier-secret',
   });
 
-  assert.deepEqual(tokens, {
-    accessToken: 'access-value',
-    refreshToken: 'refresh-value',
-    expiresAt: 3600,
-    tokenType: 'Bearer',
-    scope: 'https://www.googleapis.com/auth/gmail.readonly',
-  });
+  assert.equal(tokens.accessToken, 'access-value');
+  assert.equal(tokens.refreshToken, 'refresh-value');
+  assert.equal(tokens.tokenType, 'Bearer');
+  assert.equal(tokens.scope, 'https://www.googleapis.com/auth/gmail.readonly');
+  assert.match(tokens.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
 test('createConnector returns Gmail API connector backed by Tauri keychain adapter', async () => {
   const bridge = createTauriGmailBridge({
     mailCore: makeMailCore(),
     invoke: async (command, payload) => {
+      if (command === 'gmail_oauth_config') return { tokenUrl: 'https://oauth2.googleapis.com/token', clientId: 'desktop-client.apps.googleusercontent.com' };
       if (command === 'gmail_keychain_get') {
         assert.equal(payload.account, accountId);
         return JSON.stringify({ access_token: 'stored-access', token_type: 'Bearer' });

@@ -284,26 +284,41 @@ export function createMemoryKeychain() {
   };
 }
 
-export function createGmailApiConnector({ tokenStore, fetchImpl = globalThis.fetch, accountId = 'acct_gmail_primary' } = {}) {
+export function createGmailApiConnector({
+  tokenStore,
+  fetchImpl = globalThis.fetch,
+  accountId = 'acct_gmail_primary',
+  tokenUrl = 'https://oauth2.googleapis.com/token',
+  clientId = '',
+  clientSecret = '',
+  now = () => new Date(),
+} = {}) {
   requireField('tokenStore', tokenStore);
   requireField('fetchImpl', fetchImpl);
 
   return {
     provider: 'gmail',
     async listRecentMessages({ maxResults = 25 } = {}) {
-      const accessToken = await readAccessToken(tokenStore, accountId);
-      const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
-      listUrl.searchParams.set('labelIds', 'INBOX');
-      listUrl.searchParams.set('maxResults', String(maxResults));
-      const listJson = await fetchGmailJson(fetchImpl, listUrl, accessToken);
-      const messageRefs = Array.isArray(listJson.messages) ? listJson.messages : [];
-      const messages = [];
-      for (const ref of messageRefs) {
-        const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(ref.id)}`);
-        messageUrl.searchParams.set('format', 'full');
-        messages.push(normalizeGmailApiMessage(await fetchGmailJson(fetchImpl, messageUrl, accessToken)));
+      const accessToken = await readAccessToken(tokenStore, accountId, { fetchImpl, tokenUrl, clientId, clientSecret, now });
+      try {
+        const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+        listUrl.searchParams.set('labelIds', 'INBOX');
+        listUrl.searchParams.set('maxResults', String(maxResults));
+        const listJson = await fetchGmailJson(fetchImpl, listUrl, accessToken);
+        const messageRefs = Array.isArray(listJson.messages) ? listJson.messages : [];
+        const messages = [];
+        for (const ref of messageRefs) {
+          const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(ref.id)}`);
+          messageUrl.searchParams.set('format', 'full');
+          messages.push(normalizeGmailApiMessage(await fetchGmailJson(fetchImpl, messageUrl, accessToken)));
+        }
+        return { historyId: listJson.historyId || messages.at(-1)?.historyId || null, messages };
+      } catch (error) {
+        if (error?.code === 'GMAIL_AUTH_REVOKED' && typeof tokenStore.clearTokens === 'function') {
+          await tokenStore.clearTokens(accountId);
+        }
+        throw error;
       }
-      return { historyId: listJson.historyId || messages.at(-1)?.historyId || null, messages };
     },
   };
 }
@@ -319,7 +334,7 @@ export function normalizeGmailApiMessage(message) {
     subject: headers.subject || '(no subject)',
     from: headers.from || 'unknown sender',
     to: headers.to || '',
-    snippet: summarizeBody(textBody) || '',
+    snippet: summarizeBody(textBody) || message.snippet || '',
     textBody,
     receivedAt,
   };
@@ -365,10 +380,26 @@ export function createMemoryJsonStorage() {
   };
 }
 
-export async function syncGmailInbox({ connector, accountId, mailStore, maxResults = 25 } = {}) {
-  const result = await ingestGmailMessages({ connector, accountId, maxResults });
-  if (mailStore) await mailStore.saveSyncResult(result);
-  return result;
+export async function syncGmailInbox({ connector, accountId, mailStore, repository, accountEmail, maxResults = 25 } = {}) {
+  requireField('accountId', accountId);
+  try {
+    const result = await ingestGmailMessages({ connector, accountId, maxResults });
+    const status = result.threads.length > 0 ? 'connected' : 'connected-empty';
+    const nextResult = { ...result, status };
+    if (repository) await saveGmailSyncToRepository({ repository, accountId, accountEmail, connector, result: nextResult });
+    if (mailStore) await mailStore.saveSyncResult(nextResult);
+    return repository ? { ...nextResult, threads: await repository.listThreads({ accountId }) } : nextResult;
+  } catch (error) {
+    if (repository) {
+      await repository.saveSyncState(accountId, {
+        provider: 'gmail',
+        status: error?.code === 'GMAIL_AUTH_REVOKED' ? 'auth-revoked' : 'sync-error',
+        error: redactForLogs(error?.message || error),
+        syncedAt: new Date(0).toISOString(),
+      });
+    }
+    throw error;
+  }
 }
 
 export const gmailSyncCursorPlan = {
@@ -425,6 +456,43 @@ export async function ingestGmailMessages({ connector, accountId, maxResults = 1
     },
     threads,
     rows: threads.map((thread) => buildSearchRows(thread)),
+  };
+}
+
+async function saveGmailSyncToRepository({ repository, accountId, accountEmail, connector, result }) {
+  await repository.upsertAccount({
+    id: accountId,
+    provider: connector?.provider || result.provider || 'gmail',
+    email: accountEmail || `${accountId}@local.kept`,
+    updatedAt: result.cursor.syncedAt,
+  });
+
+  for (const thread of result.threads) {
+    await repository.upsertMessage(gmailThreadToLocalMessage(thread));
+  }
+
+  await repository.saveSyncState(accountId, {
+    provider: result.provider || 'gmail',
+    status: result.status,
+    historyId: result.cursor.historyId,
+    syncedAt: result.cursor.syncedAt,
+  });
+}
+
+function gmailThreadToLocalMessage(thread) {
+  return {
+    id: thread.providerMessageId || thread.id,
+    accountId: thread.accountId,
+    threadId: thread.id,
+    providerMessageId: thread.providerMessageId || thread.id,
+    sender: { name: thread.sender || 'unknown sender', email: thread.senderEmail || '' },
+    recipients: thread.recipients || [],
+    subject: thread.subject || '(no subject)',
+    body: thread.body || thread.snippet || '',
+    snippet: thread.snippet || summarizeBody(thread.body || ''),
+    receivedAt: thread.receivedAt || new Date(0).toISOString(),
+    flags: { read: !thread.isUnread, starred: false, archived: false },
+    metadata: { provider: 'gmail', historyId: thread.historyId || null },
   };
 }
 
@@ -529,18 +597,69 @@ function normalizeTokenPayload(tokens) {
   };
 }
 
-async function readAccessToken(tokenStore, accountId) {
+async function readAccessToken(tokenStore, accountId, refreshOptions = {}) {
   const tokens = await tokenStore.loadTokens(accountId);
   if (!tokens?.accessToken) throw new Error('Gmail access token not found in keychain');
+  if (isTokenExpired(tokens, refreshOptions.now) && tokens.refreshToken) {
+    const refreshed = await refreshGmailAccessToken(tokens, refreshOptions);
+    const nextTokens = normalizeTokenPayload({
+      ...tokens,
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken || tokens.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      scope: refreshed.scope || tokens.scope,
+      tokenType: refreshed.tokenType || tokens.tokenType,
+    });
+    if (typeof tokenStore.saveTokens === 'function') await tokenStore.saveTokens(accountId, nextTokens);
+    return nextTokens.accessToken;
+  }
   return tokens.accessToken;
+}
+
+function isTokenExpired(tokens, now = () => new Date()) {
+  if (!tokens?.expiresAt) return false;
+  const expiresAt = Date.parse(tokens.expiresAt);
+  if (Number.isNaN(expiresAt)) return false;
+  return expiresAt <= now().getTime() + 60_000;
+}
+
+async function refreshGmailAccessToken(tokens, { fetchImpl, tokenUrl, clientId, clientSecret, now = () => new Date() } = {}) {
+  requireField('refreshToken', tokens.refreshToken);
+  const body = new URLSearchParams();
+  body.set('grant_type', 'refresh_token');
+  body.set('refresh_token', tokens.refreshToken);
+  if (clientId) body.set('client_id', clientId);
+  if (clientSecret) body.set('client_secret', clientSecret);
+  const response = await fetchImpl(tokenUrl, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!response?.ok) throw createGmailAuthRevokedError(`Gmail token refresh failed with ${response?.status || 'unknown'} status`);
+  const json = await response.json();
+  const expiresInSeconds = Number(json.expires_in || 3600);
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token || tokens.refreshToken,
+    expiresAt: new Date(now().getTime() + expiresInSeconds * 1000).toISOString(),
+    scope: json.scope || tokens.scope,
+    tokenType: json.token_type || tokens.tokenType || 'Bearer',
+  };
 }
 
 async function fetchGmailJson(fetchImpl, url, accessToken) {
   const response = await fetchImpl(String(url), {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
   });
+  if (response?.status === 401 || response?.status === 403) throw createGmailAuthRevokedError(`Gmail credentials were revoked or expired with ${response.status} status`);
   if (!response?.ok) throw new Error(`Gmail API request failed with ${response?.status || 'unknown'} status`);
   return response.json();
+}
+
+function createGmailAuthRevokedError(message) {
+  const error = new Error(message || 'Gmail authorization was revoked.');
+  error.code = 'GMAIL_AUTH_REVOKED';
+  return error;
 }
 
 function extractGmailTextBody(payload) {

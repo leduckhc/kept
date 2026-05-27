@@ -6,6 +6,7 @@ import {
   combineInboxThreads,
   createLocalStorageAdapter,
   filterInboxThreads,
+  getGmailSyncStatus,
   getSyncedGmailThreads,
 } from './gmail-connect.js';
 
@@ -20,7 +21,7 @@ const state = {
   importMeta: loadImportMeta(),
   searchQuery: '',
   gmail: {
-    status: 'idle',
+    status: 'never-connected',
     threads: [],
     errorMessage: '',
     accountId: GMAIL_ACCOUNT_ID,
@@ -43,7 +44,7 @@ window.addEventListener('keydown', (event) => {
 async function initializeGmailState() {
   const syncState = await mailStore.loadSyncState();
   state.gmail.threads = getSyncedGmailThreads(syncState, { accountId: state.gmail.accountId });
-  state.gmail.status = state.gmail.threads.length > 0 ? 'connected' : 'idle';
+  state.gmail.status = getGmailSyncStatus(syncState, { accountId: state.gmail.accountId });
   renderApp();
 }
 
@@ -126,10 +127,10 @@ function renderGmailStatus() {
   );
   const actions = el('div', { className: 'mail-actions' });
 
-  if ((state.gmail.status === 'idle' || state.gmail.status === 'auth-error') && state.gmail.threads.length > 0) {
+  if ((state.gmail.status === 'never-connected' || state.gmail.status === 'oauth-denied' || state.gmail.status === 'auth-revoked') && state.gmail.threads.length > 0) {
     actions.append(el('button', { type: 'button', className: 'primary-mail-action', text: 'Connect Gmail', id: 'connect-gmail' }));
   }
-  if (state.gmail.status === 'connected' || state.gmail.status === 'sync-error') {
+  if (state.gmail.status === 'connected' || state.gmail.status === 'connected-empty' || state.gmail.status === 'sync-error') {
     actions.append(el('button', { type: 'button', className: 'primary-mail-action', text: 'Sync now', id: 'sync-gmail' }));
   }
   if (state.gmail.threads.length > 0) {
@@ -142,7 +143,7 @@ function renderGmailStatus() {
 }
 
 function gmailStatusCopy() {
-  if (state.gmail.status === 'oauth') {
+  if (state.gmail.status === 'oauth-pending') {
     return {
       title: 'Opening Gmail sign-in',
       detail: 'Finish the readonly Gmail consent in your browser, then return to Kept.',
@@ -160,7 +161,19 @@ function gmailStatusCopy() {
       detail: 'Recent Gmail appears first. Bodies and OAuth tokens are not logged.',
     };
   }
-  if (state.gmail.status === 'auth-error') {
+  if (state.gmail.status === 'connected-empty') {
+    return {
+      title: 'Gmail connected · no inbox mail yet',
+      detail: 'Kept checked Gmail and did not find recent inbox rows. Sync again anytime.',
+    };
+  }
+  if (state.gmail.status === 'auth-revoked') {
+    return {
+      title: 'Gmail access needs reconnecting',
+      detail: state.gmail.errorMessage || 'Reconnect Gmail to refresh readonly access. Existing local mail stays available.',
+    };
+  }
+  if (state.gmail.status === 'oauth-denied') {
     return {
       title: 'Gmail sign-in needs attention',
       detail: state.gmail.errorMessage || 'Try connecting Gmail again.',
@@ -192,7 +205,7 @@ function renderEmptyGmailState() {
 }
 
 function emptyStateCopy() {
-  if (state.gmail.status === 'oauth') {
+  if (state.gmail.status === 'oauth-pending') {
     return {
       eyebrow: 'Browser sign-in',
       title: 'Finish Gmail in your browser.',
@@ -210,11 +223,20 @@ function emptyStateCopy() {
       help: 'You can leave this window open. Kept will keep the mbox fallback available if you prefer a manual import later.',
     };
   }
-  if (state.gmail.status === 'auth-error') {
+  if (state.gmail.status === 'connected-empty') {
     return {
-      eyebrow: 'Sign-in interrupted',
-      title: 'Gmail did not connect yet.',
-      body: 'Nothing synced locally. Try Gmail again, or use the local mbox fallback if you would rather import manually.',
+      eyebrow: 'Gmail connected',
+      title: 'No recent inbox mail found.',
+      body: 'Kept checked Gmail and saved the empty sync state locally. You can sync again or import a Takeout mbox.',
+      actionLabel: '',
+      help: 'The mbox fallback above remains available for older exported mail.',
+    };
+  }
+  if (state.gmail.status === 'oauth-denied' || state.gmail.status === 'auth-revoked') {
+    return {
+      eyebrow: state.gmail.status === 'auth-revoked' ? 'Reconnect needed' : 'Sign-in interrupted',
+      title: state.gmail.status === 'auth-revoked' ? 'Gmail access expired.' : 'Gmail did not connect yet.',
+      body: state.gmail.status === 'auth-revoked' ? 'Reconnect Gmail to refresh readonly access. Existing local mail stays available.' : 'Nothing synced locally. Try Gmail again, or use the local mbox fallback if you would rather import manually.',
       actionLabel: 'Connect Gmail',
       help: 'The mbox fallback above still gives you a local Gmail Takeout import path without OAuth.',
     };
@@ -335,7 +357,7 @@ function wireGmailControls() {
   document.querySelector('#clear-gmail-cache')?.addEventListener('click', async () => {
     await mailStore.clear();
     state.gmail.threads = [];
-    state.gmail.status = 'idle';
+    state.gmail.status = 'never-connected';
     state.gmail.errorMessage = '';
     renderApp();
   });
@@ -374,7 +396,7 @@ function wireSearchControl() {
 }
 
 async function startGmailConnect() {
-  state.gmail.status = 'oauth';
+  state.gmail.status = 'oauth-pending';
   state.gmail.errorMessage = '';
   renderApp();
 
@@ -383,7 +405,7 @@ async function startGmailConnect() {
     await gmailAdapter.startOAuth({ accountId: state.gmail.accountId });
     await syncGmail();
   } catch (error) {
-    state.gmail.status = 'auth-error';
+    state.gmail.status = error?.code === 'GMAIL_AUTH_REVOKED' ? 'auth-revoked' : 'oauth-denied';
     state.gmail.errorMessage = userFacingError(error, 'Could not finish Gmail sign-in.');
     renderApp();
   }
@@ -398,10 +420,10 @@ async function syncGmail() {
     const connector = await getGmailConnector();
     const result = await syncGmailInbox({ connector, accountId: state.gmail.accountId, mailStore, maxResults: 25 });
     state.gmail.threads = result.threads.map(toPersistedThread);
-    state.gmail.status = 'connected';
+    state.gmail.status = result.status || (state.gmail.threads.length > 0 ? 'connected' : 'connected-empty');
     renderApp();
   } catch (error) {
-    state.gmail.status = state.gmail.threads.length > 0 ? 'sync-error' : 'auth-error';
+    state.gmail.status = error?.code === 'GMAIL_AUTH_REVOKED' ? 'auth-revoked' : 'sync-error';
     state.gmail.errorMessage = userFacingError(error, 'Could not sync Gmail.');
     renderApp();
   }
