@@ -5,6 +5,10 @@ edition = "2021"
 
 [dependencies]
 tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+open = "5"
+url = "2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

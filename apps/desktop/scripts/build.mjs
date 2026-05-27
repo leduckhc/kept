@@ -10,8 +10,9 @@ await cp('../../packages', 'dist/packages', {
   filter: (source) => !source.includes('/node_modules/') && !source.includes('/test/'),
 });
 
-const packagedMainPath = 'dist/src/main.js';
-const packagedMain = await readFile(packagedMainPath, 'utf8');
-await writeFile(packagedMainPath, packagedMain.replaceAll("from '/packages/", "from '../packages/"));
+for (const packagedPath of ['dist/src/main.js', 'dist/src/tauri-gmail-bridge.js']) {
+  const packagedSource = await readFile(packagedPath, 'utf8');
+  await writeFile(packagedPath, packagedSource.replaceAll("from '/packages/", "from '../packages/"));
+}
 
 console.log('desktop static shell built with Tauri-safe runtime assets');

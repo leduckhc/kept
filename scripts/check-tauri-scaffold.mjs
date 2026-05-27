@@ -10,6 +10,8 @@ const required = [
   'packages/ai-core/src/index.js',
   'apps/desktop/dist/index.html',
   'apps/desktop/dist/src/main.js',
+  'apps/desktop/dist/src/tauri-gmail-bridge.js',
+  'apps/desktop/dist/src/tauri-gmail-bridge-core.js',
   'apps/desktop/dist/src/styles.css',
   'apps/desktop/dist/packages/ui/src/index.js',
   'apps/desktop/dist/packages/mail-core/src/index.js',
@@ -27,10 +29,17 @@ if (!distIndex.includes('./src/main.js')) {
 }
 
 const distMain = await readFile('apps/desktop/dist/src/main.js', 'utf8');
-if (distMain.includes("from '/packages/")) {
+const distBridge = await readFile('apps/desktop/dist/src/tauri-gmail-bridge.js', 'utf8');
+if (!distIndex.includes('./src/tauri-gmail-bridge.js')) {
+  throw new Error('desktop dist index must load the Tauri Gmail bridge before the Kept runtime script');
+}
+if (distIndex.indexOf('./src/tauri-gmail-bridge.js') > distIndex.indexOf('./src/main.js')) {
+  throw new Error('desktop dist index must load the Tauri Gmail bridge before main.js');
+}
+if (distMain.includes("from '/packages/") || distBridge.includes("from '/packages/")) {
   throw new Error('desktop dist runtime must not use root-absolute package imports; Tauri packaged app needs relative imports');
 }
-if (!distMain.includes("from '../packages/")) {
+if (!distMain.includes("from '../packages/") || !distBridge.includes("from '../packages/")) {
   throw new Error('desktop dist runtime must load packaged workspace modules with relative imports');
 }
 if (distMain.includes('sampleInboxThreads') || distMain.includes('Synthetic preview:')) {
