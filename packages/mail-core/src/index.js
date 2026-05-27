@@ -284,26 +284,41 @@ export function createMemoryKeychain() {
   };
 }
 
-export function createGmailApiConnector({ tokenStore, fetchImpl = globalThis.fetch, accountId = 'acct_gmail_primary' } = {}) {
+export function createGmailApiConnector({
+  tokenStore,
+  fetchImpl = globalThis.fetch,
+  accountId = 'acct_gmail_primary',
+  tokenUrl = 'https://oauth2.googleapis.com/token',
+  clientId = '',
+  clientSecret = '',
+  now = () => new Date(),
+} = {}) {
   requireField('tokenStore', tokenStore);
   requireField('fetchImpl', fetchImpl);
 
   return {
     provider: 'gmail',
     async listRecentMessages({ maxResults = 25 } = {}) {
-      const accessToken = await readAccessToken(tokenStore, accountId);
-      const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
-      listUrl.searchParams.set('labelIds', 'INBOX');
-      listUrl.searchParams.set('maxResults', String(maxResults));
-      const listJson = await fetchGmailJson(fetchImpl, listUrl, accessToken);
-      const messageRefs = Array.isArray(listJson.messages) ? listJson.messages : [];
-      const messages = [];
-      for (const ref of messageRefs) {
-        const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(ref.id)}`);
-        messageUrl.searchParams.set('format', 'full');
-        messages.push(normalizeGmailApiMessage(await fetchGmailJson(fetchImpl, messageUrl, accessToken)));
+      const accessToken = await readAccessToken(tokenStore, accountId, { fetchImpl, tokenUrl, clientId, clientSecret, now });
+      try {
+        const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+        listUrl.searchParams.set('labelIds', 'INBOX');
+        listUrl.searchParams.set('maxResults', String(maxResults));
+        const listJson = await fetchGmailJson(fetchImpl, listUrl, accessToken);
+        const messageRefs = Array.isArray(listJson.messages) ? listJson.messages : [];
+        const messages = [];
+        for (const ref of messageRefs) {
+          const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(ref.id)}`);
+          messageUrl.searchParams.set('format', 'full');
+          messages.push(normalizeGmailApiMessage(await fetchGmailJson(fetchImpl, messageUrl, accessToken)));
+        }
+        return { historyId: listJson.historyId || messages.at(-1)?.historyId || null, messages };
+      } catch (error) {
+        if (error?.code === 'GMAIL_AUTH_REVOKED' && typeof tokenStore.clearTokens === 'function') {
+          await tokenStore.clearTokens(accountId);
+        }
+        throw error;
       }
-      return { historyId: listJson.historyId || messages.at(-1)?.historyId || null, messages };
     },
   };
 }
@@ -319,7 +334,7 @@ export function normalizeGmailApiMessage(message) {
     subject: headers.subject || '(no subject)',
     from: headers.from || 'unknown sender',
     to: headers.to || '',
-    snippet: summarizeBody(textBody) || '',
+    snippet: summarizeBody(textBody) || message.snippet || '',
     textBody,
     receivedAt,
   };
@@ -365,10 +380,26 @@ export function createMemoryJsonStorage() {
   };
 }
 
-export async function syncGmailInbox({ connector, accountId, mailStore, maxResults = 25 } = {}) {
-  const result = await ingestGmailMessages({ connector, accountId, maxResults });
-  if (mailStore) await mailStore.saveSyncResult(result);
-  return result;
+export async function syncGmailInbox({ connector, accountId, mailStore, repository, accountEmail, maxResults = 25 } = {}) {
+  requireField('accountId', accountId);
+  try {
+    const result = await ingestGmailMessages({ connector, accountId, maxResults });
+    const status = result.threads.length > 0 ? 'connected' : 'connected-empty';
+    const nextResult = { ...result, status };
+    if (repository) await saveGmailSyncToRepository({ repository, accountId, accountEmail, connector, result: nextResult });
+    if (mailStore) await mailStore.saveSyncResult(nextResult);
+    return repository ? { ...nextResult, threads: await repository.listThreads({ accountId }) } : nextResult;
+  } catch (error) {
+    if (repository) {
+      await repository.saveSyncState(accountId, {
+        provider: 'gmail',
+        status: error?.code === 'GMAIL_AUTH_REVOKED' ? 'auth-revoked' : 'sync-error',
+        error: redactForLogs(error?.message || error),
+        syncedAt: new Date(0).toISOString(),
+      });
+    }
+    throw error;
+  }
 }
 
 export const gmailSyncCursorPlan = {
@@ -425,6 +456,43 @@ export async function ingestGmailMessages({ connector, accountId, maxResults = 1
     },
     threads,
     rows: threads.map((thread) => buildSearchRows(thread)),
+  };
+}
+
+async function saveGmailSyncToRepository({ repository, accountId, accountEmail, connector, result }) {
+  await repository.upsertAccount({
+    id: accountId,
+    provider: connector?.provider || result.provider || 'gmail',
+    email: accountEmail || `${accountId}@local.kept`,
+    updatedAt: result.cursor.syncedAt,
+  });
+
+  for (const thread of result.threads) {
+    await repository.upsertMessage(gmailThreadToLocalMessage(thread));
+  }
+
+  await repository.saveSyncState(accountId, {
+    provider: result.provider || 'gmail',
+    status: result.status,
+    historyId: result.cursor.historyId,
+    syncedAt: result.cursor.syncedAt,
+  });
+}
+
+function gmailThreadToLocalMessage(thread) {
+  return {
+    id: thread.providerMessageId || thread.id,
+    accountId: thread.accountId,
+    threadId: thread.id,
+    providerMessageId: thread.providerMessageId || thread.id,
+    sender: { name: thread.sender || 'unknown sender', email: thread.senderEmail || '' },
+    recipients: thread.recipients || [],
+    subject: thread.subject || '(no subject)',
+    body: thread.body || thread.snippet || '',
+    snippet: thread.snippet || summarizeBody(thread.body || ''),
+    receivedAt: thread.receivedAt || new Date(0).toISOString(),
+    flags: { read: !thread.isUnread, starred: false, archived: false },
+    metadata: { provider: 'gmail', historyId: thread.historyId || null },
   };
 }
 
@@ -529,18 +597,69 @@ function normalizeTokenPayload(tokens) {
   };
 }
 
-async function readAccessToken(tokenStore, accountId) {
+async function readAccessToken(tokenStore, accountId, refreshOptions = {}) {
   const tokens = await tokenStore.loadTokens(accountId);
   if (!tokens?.accessToken) throw new Error('Gmail access token not found in keychain');
+  if (isTokenExpired(tokens, refreshOptions.now) && tokens.refreshToken) {
+    const refreshed = await refreshGmailAccessToken(tokens, refreshOptions);
+    const nextTokens = normalizeTokenPayload({
+      ...tokens,
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken || tokens.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      scope: refreshed.scope || tokens.scope,
+      tokenType: refreshed.tokenType || tokens.tokenType,
+    });
+    if (typeof tokenStore.saveTokens === 'function') await tokenStore.saveTokens(accountId, nextTokens);
+    return nextTokens.accessToken;
+  }
   return tokens.accessToken;
+}
+
+function isTokenExpired(tokens, now = () => new Date()) {
+  if (!tokens?.expiresAt) return false;
+  const expiresAt = Date.parse(tokens.expiresAt);
+  if (Number.isNaN(expiresAt)) return false;
+  return expiresAt <= now().getTime() + 60_000;
+}
+
+async function refreshGmailAccessToken(tokens, { fetchImpl, tokenUrl, clientId, clientSecret, now = () => new Date() } = {}) {
+  requireField('refreshToken', tokens.refreshToken);
+  const body = new URLSearchParams();
+  body.set('grant_type', 'refresh_token');
+  body.set('refresh_token', tokens.refreshToken);
+  if (clientId) body.set('client_id', clientId);
+  if (clientSecret) body.set('client_secret', clientSecret);
+  const response = await fetchImpl(tokenUrl, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!response?.ok) throw createGmailAuthRevokedError(`Gmail token refresh failed with ${response?.status || 'unknown'} status`);
+  const json = await response.json();
+  const expiresInSeconds = Number(json.expires_in || 3600);
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token || tokens.refreshToken,
+    expiresAt: new Date(now().getTime() + expiresInSeconds * 1000).toISOString(),
+    scope: json.scope || tokens.scope,
+    tokenType: json.token_type || tokens.tokenType || 'Bearer',
+  };
 }
 
 async function fetchGmailJson(fetchImpl, url, accessToken) {
   const response = await fetchImpl(String(url), {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
   });
+  if (response?.status === 401 || response?.status === 403) throw createGmailAuthRevokedError(`Gmail credentials were revoked or expired with ${response.status} status`);
   if (!response?.ok) throw new Error(`Gmail API request failed with ${response?.status || 'unknown'} status`);
   return response.json();
+}
+
+function createGmailAuthRevokedError(message) {
+  const error = new Error(message || 'Gmail authorization was revoked.');
+  error.code = 'GMAIL_AUTH_REVOKED';
+  return error;
 }
 
 function extractGmailTextBody(payload) {
@@ -932,6 +1051,119 @@ export async function createLocalMailRepository({ path: storePath, initialData, 
   return api;
 }
 
+export async function createBrowserLocalMailRepository({ storage, key = 'kept.localMailRepository.v1', initialData, bodyEncryptionKey, cryptoImpl = globalThis.crypto } = {}) {
+  requireField('storage', storage);
+  const bodyEncryption = await createBrowserBodyEncryptionContext({ key, bodyEncryptionKey, cryptoImpl });
+  let state = initialData
+    ? await migrateBrowserLocalMailState(initialData, bodyEncryption)
+    : await loadBrowserLocalMailState(storage, key, bodyEncryption);
+
+  async function persist() {
+    const diskState = await serializeBrowserLocalMailStateForDisk(state, bodyEncryption);
+    await storage.setItem(key, `${JSON.stringify(diskState)}\n`);
+  }
+
+  const api = {
+    key,
+    async close() { await persist(); },
+    async upsertAccount(account) {
+      const normalized = normalizeLocalAccount(account);
+      state.accounts[normalized.id] = { ...state.accounts[normalized.id], ...normalized };
+      await persist();
+      return state.accounts[normalized.id];
+    },
+    async listAccounts() { return Object.values(state.accounts).map(clone); },
+    async getAccount(accountId) { return clone(state.accounts[accountId] || null); },
+    async upsertThread(thread) {
+      const normalized = normalizeLocalThread(thread);
+      const previous = state.threads[normalized.id] || {};
+      state.threads[normalized.id] = { ...previous, ...normalized, messageIds: normalized.messageIds.length ? normalized.messageIds : (previous.messageIds || []) };
+      await persist();
+      return clone(state.threads[normalized.id]);
+    },
+    async listThreads({ accountId } = {}) {
+      return Object.values(state.threads)
+        .filter((thread) => !accountId || thread.accountId === accountId)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+        .map(clone);
+    },
+    async getThread(threadId) { return clone(state.threads[threadId] || null); },
+    async upsertMessage(message) {
+      const normalizedInput = normalizeLocalMessage(message);
+      const existingId = findMessageIdByProvider(state, normalizedInput.accountId, normalizedInput.providerMessageId);
+      const id = existingId || normalizedInput.id;
+      const normalized = { ...normalizedInput, id, attachments: normalizedInput.attachments.map((attachment) => ({ ...attachment, messageId: id })) };
+      const previousMessage = state.messages[id];
+      if (previousMessage?.threadId && previousMessage.threadId !== normalized.threadId && state.threads[previousMessage.threadId]) {
+        state.threads[previousMessage.threadId].messageIds = (state.threads[previousMessage.threadId].messageIds || []).filter((messageId) => messageId !== id);
+      }
+      state.messages[id] = normalized;
+      state.attachments = Object.fromEntries(Object.entries(state.attachments).filter(([, attachment]) => attachment.messageId !== id));
+      normalized.attachments.forEach((attachment) => { state.attachments[scopedAttachmentKey(id, attachment.id)] = attachment; });
+      const thread = state.threads[normalized.threadId] || normalizeLocalThread({ id: normalized.threadId, accountId: normalized.accountId, subject: normalized.subject, updatedAt: normalized.receivedAt });
+      const messageIds = new Set(thread.messageIds || []);
+      messageIds.add(id);
+      state.threads[normalized.threadId] = {
+        ...thread,
+        subject: normalized.subject || thread.subject,
+        updatedAt: maxIsoTimestamp(thread.updatedAt, normalized.receivedAt),
+        messageIds: [...messageIds],
+      };
+      await persist();
+      return clone(state.messages[id]);
+    },
+    async getMessage(messageId) { return clone(state.messages[messageId] || null); },
+    async listMessages({ accountId, threadId } = {}) {
+      return Object.values(state.messages)
+        .filter((message) => (!accountId || message.accountId === accountId) && (!threadId || message.threadId === threadId))
+        .sort((left, right) => right.receivedAt.localeCompare(left.receivedAt))
+        .map(clone);
+    },
+    async setFlags(messageId, flags) {
+      requireField('messageId', messageId);
+      if (!state.messages[messageId]) throw new Error(`Local message not found: ${messageId}`);
+      state.messages[messageId].flags = normalizeLocalFlags({ ...state.messages[messageId].flags, ...flags });
+      await persist();
+      return clone(state.messages[messageId].flags);
+    },
+    async saveSyncState(accountId, syncState) {
+      requireField('accountId', accountId);
+      state.syncStates[accountId] = sanitizeSecretFields({ ...syncState, updatedAt: syncState.updatedAt || syncState.syncedAt || new Date(0).toISOString() });
+      await persist();
+      return clone(state.syncStates[accountId]);
+    },
+    async getSyncState(accountId) { return clone(state.syncStates[accountId] || null); },
+    async recordAiAudit(entry) {
+      const normalized = normalizeAiAuditEntry(entry);
+      state.aiAudits[normalized.id] = normalized;
+      await persist();
+      return clone(normalized);
+    },
+    async listAiAuditEntries({ threadId, messageId } = {}) {
+      return Object.values(state.aiAudits)
+        .filter((entry) => (!threadId || entry.threadId === threadId) && (!messageId || entry.messageId === messageId))
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map(clone);
+    },
+    async rebuildSearchIndex() {
+      const rows = Object.values(state.messages).map((message) => ({
+        messageId: message.id,
+        threadId: message.threadId,
+        subject: message.subject,
+        sender: message.sender.name || message.sender.email,
+        recipients: message.recipients.map((recipient) => recipient.email || recipient.name),
+        body: message.body,
+        receivedAt: message.receivedAt,
+      }));
+      return createRebuiltSearchIndex(rows);
+    },
+    exportState() { return clone(state); },
+  };
+
+  await persist();
+  return api;
+}
+
 export function createRepositoryCorruptionError(details = '') {
   const error = new Error(`Kept local mail store is corrupt. Move the store aside and rebuild from provider/local import. Details: ${redactForLogs(String(details)).slice(0, 180)}`);
   error.code = 'KEPT_LOCAL_STORE_CORRUPT';
@@ -1008,6 +1240,61 @@ function deserializeLocalMessageFromDisk(message, bodyEncryption) {
   };
 }
 
+async function loadBrowserLocalMailState(storage, key, bodyEncryption) {
+  try {
+    const raw = await storage.getItem(key);
+    if (!raw) return emptyLocalMailState();
+    return migrateBrowserLocalMailState(JSON.parse(raw), bodyEncryption);
+  } catch (error) {
+    if (error?.code === 'KEPT_LOCAL_STORE_CORRUPT') throw error;
+    throw createRepositoryCorruptionError(error?.message || error);
+  }
+}
+
+async function migrateBrowserLocalMailState(raw, bodyEncryption) {
+  if (!raw || typeof raw !== 'object') throw createRepositoryCorruptionError('local store root is not an object');
+  const next = emptyLocalMailState();
+  Object.values(raw.accounts || {}).forEach((account) => { next.accounts[account.id] = normalizeLocalAccount(account); });
+  Object.values(raw.threads || {}).forEach((thread) => { next.threads[thread.id] = normalizeLocalThread(thread); });
+  for (const message of Object.values(raw.messages || {})) {
+    const normalized = normalizeLocalMessage(await deserializeBrowserLocalMessageFromDisk(message, bodyEncryption));
+    next.messages[normalized.id] = normalized;
+    normalized.attachments.forEach((attachment) => { next.attachments[scopedAttachmentKey(normalized.id, attachment.id)] = attachment; });
+  }
+  Object.values(raw.attachments || {}).forEach((attachment) => {
+    const normalized = normalizeAttachmentMetadata(attachment);
+    next.attachments[scopedAttachmentKey(normalized.messageId || 'unscoped', normalized.id)] = normalized;
+  });
+  Object.entries(raw.syncStates || {}).forEach(([accountId, syncState]) => { next.syncStates[accountId] = sanitizeSecretFields(syncState); });
+  Object.values(raw.aiAudits || {}).forEach((entry) => { next.aiAudits[entry.id] = normalizeAiAuditEntry(entry); });
+  return next;
+}
+
+async function serializeBrowserLocalMailStateForDisk(state, bodyEncryption) {
+  const diskState = clone(state);
+  diskState.messages = Object.fromEntries(await Promise.all(
+    Object.entries(diskState.messages).map(async ([id, message]) => {
+      const encrypted = { ...message };
+      encrypted.bodyCiphertext = await encryptBrowserRepositoryText(message.body || '', bodyEncryption);
+      encrypted.snippetCiphertext = await encryptBrowserRepositoryText(message.snippet || '', bodyEncryption);
+      delete encrypted.body;
+      delete encrypted.snippet;
+      return [id, encrypted];
+    }),
+  ));
+  return diskState;
+}
+
+async function deserializeBrowserLocalMessageFromDisk(message, bodyEncryption) {
+  if (!message || typeof message !== 'object') return message;
+  if (!message.bodyCiphertext && !message.snippetCiphertext) return message;
+  return {
+    ...message,
+    body: await decryptBrowserRepositoryText(message.bodyCiphertext, bodyEncryption),
+    snippet: await decryptBrowserRepositoryText(message.snippetCiphertext, bodyEncryption),
+  };
+}
+
 async function createBodyEncryptionContext({ storePath, bodyEncryptionKey }) {
   const crypto = await import('node:crypto');
   const keyMaterial = bodyEncryptionKey
@@ -1017,6 +1304,20 @@ async function createBodyEncryptionContext({ storePath, bodyEncryptionKey }) {
     crypto,
     key: crypto.createHash('sha256').update(keyMaterial).digest(),
     keySource: bodyEncryptionKey ? 'caller-provided' : 'store-path-fallback',
+  };
+}
+
+async function createBrowserBodyEncryptionContext({ key, bodyEncryptionKey, cryptoImpl }) {
+  const subtle = cryptoImpl?.subtle;
+  if (!subtle || !cryptoImpl?.getRandomValues) throw new Error('Web Crypto is required for browser local mail repository encryption');
+  const encoder = new TextEncoder();
+  const keyMaterial = bodyEncryptionKey ? String(bodyEncryptionKey) : `kept-browser-local-mail-repository-v1:${key}`;
+  const digest = await subtle.digest('SHA-256', encoder.encode(keyMaterial));
+  return {
+    crypto: cryptoImpl,
+    subtle,
+    key: await subtle.importKey('raw', digest, 'AES-GCM', false, ['encrypt', 'decrypt']),
+    keySource: bodyEncryptionKey ? 'caller-provided' : 'storage-key-fallback',
   };
 }
 
@@ -1040,6 +1341,46 @@ function decryptRepositoryText(value, bodyEncryption) {
   } catch (error) {
     throw createRepositoryCorruptionError(error?.message || 'body decrypt failed');
   }
+}
+
+async function encryptBrowserRepositoryText(value, bodyEncryption) {
+  const iv = new Uint8Array(12);
+  bodyEncryption.crypto.getRandomValues(iv);
+  const ciphertext = await bodyEncryption.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    bodyEncryption.key,
+    new TextEncoder().encode(String(value || '')),
+  );
+  return `web-v1:${bytesToBase64(iv)}:${bytesToBase64(new Uint8Array(ciphertext))}`;
+}
+
+async function decryptBrowserRepositoryText(value, bodyEncryption) {
+  if (!value) return '';
+  const [version, ivBase64, ciphertextBase64] = String(value).split(':');
+  if (version !== 'web-v1' || !ivBase64 || !ciphertextBase64) throw createRepositoryCorruptionError('invalid encrypted body payload');
+  try {
+    const plaintext = await bodyEncryption.subtle.decrypt(
+      { name: 'AES-GCM', iv: base64ToBytes(ivBase64) },
+      bodyEncryption.key,
+      base64ToBytes(ciphertextBase64),
+    );
+    return new TextDecoder().decode(plaintext);
+  } catch (error) {
+    throw createRepositoryCorruptionError(error?.message || 'body decrypt failed');
+  }
+}
+
+function bytesToBase64(bytes) {
+  if (typeof Buffer !== 'undefined') return Buffer.from(bytes).toString('base64');
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  if (typeof Buffer !== 'undefined') return Buffer.from(value, 'base64');
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
 function scopedAttachmentKey(messageId, attachmentId) {

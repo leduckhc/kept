@@ -10,6 +10,14 @@ export function getSyncedGmailThreads(syncState, { accountId = GMAIL_ACCOUNT_ID 
     .sort(compareNewestFirst);
 }
 
+export function getGmailSyncStatus(syncState, { accountId = GMAIL_ACCOUNT_ID } = {}) {
+  const accounts = syncState?.accounts && typeof syncState.accounts === 'object' ? syncState.accounts : {};
+  const account = accounts[accountId] || Object.values(accounts).find((entry) => entry?.provider === 'gmail');
+  if (!account) return 'never-connected';
+  if (account.status) return account.status;
+  return Array.isArray(account.threads) && account.threads.length > 0 ? 'connected' : 'connected-empty';
+}
+
 export function combineInboxThreads(gmailThreads, localThreads) {
   const seen = new Set();
   return [...gmailThreads, ...localThreads].filter((thread) => {
@@ -33,6 +41,23 @@ export function filterInboxThreads(threads, query) {
     ].filter(Boolean).join(' ').toLowerCase();
     return terms.every((term) => haystack.includes(term));
   });
+}
+
+export function repositoryMessagesToInboxThreads(messages = []) {
+  return messages.map((message) => ({
+    id: message.threadId || message.id,
+    providerMessageId: message.providerMessageId || message.id,
+    sender: message.sender?.name || message.sender?.email || 'unknown sender',
+    senderEmail: message.sender?.email || '',
+    subject: message.subject || '(no subject)',
+    snippet: message.snippet || '',
+    recipients: (message.recipients || []).map((recipient) => recipient.email || recipient.name).filter(Boolean),
+    receivedAt: message.receivedAt,
+    isPriority: false,
+    isUnread: !message.flags?.read,
+    isNewSender: false,
+    source: 'gmail',
+  }));
 }
 
 export function createLocalStorageAdapter(storage) {

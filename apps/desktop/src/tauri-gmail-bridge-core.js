@@ -59,7 +59,15 @@ export function createTauriGmailBridge({
   }
 
   async function createConnector({ accountId = DEFAULT_ACCOUNT_ID } = {}) {
-    return mailCore.createGmailApiConnector({ tokenStore, fetchImpl, accountId });
+    const config = await invoke('gmail_oauth_config').catch(() => ({}));
+    return mailCore.createGmailApiConnector({
+      tokenStore,
+      fetchImpl,
+      accountId,
+      tokenUrl: config?.tokenUrl || DEFAULT_TOKEN_URL,
+      clientId: config?.clientId || '',
+      clientSecret: config?.clientSecret || '',
+    });
   }
 
   return { startOAuth, createConnector };
@@ -95,11 +103,12 @@ export async function exchangeAuthorizationCode({ fetchImpl, tokenUrl, clientId,
   return normalizeGoogleOAuthTokens(await response.json());
 }
 
-function normalizeGoogleOAuthTokens(tokens) {
+function normalizeGoogleOAuthTokens(tokens, { now = () => new Date() } = {}) {
+  const expiresAt = tokens.expiresAt || (tokens.expires_in ? new Date(now().getTime() + Number(tokens.expires_in) * 1000).toISOString() : null);
   return {
     accessToken: tokens.access_token || tokens.accessToken,
     refreshToken: tokens.refresh_token || tokens.refreshToken || null,
-    expiresAt: tokens.expires_in || tokens.expiresAt || null,
+    expiresAt,
     tokenType: tokens.token_type || tokens.tokenType || 'Bearer',
     scope: tokens.scope || 'https://www.googleapis.com/auth/gmail.readonly',
   };
