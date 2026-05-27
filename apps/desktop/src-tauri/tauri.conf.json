@@ -21,8 +21,9 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' asset: https://asset.localhost; font-src 'self'; connect-src 'self' http://127.0.0.1:* ipc: http://ipc.localhost"
-    }
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' asset: https://asset.localhost; font-src 'self'; connect-src 'self' http://127.0.0.1:* ipc: http://ipc.localhost https://oauth2.googleapis.com https://gmail.googleapis.com"
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
