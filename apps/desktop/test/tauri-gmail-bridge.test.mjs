@@ -188,6 +188,7 @@ test('desktop shell loads bridge before main and exposes Tauri globals for packa
   assert.match(tauriConfig.app.security.csp, /https:\/\/gmail\.googleapis\.com/);
   assert.match(rustMain, /option_env!\("KEPT_GMAIL_CLIENT_ID"\)/);
   assert.match(rustMain, /option_env!\("GMAIL_CLIENT_ID"\)/);
+  assert.match(rustMain, /770442354658-ju4vt9tuurrq4a4r936b4ef08l36nati\.apps\.googleusercontent\.com/);
   for (const command of ['gmail_oauth_config', 'gmail_start_oauth', 'gmail_keychain_set', 'gmail_keychain_get', 'gmail_keychain_delete']) {
     assert.match(rustMain, new RegExp(command));
   }

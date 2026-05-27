@@ -5,6 +5,7 @@ use std::net::{TcpListener, TcpStream};
 use std::time::{Duration, Instant};
 use url::Url;
 
+const DEFAULT_GMAIL_CLIENT_ID: &str = "770442354658-ju4vt9tuurrq4a4r936b4ef08l36nati.apps.googleusercontent.com";
 const DEFAULT_REDIRECT_URI: &str = "http://127.0.0.1:49210/oauth/google/callback";
 const DEFAULT_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const KEYCHAIN_SERVICE: &str = "kept.gmail.oauth";
@@ -31,7 +32,8 @@ fn gmail_oauth_config() -> GmailOAuthConfig {
     let client_id = config_value(
         "KEPT_GMAIL_CLIENT_ID",
         option_env!("KEPT_GMAIL_CLIENT_ID")
-            .or(option_env!("GMAIL_CLIENT_ID")),
+            .or(option_env!("GMAIL_CLIENT_ID"))
+            .or(Some(DEFAULT_GMAIL_CLIENT_ID)),
     );
     let redirect_uri = config_value("KEPT_GMAIL_REDIRECT_URI", option_env!("KEPT_GMAIL_REDIRECT_URI"))
         .unwrap_or_else(|| DEFAULT_REDIRECT_URI.to_string());
