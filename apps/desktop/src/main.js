@@ -1,20 +1,37 @@
 import { brandTokens, renderPipMark } from '/packages/ui/src/index.js';
-import { getInboxSections, parseMboxToThreads } from '/packages/mail-core/src/index.js';
+import { createJsonMailStore, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
 import { disabledProvider } from '/packages/ai-core/src/index.js';
+import {
+  GMAIL_ACCOUNT_ID,
+  combineInboxThreads,
+  createLocalStorageAdapter,
+  filterInboxThreads,
+  getSyncedGmailThreads,
+} from './gmail-connect.js';
 
 const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
 const root = document.querySelector('#root');
+const gmailAdapter = window.__KEPT_GMAIL_CONNECT__ || null;
+const mailStore = createJsonMailStore({ storage: createLocalStorageAdapter(localStorage) });
 
 const state = {
   threads: loadThreads(),
   importMeta: loadImportMeta(),
+  searchQuery: '',
+  gmail: {
+    status: 'idle',
+    threads: [],
+    errorMessage: '',
+    accountId: GMAIL_ACCOUNT_ID,
+  },
 };
 
 document.documentElement.style.setProperty('--accent', brandTokens.color.accent);
 document.documentElement.style.setProperty('--paper', brandTokens.color.paper);
 document.documentElement.style.setProperty('--ink', brandTokens.color.ink);
 renderApp();
+initializeGmailState();
 
 window.addEventListener('keydown', (event) => {
   const wantsCommandSearch = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
@@ -23,23 +40,37 @@ window.addEventListener('keydown', (event) => {
   document.querySelector('#inbox-search')?.focus();
 });
 
-function renderApp() {
-  const inboxNow = newestThreadDate(state.threads) || new Date();
-  const sections = getInboxSections(state.threads, { now: inboxNow });
-  const inboxCount = state.threads.length;
-  const unreadCount = state.threads.filter((thread) => thread.isUnread).length;
-  const newSenders = getNewSenders(state.threads);
-
-  root.replaceChildren(renderInboxShell({ sections, inboxCount, unreadCount, newSenders }));
-  wireImportControls();
+async function initializeGmailState() {
+  const syncState = await mailStore.loadSyncState();
+  state.gmail.threads = getSyncedGmailThreads(syncState, { accountId: state.gmail.accountId });
+  state.gmail.status = state.gmail.threads.length > 0 ? 'connected' : 'idle';
+  renderApp();
 }
 
-function renderInboxShell({ sections, inboxCount, unreadCount, newSenders }) {
+function renderApp() {
+  const allThreads = combineInboxThreads(state.gmail.threads, state.threads);
+  const visibleThreads = filterInboxThreads(allThreads, state.searchQuery);
+  const inboxNow = newestThreadDate(visibleThreads) || newestThreadDate(allThreads) || new Date();
+  const sections = getInboxSections(visibleThreads, { now: inboxNow });
+  const inboxCount = allThreads.length;
+  const visibleCount = visibleThreads.length;
+  const unreadCount = visibleThreads.filter((thread) => thread.isUnread).length;
+  const newSenders = getNewSenders(visibleThreads);
+
+  root.replaceChildren(renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders }));
+  wireGmailControls();
+  wireImportControls();
+  wireSearchControl();
+}
+
+function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders }) {
   const shell = el('main', { className: 'shell', ariaLabel: 'Kept inbox' });
   const surface = el('section', { className: 'inbox-surface' });
-  surface.append(renderTopBar({ inboxCount, unreadCount }), renderImportStatus());
+  surface.append(renderTopBar({ inboxCount, visibleCount, unreadCount }), renderGmailStatus());
   if (inboxCount === 0) {
-    surface.append(renderEmptyImportState());
+    surface.append(renderEmptyGmailState());
+  } else if (visibleCount === 0) {
+    surface.append(renderSearchEmptyState());
   } else {
     surface.append(renderNewSenders(newSenders), renderInboxSections(sections));
   }
@@ -47,7 +78,7 @@ function renderInboxShell({ sections, inboxCount, unreadCount, newSenders }) {
   return shell;
 }
 
-function renderTopBar({ inboxCount, unreadCount }) {
+function renderTopBar({ inboxCount, visibleCount, unreadCount }) {
   const topbar = el('header', { className: 'topbar' });
 
   const brand = el('div', { className: 'brand' });
@@ -58,18 +89,19 @@ function renderTopBar({ inboxCount, unreadCount }) {
   const title = el('div', { className: 'inbox-title' });
   title.append(
     el('h1', { text: 'Inbox' }),
-    el('span', { className: 'inbox-count', text: inboxCount === 0 ? 'No local mail imported' : `${inboxCount} messages · ${unreadCount} unread` }),
+    el('span', { className: 'inbox-count', text: formatInboxCount({ inboxCount, visibleCount, unreadCount }) }),
   );
 
-  const search = el('label', { className: 'search-box', ariaLabel: 'Ask or search mail' });
+  const search = el('label', { className: 'search-box', ariaLabel: 'Search synced local inbox' });
   search.append(
     el('span', { className: 'search-icon', text: '⌕', ariaHidden: 'true' }),
     el('input', {
       id: 'inbox-search',
       type: 'search',
-      placeholder: 'Search imported mail',
-      ariaLabel: 'Search imported mail',
+      placeholder: 'Search local inbox',
+      ariaLabel: 'Search synced local inbox',
       disabled: inboxCount === 0,
+      value: state.searchQuery,
     }),
     el('kbd', { text: '⌘K' }),
   );
@@ -77,43 +109,100 @@ function renderTopBar({ inboxCount, unreadCount }) {
   const status = el('div', { className: 'status-pill', ariaLabel: 'Local-first and bring your own AI status' });
   status.append(
     el('span', { className: 'status-dot', ariaHidden: 'true' }),
-    el('span', { text: `Local import · BYO AI ${disabledProvider.status}` }),
+    el('span', { text: `Local mail · BYO AI ${disabledProvider.status}` }),
   );
 
   topbar.append(brand, title, search, status);
   return topbar;
 }
 
-function renderImportStatus() {
-  const status = el('section', { className: 'import-status', ariaLabel: 'Local mail import status' });
+function renderGmailStatus() {
+  const status = el('section', { className: `gmail-status ${state.gmail.status}`, ariaLabel: 'Gmail connection status' });
   const copy = el('div');
+  const statusCopy = gmailStatusCopy();
   copy.append(
-    el('strong', { text: state.importMeta ? `Imported ${state.importMeta.count} messages` : 'Real mail only — no demo inbox loaded' }),
-    el('span', { text: state.importMeta ? `${state.importMeta.fileName} · ${formatImportedAt(state.importMeta.importedAt)}` : 'Import a Gmail Takeout .mbox file to populate this inbox locally.' }),
+    el('strong', { text: statusCopy.title }),
+    el('span', { text: statusCopy.detail }),
   );
-  const actions = el('div', { className: 'import-actions' });
-  actions.append(renderImportButton(state.importMeta ? 'Import another mbox' : 'Import Gmail Takeout mbox'));
-  if (state.threads.length > 0) {
-    actions.append(el('button', { type: 'button', className: 'clear-import', text: 'Clear local import', id: 'clear-local-import' }));
+  const actions = el('div', { className: 'mail-actions' });
+
+  if (state.gmail.status === 'idle' || state.gmail.status === 'auth-error') {
+    actions.append(el('button', { type: 'button', className: 'primary-mail-action', text: 'Connect Gmail', id: 'connect-gmail' }));
   }
+  if (state.gmail.status === 'connected' || state.gmail.status === 'sync-error') {
+    actions.append(el('button', { type: 'button', className: 'primary-mail-action', text: 'Sync now', id: 'sync-gmail' }));
+  }
+  if (state.gmail.threads.length > 0) {
+    actions.append(el('button', { type: 'button', className: 'secondary-mail-action', text: 'Clear Gmail cache', id: 'clear-gmail-cache' }));
+  }
+  actions.append(renderImportButton(state.importMeta ? 'Import another mbox' : 'Import mbox fallback', 'secondary-mail-action'));
+
   status.append(copy, actions);
   return status;
 }
 
-function renderEmptyImportState() {
-  const empty = el('section', { className: 'empty-import', ariaLabel: 'Import real mail' });
+function gmailStatusCopy() {
+  if (state.gmail.status === 'oauth') {
+    return {
+      title: 'Opening Gmail sign-in',
+      detail: 'Finish the readonly Gmail consent in your browser, then return to Kept.',
+    };
+  }
+  if (state.gmail.status === 'syncing') {
+    return {
+      title: 'Syncing recent Gmail',
+      detail: 'Kept is saving recent inbox rows locally on this device.',
+    };
+  }
+  if (state.gmail.status === 'connected') {
+    return {
+      title: `Gmail connected · ${formatPlural(state.gmail.threads.length, 'local message')}`,
+      detail: 'Recent Gmail appears first. Bodies and OAuth tokens are not logged.',
+    };
+  }
+  if (state.gmail.status === 'auth-error') {
+    return {
+      title: 'Gmail sign-in needs attention',
+      detail: state.gmail.errorMessage || 'Try connecting Gmail again.',
+    };
+  }
+  if (state.gmail.status === 'sync-error') {
+    return {
+      title: 'Gmail sync did not finish',
+      detail: state.gmail.errorMessage || 'Try syncing again. Existing local mail stays available.',
+    };
+  }
+  return {
+    title: 'Real mail only — no demo inbox loaded',
+    detail: 'Connect Gmail for readonly local sync, or import a Gmail Takeout mbox fallback.',
+  };
+}
+
+function renderEmptyGmailState() {
+  const empty = el('section', { className: 'empty-import', ariaLabel: 'Connect Gmail' });
   empty.append(
-    el('p', { className: 'eyebrow', text: 'No mock inbox' }),
-    el('h2', { text: 'Bring in your real Gmail export.' }),
-    el('p', { text: 'Kept now starts empty. Choose a Gmail Takeout .mbox file and it parses the inbox on this Mac. Nothing is uploaded to a Kept server.' }),
-    renderImportButton('Choose .mbox file'),
-    el('p', { className: 'import-help', text: 'Gmail path: Google Takeout → Mail → export → unzip → choose the .mbox file.' }),
+    el('p', { className: 'eyebrow', text: 'Fresh Kept' }),
+    el('h2', { text: 'Connect Gmail to fill this inbox.' }),
+    el('p', { text: 'Kept starts empty. Gmail sync is readonly and stores recent mail locally on this device.' }),
+    el('button', { type: 'button', className: 'primary-mail-action large', text: 'Connect Gmail', id: 'connect-gmail-empty' }),
+    el('p', { className: 'import-help', text: 'Prefer no OAuth? Use the mbox fallback above for a local Gmail Takeout import.' }),
   );
   return empty;
 }
 
-function renderImportButton(label) {
-  const wrap = el('label', { className: 'import-button' });
+function renderSearchEmptyState() {
+  const empty = el('section', { className: 'empty-import compact', ariaLabel: 'No local search results' });
+  empty.append(
+    el('p', { className: 'eyebrow', text: 'No matches' }),
+    el('h2', { text: 'Nothing local matches that search.' }),
+    el('p', { text: 'Search runs only over mail already synced or imported on this device.' }),
+    el('button', { type: 'button', className: 'secondary-mail-action large', text: 'Clear search', id: 'clear-search' }),
+  );
+  return empty;
+}
+
+function renderImportButton(label, className = 'secondary-mail-action') {
+  const wrap = el('label', { className });
   wrap.append(
     el('span', { text: label }),
     el('input', { type: 'file', accept: '.mbox,text/plain,application/mbox', className: 'visually-hidden', dataImportMbox: true }),
@@ -123,14 +212,14 @@ function renderImportButton(label) {
 
 function renderNewSenders(newSenders) {
   const section = el('section', { className: 'new-senders', ariaLabel: 'New senders' });
-  section.append(renderSectionHeader('New senders', `${newSenders.length} from import`));
+  section.append(renderSectionHeader('New senders', `${newSenders.length} local`));
 
   const railWrap = el('div', { className: 'carousel-wrap' });
   railWrap.append(el('button', { className: 'carousel-control', type: 'button', text: '‹', ariaLabel: 'Previous new senders' }));
 
   const rail = el('div', { className: 'sender-rail', role: 'list' });
   if (newSenders.length === 0) {
-    rail.append(el('p', { className: 'empty-row', text: 'No new senders detected in this import.' }));
+    rail.append(el('p', { className: 'empty-row', text: 'No new senders detected in local mail.' }));
   } else {
     newSenders.forEach((sender) => rail.append(renderSenderCard(sender)));
   }
@@ -145,7 +234,7 @@ function renderSenderCard(sender) {
   card.append(
     renderAvatar(sender),
     el('strong', { text: sender.sender }),
-    el('span', { className: 'sender-email', text: sender.senderEmail || 'local import' }),
+    el('span', { className: 'sender-email', text: sender.senderEmail || 'local mail' }),
     el('p', { text: sender.subject }),
   );
 
@@ -166,11 +255,11 @@ function renderInboxSections(sections) {
 
 function renderThreadSection(section) {
   const group = el('section', { className: 'thread-section', ariaLabel: section.title });
-  group.append(renderSectionHeader(section.title, `${section.threads.length} messages`));
+  group.append(renderSectionHeader(section.title, formatPlural(section.threads.length, 'message')));
 
   const rows = el('div', { className: 'rows', role: 'list' });
   if (section.threads.length === 0) {
-    rows.append(el('p', { className: 'empty-row', text: `No ${section.title.toLowerCase()} mail in this import.` }));
+    rows.append(el('p', { className: 'empty-row', text: `No ${section.title.toLowerCase()} mail in this local inbox.` }));
   } else {
     section.threads.forEach((thread) => rows.append(renderThreadRow(thread, section.id)));
   }
@@ -201,6 +290,19 @@ function renderThreadRow(thread, sectionId) {
   return row;
 }
 
+function wireGmailControls() {
+  document.querySelector('#connect-gmail')?.addEventListener('click', startGmailConnect);
+  document.querySelector('#connect-gmail-empty')?.addEventListener('click', startGmailConnect);
+  document.querySelector('#sync-gmail')?.addEventListener('click', syncGmail);
+  document.querySelector('#clear-gmail-cache')?.addEventListener('click', async () => {
+    await mailStore.clear();
+    state.gmail.threads = [];
+    state.gmail.status = 'idle';
+    state.gmail.errorMessage = '';
+    renderApp();
+  });
+}
+
 function wireImportControls() {
   document.querySelectorAll('[data-import-mbox]').forEach((input) => {
     input.addEventListener('change', async (event) => {
@@ -218,18 +320,63 @@ function wireImportControls() {
       renderApp();
     });
   });
+}
 
-  document.querySelector('#clear-local-import')?.addEventListener('click', () => {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(IMPORT_META_KEY);
-    state.threads = [];
-    state.importMeta = null;
+function wireSearchControl() {
+  const search = document.querySelector('#inbox-search');
+  search?.addEventListener('input', (event) => {
+    state.searchQuery = event.target.value;
+    renderApp();
+    document.querySelector('#inbox-search')?.focus();
+  });
+  document.querySelector('#clear-search')?.addEventListener('click', () => {
+    state.searchQuery = '';
     renderApp();
   });
 }
 
+async function startGmailConnect() {
+  state.gmail.status = 'oauth';
+  state.gmail.errorMessage = '';
+  renderApp();
+
+  try {
+    if (!gmailAdapter?.startOAuth) throw new Error('Gmail desktop bridge is not available in this build.');
+    await gmailAdapter.startOAuth({ accountId: state.gmail.accountId });
+    await syncGmail();
+  } catch (error) {
+    state.gmail.status = 'auth-error';
+    state.gmail.errorMessage = userFacingError(error, 'Could not finish Gmail sign-in.');
+    renderApp();
+  }
+}
+
+async function syncGmail() {
+  state.gmail.status = 'syncing';
+  state.gmail.errorMessage = '';
+  renderApp();
+
+  try {
+    const connector = await getGmailConnector();
+    const result = await syncGmailInbox({ connector, accountId: state.gmail.accountId, mailStore, maxResults: 25 });
+    state.gmail.threads = result.threads.map(toPersistedThread);
+    state.gmail.status = 'connected';
+    renderApp();
+  } catch (error) {
+    state.gmail.status = state.gmail.threads.length > 0 ? 'sync-error' : 'auth-error';
+    state.gmail.errorMessage = userFacingError(error, 'Could not sync Gmail.');
+    renderApp();
+  }
+}
+
+async function getGmailConnector() {
+  if (gmailAdapter?.createConnector) return gmailAdapter.createConnector({ accountId: state.gmail.accountId });
+  if (gmailAdapter?.listRecentMessages) return { provider: 'gmail', listRecentMessages: gmailAdapter.listRecentMessages };
+  throw new Error('Gmail sync bridge is not available yet.');
+}
+
 function toPersistedThread(thread) {
-  const { body: _body, ...safeThread } = thread;
+  const { body: _body, textBody: _textBody, ...safeThread } = thread;
   return safeThread;
 }
 
@@ -285,9 +432,19 @@ function renderAvatar(thread) {
   return avatar;
 }
 
+function formatInboxCount({ inboxCount, visibleCount, unreadCount }) {
+  if (inboxCount === 0) return 'No local mail connected';
+  if (visibleCount !== inboxCount) return `${visibleCount} of ${inboxCount} local messages`;
+  return `${formatPlural(inboxCount, 'message')} · ${unreadCount} unread`;
+}
+
+function formatPlural(count, singular) {
+  return `${count} ${singular}${count === 1 ? '' : 's'}`;
+}
+
 function formatTime(value) {
   const received = new Date(value);
-  const now = newestThreadDate(state.threads) || new Date();
+  const now = newestThreadDate(combineInboxThreads(state.gmail.threads, state.threads)) || new Date();
   const sameDay = received.toISOString().slice(0, 10) === now.toISOString().slice(0, 10);
   if (sameDay) {
     return new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' }).format(received);
@@ -295,8 +452,10 @@ function formatTime(value) {
   return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(received);
 }
 
-function formatImportedAt(value) {
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
+function userFacingError(error, fallback) {
+  const message = error?.message || fallback;
+  if (/token|secret|authorization|code_verifier|access_token|refresh_token/i.test(message)) return fallback;
+  return message;
 }
 
 function el(tagName, options = {}) {

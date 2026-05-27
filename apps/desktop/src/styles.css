@@ -176,7 +176,7 @@ kbd {
   margin-top: 34px;
 }
 
-.import-status {
+.gmail-status {
   display: flex;
   justify-content: space-between;
   gap: 18px;
@@ -188,32 +188,49 @@ kbd {
   background: rgba(247, 244, 255, 0.72);
 }
 
-.import-status strong,
-.import-status span {
+.gmail-status.oauth,
+.gmail-status.syncing {
+  border-color: rgba(124, 92, 255, 0.22);
+  background: linear-gradient(90deg, rgba(247, 244, 255, 0.96), rgba(255, 255, 255, 0.82));
+}
+
+.gmail-status.connected {
+  border-color: rgba(96, 162, 126, 0.22);
+  background: rgba(247, 252, 249, 0.86);
+}
+
+.gmail-status.auth-error,
+.gmail-status.sync-error {
+  border-color: rgba(190, 92, 92, 0.26);
+  background: rgba(255, 247, 247, 0.86);
+}
+
+.gmail-status strong,
+.gmail-status span {
   display: block;
 }
 
-.import-status strong {
+.gmail-status strong {
   font-size: 14px;
   letter-spacing: -0.01em;
 }
 
-.import-status span,
+.gmail-status span,
 .import-help {
   margin-top: 3px;
   color: var(--muted);
   font-size: 13px;
 }
 
-.import-actions {
+.mail-actions {
   display: flex;
   flex: none;
   gap: 10px;
   align-items: center;
 }
 
-.import-button,
-.clear-import {
+.primary-mail-action,
+.secondary-mail-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -225,16 +242,23 @@ kbd {
   cursor: pointer;
 }
 
-.import-button {
+.primary-mail-action {
   background: var(--accent);
   color: #fff;
   box-shadow: 0 10px 24px rgba(124, 92, 255, 0.16);
 }
 
-.clear-import {
+.secondary-mail-action {
   border: 1px solid #e8e3f4;
   background: #fff;
   color: #756f88;
+}
+
+.primary-mail-action.large,
+.secondary-mail-action.large {
+  min-height: 46px;
+  padding: 0 18px;
+  font-size: 14px;
 }
 
 .visually-hidden {
@@ -541,17 +565,17 @@ kbd {
 
   .search-box,
   .status-pill,
-  .import-status {
+  .gmail-status {
     grid-column: 1 / -1;
     justify-self: stretch;
   }
 
-  .import-status {
+  .gmail-status {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .import-actions {
+  .mail-actions {
     flex-wrap: wrap;
   }
 
