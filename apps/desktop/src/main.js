@@ -126,7 +126,7 @@ function renderGmailStatus() {
   );
   const actions = el('div', { className: 'mail-actions' });
 
-  if (state.gmail.status === 'idle' || state.gmail.status === 'auth-error') {
+  if ((state.gmail.status === 'idle' || state.gmail.status === 'auth-error') && state.gmail.threads.length > 0) {
     actions.append(el('button', { type: 'button', className: 'primary-mail-action', text: 'Connect Gmail', id: 'connect-gmail' }));
   }
   if (state.gmail.status === 'connected' || state.gmail.status === 'sync-error') {
@@ -179,15 +179,53 @@ function gmailStatusCopy() {
 }
 
 function renderEmptyGmailState() {
+  const copy = emptyStateCopy();
   const empty = el('section', { className: 'empty-import', ariaLabel: 'Connect Gmail' });
-  empty.append(
-    el('p', { className: 'eyebrow', text: 'Fresh Kept' }),
-    el('h2', { text: 'Connect Gmail to fill this inbox.' }),
-    el('p', { text: 'Kept starts empty. Gmail sync is readonly and stores recent mail locally on this device.' }),
-    el('button', { type: 'button', className: 'primary-mail-action large', text: 'Connect Gmail', id: 'connect-gmail-empty' }),
-    el('p', { className: 'import-help', text: 'Prefer no OAuth? Use the mbox fallback above for a local Gmail Takeout import.' }),
-  );
+  empty.append(el('p', { className: 'eyebrow', text: copy.eyebrow }));
+  empty.append(el('h2', { text: copy.title }));
+  empty.append(el('p', { text: copy.body }));
+  if (copy.actionLabel) {
+    empty.append(el('button', { type: 'button', className: 'primary-mail-action large', text: copy.actionLabel, id: 'connect-gmail-empty' }));
+  }
+  empty.append(el('p', { className: 'import-help', text: copy.help }));
   return empty;
+}
+
+function emptyStateCopy() {
+  if (state.gmail.status === 'oauth') {
+    return {
+      eyebrow: 'Browser sign-in',
+      title: 'Finish Gmail in your browser.',
+      body: 'Kept opened the readonly consent flow. Return here once Gmail approval is complete.',
+      actionLabel: '',
+      help: 'Prefer no OAuth? You can still skip this and use the mbox fallback above for a local Gmail Takeout import.',
+    };
+  }
+  if (state.gmail.status === 'syncing') {
+    return {
+      eyebrow: 'Syncing locally',
+      title: 'Bringing recent Gmail into Kept.',
+      body: 'This first sync is saving recent inbox rows locally on this device.',
+      actionLabel: '',
+      help: 'You can leave this window open. Kept will keep the mbox fallback available if you prefer a manual import later.',
+    };
+  }
+  if (state.gmail.status === 'auth-error') {
+    return {
+      eyebrow: 'Sign-in interrupted',
+      title: 'Gmail did not connect yet.',
+      body: 'Nothing synced locally. Try Gmail again, or use the local mbox fallback if you would rather import manually.',
+      actionLabel: 'Connect Gmail',
+      help: 'The mbox fallback above still gives you a local Gmail Takeout import path without OAuth.',
+    };
+  }
+  return {
+    eyebrow: 'Fresh Kept',
+    title: 'Connect Gmail to fill this inbox.',
+    body: 'Kept starts empty. Gmail sync is readonly and stores recent mail locally on this device.',
+    actionLabel: 'Connect Gmail',
+    help: 'Prefer no OAuth? Use the mbox fallback above for a local Gmail Takeout import.',
+  };
 }
 
 function renderSearchEmptyState() {
