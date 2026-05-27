@@ -92,7 +92,17 @@ export async function exchangeAuthorizationCode({ fetchImpl, tokenUrl, clientId,
     body,
   });
   if (!response.ok) throw new Error('Gmail OAuth token exchange failed.');
-  return response.json();
+  return normalizeGoogleOAuthTokens(await response.json());
+}
+
+function normalizeGoogleOAuthTokens(tokens) {
+  return {
+    accessToken: tokens.access_token || tokens.accessToken,
+    refreshToken: tokens.refresh_token || tokens.refreshToken || null,
+    expiresAt: tokens.expires_in || tokens.expiresAt || null,
+    tokenType: tokens.token_type || tokens.tokenType || 'Bearer',
+    scope: tokens.scope || 'https://www.googleapis.com/auth/gmail.readonly',
+  };
 }
 
 export function redactBridgeError(error) {

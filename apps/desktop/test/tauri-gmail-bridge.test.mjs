@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   createBridgeAvailabilityProbe,
   createTauriGmailBridge,
+  exchangeAuthorizationCode,
   redactBridgeError,
 } from '../src/tauri-gmail-bridge-core.js';
 
@@ -110,12 +111,48 @@ test('startOAuth uses readonly OAuth config, loopback callback parsing, and keyc
   assert.deepEqual(result, { accountId, stored: 'keychain' });
   assert.equal(savedTokens.length, 1);
   assert.equal(savedTokens[0].accountId, accountId);
-  assert.equal(savedTokens[0].tokens.access_token, 'access-value');
+  assert.deepEqual(savedTokens[0].tokens, {
+    accessToken: 'access-value',
+    refreshToken: 'refresh-value',
+    expiresAt: 3600,
+    tokenType: 'Bearer',
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+  });
   assert.deepEqual(invocations.map((entry) => entry.command), [
     'gmail_oauth_config',
     'gmail_start_oauth',
     'gmail_keychain_set',
   ]);
+});
+
+test('exchangeAuthorizationCode normalizes Google snake_case tokens for the mail-core keychain store', async () => {
+  const tokens = await exchangeAuthorizationCode({
+    fetchImpl: async (_url, _options) => ({
+      ok: true,
+      async json() {
+        return {
+          access_token: 'access-value',
+          refresh_token: 'refresh-value',
+          expires_in: 3600,
+          token_type: 'Bearer',
+          scope: 'https://www.googleapis.com/auth/gmail.readonly',
+        };
+      },
+    }),
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    clientId: 'desktop-client.apps.googleusercontent.com',
+    redirectUri: 'http://127.0.0.1:49210/oauth/google/callback',
+    code: 'real-auth-code',
+    verifier: 'verifier-secret',
+  });
+
+  assert.deepEqual(tokens, {
+    accessToken: 'access-value',
+    refreshToken: 'refresh-value',
+    expiresAt: 3600,
+    tokenType: 'Bearer',
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+  });
 });
 
 test('createConnector returns Gmail API connector backed by Tauri keychain adapter', async () => {
@@ -149,6 +186,8 @@ test('desktop shell loads bridge before main and exposes Tauri globals for packa
   assert.equal(tauriConfig.app.withGlobalTauri, true);
   assert.match(tauriConfig.app.security.csp, /https:\/\/oauth2\.googleapis\.com/);
   assert.match(tauriConfig.app.security.csp, /https:\/\/gmail\.googleapis\.com/);
+  assert.match(rustMain, /option_env!\("KEPT_GMAIL_CLIENT_ID"\)/);
+  assert.match(rustMain, /option_env!\("GMAIL_CLIENT_ID"\)/);
   for (const command of ['gmail_oauth_config', 'gmail_start_oauth', 'gmail_keychain_set', 'gmail_keychain_get', 'gmail_keychain_delete']) {
     assert.match(rustMain, new RegExp(command));
   }

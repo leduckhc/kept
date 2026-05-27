@@ -28,14 +28,15 @@ struct KeychainSetResult {
 
 #[tauri::command]
 fn gmail_oauth_config() -> GmailOAuthConfig {
-    let client_id = env::var("KEPT_GMAIL_CLIENT_ID")
-        .or_else(|_| env::var("GMAIL_CLIENT_ID"))
-        .ok()
-        .filter(|value| !value.trim().is_empty());
-    let redirect_uri = env::var("KEPT_GMAIL_REDIRECT_URI")
-        .unwrap_or_else(|_| DEFAULT_REDIRECT_URI.to_string());
-    let token_url = env::var("KEPT_GMAIL_TOKEN_URL")
-        .unwrap_or_else(|_| DEFAULT_TOKEN_URL.to_string());
+    let client_id = config_value(
+        "KEPT_GMAIL_CLIENT_ID",
+        option_env!("KEPT_GMAIL_CLIENT_ID")
+            .or(option_env!("GMAIL_CLIENT_ID")),
+    );
+    let redirect_uri = config_value("KEPT_GMAIL_REDIRECT_URI", option_env!("KEPT_GMAIL_REDIRECT_URI"))
+        .unwrap_or_else(|| DEFAULT_REDIRECT_URI.to_string());
+    let token_url = config_value("KEPT_GMAIL_TOKEN_URL", option_env!("KEPT_GMAIL_TOKEN_URL"))
+        .unwrap_or_else(|| DEFAULT_TOKEN_URL.to_string());
 
     GmailOAuthConfig {
         enabled: client_id.is_some(),
@@ -44,6 +45,14 @@ fn gmail_oauth_config() -> GmailOAuthConfig {
         token_url,
         callback_timeout_ms: 120_000,
     }
+}
+
+fn config_value(runtime_key: &str, build_value: Option<&'static str>) -> Option<String> {
+    env::var(runtime_key)
+        .ok()
+        .or_else(|| build_value.map(str::to_string))
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 #[tauri::command]
