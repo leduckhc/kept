@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kept Real Mail Alpha — state matrix directions</title>
+  <style>
+    :root {
+      --page: #fbfaff;
+      --surface: rgba(255,255,255,0.92);
+      --surface-strong: #ffffff;
+      --ink: #1f1b2d;
+      --muted: #756f88;
+      --line: #e8e3f4;
+      --line-strong: #ddd5f0;
+      --accent: #7c5cff;
+      --accent-soft: #f4f1fb;
+      --good: #7f9650;
+      --good-soft: #f7fbf2;
+      --warn: #b07a17;
+      --warn-soft: #fff7e8;
+      --bad: #bf5a5a;
+      --bad-soft: #fff5f5;
+      --shadow: 0 30px 80px rgba(78, 58, 121, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(124,92,255,0.08), transparent 28%),
+        linear-gradient(135deg, #ffffff 0%, var(--page) 100%);
+    }
+    .page {
+      width: 1600px;
+      margin: 0 auto;
+      padding: 36px 36px 56px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+    .hero-card,
+    .evidence,
+    .mockup,
+    .matrix,
+    .handoff,
+    .pattern {
+      background: var(--surface);
+      border: 1px solid rgba(232,227,244,0.95);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+    }
+    .hero-card {
+      padding: 28px 30px;
+    }
+    .eyebrow,
+    .section-label,
+    .micro-label,
+    thead th {
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .eyebrow { color: var(--accent); }
+    h1 {
+      margin: 10px 0 12px;
+      font-size: 40px;
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+    .hero-card p,
+    .hero-card li,
+    .pattern p,
+    .handoff p,
+    td,
+    .chip,
+    .detail {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    ul { margin: 14px 0 0; padding-left: 18px; }
+    .evidence {
+      padding: 22px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .evidence-item,
+    .callout,
+    .state-band,
+    .subband,
+    .search-inline,
+    .reader-card,
+    .ai-card,
+    .mini-state,
+    .inline-pill,
+    .footer-note,
+    .pattern-block,
+    .handoff-block {
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      border-radius: 18px;
+    }
+    .evidence-item { padding: 12px 14px; }
+    .evidence-item strong { display: block; font-size: 13px; color: var(--ink); margin-bottom: 2px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+    .mockup { padding: 18px; }
+    .mockup h2 { margin: 6px 0 6px; font-size: 26px; letter-spacing: -0.04em; }
+    .mockup .summary { min-height: 42px; }
+    .stage {
+      margin-top: 14px;
+      padding: 18px;
+      border-radius: 24px;
+      border: 1px solid rgba(232,227,244,0.95);
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(251,250,255,0.94));
+      min-height: 780px;
+      position: relative;
+      overflow: hidden;
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: auto auto 1fr auto;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; }
+    .pip {
+      width: 32px; height: 32px; border-radius: 999px;
+      border: 2px solid #7f9650; position: relative;
+    }
+    .pip::before, .pip::after {
+      content: ""; position: absolute; top: 9px; width: 6px; height: 6px; border-radius: 999px; background: #7f9650;
+    }
+    .pip::before { left: 7px; }
+    .pip::after { right: 7px; }
+    .title h3 { margin: 0; font-size: 28px; letter-spacing: -0.05em; }
+    .title span { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .search {
+      justify-self: stretch;
+      display: flex; align-items: center; gap: 10px;
+      height: 42px; padding: 0 14px;
+      border-radius: 999px; border: 1px solid var(--line);
+      background: rgba(255,255,255,0.95); color: #9188a7;
+      font-size: 14px;
+    }
+    .kbd {
+      margin-left: auto; padding: 4px 8px; border-radius: 10px; border: 1px solid var(--line);
+      background: var(--accent-soft); color: var(--muted); font-size: 11px; font-weight: 800;
+    }
+    .quiet-status { display: flex; align-items: center; gap: 8px; color: #6d5ad7; font-size: 12px; }
+    .quiet-status::before {
+      content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 5px rgba(124,92,255,0.12);
+    }
+    .state-band {
+      display: grid; gap: 10px; padding: 14px 16px; margin-bottom: 16px;
+      background: rgba(247,244,255,0.78);
+    }
+    .state-band.good { background: var(--good-soft); border-color: rgba(127,150,80,0.22); }
+    .state-band.warn { background: var(--warn-soft); border-color: rgba(176,122,23,0.18); }
+    .state-band.bad { background: var(--bad-soft); border-color: rgba(191,90,90,0.2); }
+    .state-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .state-copy strong, .state-copy span { display: block; }
+    .state-copy strong { font-size: 14px; }
+    .state-copy span { color: var(--muted); font-size: 13px; margin-top: 3px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn, .btn-quiet {
+      height: 34px; padding: 0 14px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 850; border: 1px solid var(--line);
+    }
+    .btn { background: var(--accent); color: white; border-color: transparent; }
+    .btn.good { background: #7f9650; }
+    .btn.warn { background: #d59d35; }
+    .btn.bad { background: #cf7b7b; }
+    .btn-quiet { background: white; color: var(--muted); }
+    .mini-grid { display: grid; gap: 12px; }
+    .callout { padding: 14px; }
+    .callout strong { display: block; font-size: 13px; margin-bottom: 4px; }
+    .mail-list { margin-top: 14px; display: grid; gap: 10px; }
+    .section-head {
+      display: flex; justify-content: space-between; align-items: center;
+      color: var(--muted); margin-bottom: 8px; font-size: 11px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .row {
+      display: grid; grid-template-columns: 30px 132px 220px 1fr 72px;
+      gap: 12px; align-items: center;
+      min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.92);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+    }
+    .row.priority { background: linear-gradient(90deg, #f7fbf2 0%, rgba(255,255,255,0.98) 72%); }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 800; color: #534b67; background: #ede7f6;
+    }
+    .sender, .subject { font-size: 13px; font-weight: 750; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .snippet, .time { color: var(--muted); font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .new-sender-card {
+      border: 1px solid var(--line); border-radius: 24px; background: #fff; padding: 14px; min-height: 170px;
+      box-shadow: 0 12px 24px rgba(68,49,113,0.04);
+    }
+    .new-sender-card strong { display: block; margin-top: 14px; font-size: 15px; }
+    .new-sender-card .detail { margin-top: 3px; }
+    .new-sender-card .actions { margin-top: 14px; }
+    .sender-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 18px; }
+    .subband { padding: 10px 12px; display: grid; gap: 8px; margin-bottom: 12px; }
+    .subband .state-row { align-items: start; }
+    .search-inline { padding: 12px 14px; display: grid; gap: 8px; margin-bottom: 12px; }
+    .inline-stack { display: grid; gap: 8px; margin-top: 12px; }
+    .inline-pill {
+      padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      background: linear-gradient(180deg, #fff, #fcfbff);
+    }
+    .pill-label { font-size: 13px; font-weight: 760; }
+    .pill-copy { color: var(--muted); font-size: 12px; }
+    .reader-card, .ai-card { padding: 14px; margin-top: 12px; }
+    .reader-card h4, .ai-card h4, .pattern h3, .handoff h3, .matrix h3 { margin: 0 0 10px; font-size: 24px; letter-spacing: -0.04em; }
+    .reader-card .body-box, .ai-card .body-box {
+      border: 1px dashed var(--line-strong); border-radius: 16px; padding: 12px; margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.5;
+      background: #fff;
+    }
+    .right-drawer {
+      position: absolute; right: 18px; top: 138px; width: 42%;
+      border: 1px solid var(--line); border-radius: 24px; background: rgba(255,255,255,0.98);
+      box-shadow: 0 22px 50px rgba(68,49,113,0.08); padding: 16px;
+    }
+    .left-compressed { width: calc(58% - 14px); }
+    .mini-state { padding: 12px; display: grid; gap: 6px; margin-top: 10px; }
+    .mini-state strong { font-size: 13px; }
+    .muted { color: var(--muted); }
+    .matrix, .pattern, .handoff { padding: 24px; margin-top: 22px; }
+    .pattern-grid, .handoff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .pattern-block, .handoff-block { padding: 16px; }
+    .pattern-block strong, .handoff-block strong { display: block; margin-bottom: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    thead th { text-align: left; color: var(--muted); padding: 0 0 10px; }
+    tbody td {
+      vertical-align: top; padding: 13px 10px 13px 0; border-top: 1px solid rgba(232,227,244,0.8);
+    }
+    tbody td:first-child { width: 16%; color: var(--ink); font-weight: 720; }
+    tbody td:nth-child(2) { width: 14%; color: var(--ink); font-weight: 700; }
+    tbody td:nth-child(3) { width: 25%; }
+    tbody td:nth-child(4) { width: 25%; }
+    tbody td:nth-child(5) { width: 20%; }
+    .tag {
+      display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line);
+      font-size: 11px; font-weight: 800; color: var(--muted); background: white; margin-right: 6px; margin-top: 6px;
+    }
+    .footer-note { padding: 12px 14px; margin-top: 14px; }
+    .variant-chip { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 900; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-card">
+        <div class="eyebrow">Kept / Real Mail Alpha</div>
+        <h1>Decision board for Gmail, search, reader, and AI states</h1>
+        <p>Locked layout preserved: white + soft lavender, no sidebar, one email per row, quiet local-first / BYO-AI status. The three directions below vary only how stateful moments surface inside the main inbox shell, so Harry and John can implement one coherent contract instead of inventing incompatible states.</p>
+        <ul>
+          <li>Evidence anchors: KPT-008 soft-inbox QA, Gmail Connect Alpha integration acceptance, privacy model, and existing local-only search copy.</li>
+          <li>All variants keep the inbox calm until the user needs help, then escalate with one primary action and one trust line.</li>
+          <li>Recommended pattern applies across variants; Milan should choose the mockup shell.</li>
+        </ul>
+      </div>
+      <div class="evidence">
+        <div class="evidence-item"><strong>From KPT-008</strong> No sidebar, one line = one email, top search pill, quiet status, new senders carousel.</div>
+        <div class="evidence-item"><strong>From Gmail Alpha</strong> Starts empty, readonly Gmail sync, search only over local mail, cached Gmail survives sync errors.</div>
+        <div class="evidence-item"><strong>From privacy model</strong> Never imply bodies or OAuth tokens leave device by default. Approval gate must name provider and what leaves local.</div>
+        <div class="evidence-item"><strong>Design call</strong> Avoid dense debug dumps. Put timestamps, provider details, and audit detail behind secondary disclosure.</div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="mockup" id="variant-a">
+        <div class="variant-chip">Variant A</div>
+        <h2>Calm status band</h2>
+        <p class="summary">Best when Milan wants the clearest implementation contract: one persistent band under the top bar owns Gmail, search, and AI state transitions.</p>
+        <div class="stage">
+          <div class="topbar">
+            <div class="brand"><span class="pip"></span><span>Pip / Kept</span></div>
+            <div class="title"><h3>Inbox</h3><span>1 local message · Gmail cache available</span></div>
+            <div class="search"><span>Ask or search local mail</span><span class="kbd">⌘K</span></div>
+            <div class="quiet-status">Local-first · BYO AI on approval</div>
+          </div>
+          <div class="state-band warn">
+            <div class="state-row">
+              <div class="state-copy">
+                <strong>Gmail sync paused after 18 of 42 recent threads.</strong>
+                <span>Your cached rows stay searchable. Reconnect Gmail to finish locally.</span>
+              </div>
+              <div class="actions"><span class="btn warn">Reconnect Gmail</span><span class="btn-quiet">See sync details</span></div>
+            </div>
+            <div class="state-row">
+              <div class="state-copy">
+                <strong>Search indexing still catching up.</strong>
+                <span>Recent rows are visible now. Full sender and phrase search unlocks when local indexing finishes.</span>
+              </div>
+              <div class="actions"><span class="btn-quiet">1,240 / 4,860 indexed</span></div>
+            </div>
+          </div>
+          <div class="sender-grid">
+            <div class="new-sender-card">
+              <div class="avatar">MV</div>
+              <strong>Mara Vale</strong>
+              <div class="detail">mara@venue.test</div>
+              <div class="detail" style="margin-top:12px;">Review venue agreement before Friday</div>
+              <div class="actions"><span class="btn good">Accept</span><span class="btn-quiet">Block</span></div>
+            </div>
+            <div class="new-sender-card">
+              <div class="avatar" style="background:#f4e5dd;">LS</div>
+              <strong>Lina Stone</strong>
+              <div class="detail">lina@ledger.test</div>
+              <div class="detail" style="margin-top:12px;">Receipt export is ready</div>
+              <div class="actions"><span class="btn good">Accept</span><span class="btn-quiet">Block</span></div>
+            </div>
+          </div>
+          <div class="section-head"><span>Priority</span><span>1 message</span></div>
+          <div class="mail-list">
+            <div class="row priority"><div class="avatar" style="background:#f1e6d9;">MV</div><div class="sender">Mara Vale</div><div class="subject">Review venue agreement before Friday</div><div class="snippet">Cached body available locally · sync stalled after headers 18–42</div><div class="time">6:45 AM</div></div>
+          </div>
+          <div class="reader-card">
+            <div class="section-head"><span>Reader</span><span>Thread open</span></div>
+            <h4>Venue agreement follow-up</h4>
+            <div class="body-box"><strong style="display:block;color:var(--ink);margin-bottom:6px;">HTML-only body</strong>We saved the message structure locally, but this thread only arrived as HTML. Show sanitized render first, with a quiet fallback link: “Open original formatting.” Attachment row stays metadata-only until opened.</div>
+          </div>
+          <div class="ai-card">
+            <div class="section-head"><span>Ask Kept</span><span>Approval gate</span></div>
+            <h4>Summarize this thread before reply?</h4>
+            <div class="body-box">Provider: OpenAI GPT-4.1 mini<br/>Leaves device: subject, participants, selected body text from 1 thread<br/>Audit: prompt + result saved locally for review<br/><div class="actions" style="margin-top:12px;"><span class="btn">Approve and send</span><span class="btn-quiet">Not now</span></div></div>
+          </div>
+          <div class="footer-note">Strength: easiest state ownership. Risk: two stacked bands can feel heavy if too many services speak at once.</div>
+        </div>
+      </article>
+
+      <article class="mockup" id="variant-b">
+        <div class="variant-chip">Variant B</div>
+        <h2>Inline state chips</h2>
+        <p class="summary">Best when Milan wants maximum calm: keep the inbox almost unchanged and let Gmail, search, reader, and AI speak through compact inline chips near the place they matter.</p>
+        <div class="stage">
+          <div class="topbar">
+            <div class="brand"><span class="pip"></span><span>Pip / Kept</span></div>
+            <div class="title"><h3>Inbox</h3><span>42 local messages · 3 unread</span></div>
+            <div class="search"><span>Search local mail</span><span class="kbd">⌘K</span></div>
+            <div class="quiet-status">Local-first · AI off by default</div>
+          </div>
+          <div class="subband good">
+            <div class="state-row">
+              <div class="state-copy"><strong>Gmail connected</strong><span>42 recent rows stored locally. Last sync 6 min ago.</span></div>
+              <div class="actions"><span class="btn good">Sync now</span><span class="btn-quiet">Details</span></div>
+            </div>
+          </div>
+          <div class="search-inline">
+            <div class="state-row">
+              <div class="state-copy"><strong>No local results for “invoice april”.</strong><span>Try sender, month, or a phrase from a cached thread. Search only covers mail already on this device.</span></div>
+              <div class="actions"><span class="btn-quiet">Clear search</span></div>
+            </div>
+          </div>
+          <div class="inline-stack">
+            <div class="inline-pill"><div><div class="pill-label">Reader body missing</div><div class="pill-copy">Headers and attachment names are local. Full body did not arrive in the last sync.</div></div><span class="btn-quiet">Resync thread</span></div>
+            <div class="inline-pill"><div><div class="pill-label">AI provider missing</div><div class="pill-copy">Add a BYO provider key to summarize, draft, or classify.</div></div><span class="btn-quiet">Add provider</span></div>
+          </div>
+          <div class="section-head" style="margin-top:18px;"><span>Today</span><span>3 messages</span></div>
+          <div class="mail-list">
+            <div class="row"><div class="avatar" style="background:#dce8f1;">JR</div><div class="sender">June Avery</div><div class="subject">Soft inbox copy pass</div><div class="snippet">Search terms matched locally in the cached snippet</div><div class="time">4:10 AM</div></div>
+            <div class="row"><div class="avatar" style="background:#f0e8f7;">PK</div><div class="sender">Pip Keeper</div><div class="subject">Today’s tidy inbox brief</div><div class="snippet">AI disabled · no prompt sent yet</div><div class="time">5:20 AM</div></div>
+            <div class="row"><div class="avatar" style="background:#ece4db;">SM</div><div class="sender">Sage Monroe</div><div class="subject">Shared checklist</div><div class="snippet">Attachment metadata only · 2 files</div><div class="time">7:02 AM</div></div>
+          </div>
+          <div class="reader-card">
+            <div class="section-head"><span>Reader</span><span>Long body</span></div>
+            <h4>Today’s tidy inbox brief</h4>
+            <div class="body-box">Lead with the first 18–24 lines, then fade into a “Continue reading locally” expansion. Keep timestamps, provider, audit history, and attachment hashes inside secondary disclosures so the body stays readable.</div>
+          </div>
+          <div class="ai-card">
+            <div class="section-head"><span>Ask Kept</span><span>Result</span></div>
+            <h4>Draft ready</h4>
+            <div class="body-box">“Here’s a concise reply draft based on the visible local thread.”<br/><span class="muted">Audit saved locally · Provider details hidden until expanded</span></div>
+          </div>
+          <div class="footer-note">Strength: calmest default shell and least chrome. Risk: implementation must be disciplined so chips do not appear in too many places at once.</div>
+        </div>
+      </article>
+
+      <article class="mockup" id="variant-c">
+        <div class="variant-chip">Variant C</div>
+        <h2>Focus drawer</h2>
+        <p class="summary">Best when Milan wants the reader and AI flow to feel more intentional: list stays clean while a floating right drawer owns detailed reader, approval, and error states.</p>
+        <div class="stage">
+          <div class="topbar">
+            <div class="brand"><span class="pip"></span><span>Pip / Kept</span></div>
+            <div class="title"><h3>Inbox</h3><span>No local mail connected</span></div>
+            <div class="search"><span>Search disabled until local mail arrives</span><span class="kbd">⌘K</span></div>
+            <div class="quiet-status">Local-first · BYO AI quiet</div>
+          </div>
+          <div class="left-compressed">
+            <div class="state-band">
+              <div class="state-row">
+                <div class="state-copy"><strong>Connect Gmail to fill this inbox.</strong><span>Readonly sync saves recent rows locally on this device, or you can import a Gmail Takeout mbox.</span></div>
+                <div class="actions"><span class="btn">Connect Gmail</span><span class="btn-quiet">Import mbox</span></div>
+              </div>
+            </div>
+            <div class="mini-grid">
+              <div class="callout"><strong>Search disabled</strong>Enable local search after first Gmail sync or mbox import.</div>
+              <div class="callout"><strong>Connected empty</strong>If Gmail connects but there are no inbox rows yet, keep the inbox shell and switch the title to “No recent inbox mail found.”</div>
+              <div class="callout"><strong>Auth revoked</strong>Show cached rows, freeze sync, and replace the primary action with “Reconnect Gmail.”</div>
+            </div>
+            <div class="section-head" style="margin-top:18px;"><span>Priority</span><span>0 messages</span></div>
+            <div class="mail-list">
+              <div class="row"><div class="avatar" style="background:#f4eef9;">--</div><div class="sender">Inbox waits here</div><div class="subject">One row per email remains the contract</div><div class="snippet">No placeholders pretending to be real mail</div><div class="time">—</div></div>
+            </div>
+          </div>
+          <div class="right-drawer">
+            <div class="section-head"><span>Reader / AI drawer</span><span>Focused state host</span></div>
+            <h4 style="margin:0;font-size:26px;letter-spacing:-0.05em;">Thread unavailable yet</h4>
+            <div class="body-box">Open the drawer only when the user selects a thread, needs AI approval, or hits a thread-specific problem. This keeps the inbox shell untouched during auth and sync states.</div>
+            <div class="mini-state">
+              <strong>OAuth pending</strong>
+              <span class="muted">Waiting for Gmail approval in your browser. Return here when readonly consent finishes.</span>
+              <div class="actions"><span class="btn-quiet">Cancel</span></div>
+            </div>
+            <div class="mini-state">
+              <strong>Provider error</strong>
+              <span class="muted">OpenAI could not complete the draft. Your local thread is unchanged and the failed prompt is available in audit details.</span>
+              <div class="actions"><span class="btn bad">Retry with same provider</span><span class="btn-quiet">Choose another provider</span></div>
+            </div>
+            <div class="mini-state">
+              <strong>Audit save error</strong>
+              <span class="muted">Result generated, but Kept could not save the audit record locally. Copy the draft first before retrying audit save.</span>
+              <div class="actions"><span class="btn-quiet">Copy result</span><span class="btn-quiet">Retry audit save</span></div>
+            </div>
+            <div class="footer-note">Strength: strongest reader/AI focus. Risk: the drawer can start to feel like a hidden second layout if overused for global Gmail/search states.</div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="pattern">
+      <div class="section-label">Recommended pattern across all variants</div>
+      <h3>Two-line state copy, one primary action, one trust line</h3>
+      <p>Recommend a consistent microcopy contract rather than picking the winning mockup shell. Every state should use: (1) a plain-language outcome line, (2) one trust/explanation line naming what stays local or what is missing, and (3) one dominant next step with optional quiet fallback.</p>
+      <div class="pattern-grid">
+        <div class="pattern-block"><strong>Why this pattern</strong>Keeps the no-sidebar inbox calm, matches existing Gmail Alpha empty/search copy, and prevents implementation from inventing separate voice systems for Gmail, search, reader, and AI.</div>
+        <div class="pattern-block"><strong>Rationale bullets</strong>1. Trust copy stays visible exactly when data boundaries change. 2. The user always gets one obvious recovery step. 3. Technical detail moves behind secondary disclosure instead of polluting the main list.</div>
+      </div>
+    </section>
+
+    <section class="matrix">
+      <div class="section-label">Full implementation matrix</div>
+      <h3>State IDs, copy, action, and trust rule</h3>
+      <table>
+        <thead>
+          <tr><th>Surface</th><th>State ID</th><th>Primary copy</th><th>Primary action / UI treatment</th><th>Trust rule</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Gmail</td><td>gmail.empty.fresh</td><td>Connect Gmail to fill this inbox.</td><td>Primary: Connect Gmail. Secondary: Import mbox. Large empty-state card inside inbox shell.</td><td>Say readonly and local on device. Never imply Kept server sees mail.</td></tr>
+          <tr><td>Gmail</td><td>gmail.oauth.pending</td><td>Finish Gmail in your browser.</td><td>Swap primary CTA for waiting state; allow cancel. Keep shell visible.</td><td>Name browser handoff; no token/debug detail in primary view.</td></tr>
+          <tr><td>Gmail</td><td>gmail.oauth.error</td><td>Gmail did not connect yet.</td><td>Primary: Connect Gmail again. Secondary: Import mbox.</td><td>Confirm nothing synced locally yet.</td></tr>
+          <tr><td>Gmail</td><td>gmail.syncing.progress</td><td>Bringing recent Gmail into Kept.</td><td>Progress line with fetched / stored / indexed counts; no fake rows.</td><td>Explain that recent rows are saving locally on this device.</td></tr>
+          <tr><td>Gmail</td><td>gmail.connected.rows</td><td>Gmail connected.</td><td>Quiet success band or chip with last sync time and Sync now.</td><td>Reassure bodies and OAuth tokens are not logged.</td></tr>
+          <tr><td>Gmail</td><td>gmail.connected.empty</td><td>No recent inbox mail found.</td><td>Keep connected state visible; show empty inbox card, not auth CTA.</td><td>Clarify account is connected but Kept has no recent inbox rows yet.</td></tr>
+          <tr><td>Gmail</td><td>gmail.sync.error.cached</td><td>Gmail sync paused. Your cached rows stay available.</td><td>Primary: Reconnect or Sync now depending on error. Secondary: See sync details.</td><td>Explicitly protect cached mail and local search availability.</td></tr>
+          <tr><td>Gmail</td><td>gmail.auth.revoked</td><td>Reconnect Gmail to keep this inbox current.</td><td>Freeze sync; keep cached rows. Primary: Reconnect Gmail.</td><td>Say cached mail remains local and readable.</td></tr>
+          <tr><td>Search</td><td>search.disabled</td><td>Search unlocks after local mail arrives.</td><td>Disable input with explanatory placeholder.</td><td>Scope search to local mail only.</td></tr>
+          <tr><td>Search</td><td>search.indexing</td><td>Search is still indexing recent mail.</td><td>Keep input enabled if partial results work; otherwise show progress under field.</td><td>Differentiate visible rows from full phrase search readiness.</td></tr>
+          <tr><td>Search</td><td>search.ready</td><td>Search local mail.</td><td>Quiet default pill. No extra banners.</td><td>No trust copy needed until AI enters.</td></tr>
+          <tr><td>Search</td><td>search.empty</td><td>No local results for “query”.</td><td>Inline empty state near search with Clear search.</td><td>Remind user only synced/imported mail is searchable.</td></tr>
+          <tr><td>Search</td><td>search.error</td><td>Search needs a moment.</td><td>Retry or rebuild index action in details view.</td><td>Preserve user query; do not imply mail loss.</td></tr>
+          <tr><td>Reader</td><td>reader.open</td><td>Show thread body with compact header.</td><td>Open inline panel or drawer; keep list scan intact.</td><td>Hide verbose metadata behind disclosure.</td></tr>
+          <tr><td>Reader</td><td>reader.body.missing</td><td>This thread body is not local yet.</td><td>Primary: Resync thread. Show headers + attachment metadata if available.</td><td>Be precise: headers local, body missing.</td></tr>
+          <tr><td>Reader</td><td>reader.body.htmlOnly</td><td>Showing saved HTML formatting.</td><td>Sanitized render first; quiet fallback to original formatting.</td><td>Do not present raw HTML/debug by default.</td></tr>
+          <tr><td>Reader</td><td>reader.body.long</td><td>Keep reading locally.</td><td>Show first section with gradient fade and expand affordance.</td><td>Timestamps and raw metadata stay secondary.</td></tr>
+          <tr><td>Reader</td><td>reader.attachments.meta</td><td>Attachments available as metadata.</td><td>List filename, size, type, received time before open/download.</td><td>Do not claim content is downloaded unless it is local.</td></tr>
+          <tr><td>AI</td><td>ai.disabled</td><td>AI is off by default.</td><td>Quiet empty panel with Enable AI or Learn how.</td><td>Frame BYO AI as optional.</td></tr>
+          <tr><td>AI</td><td>ai.provider.missing</td><td>Add a provider to use AI here.</td><td>Primary: Add provider.</td><td>Name that nothing has been sent.</td></tr>
+          <tr><td>AI</td><td>ai.approval.required</td><td>Approve what leaves this device.</td><td>Approval sheet naming provider, selected content, purpose, and audit destination.</td><td>Provider name and sent scope must be explicit.</td></tr>
+          <tr><td>AI</td><td>ai.sending</td><td>Sending approved context…</td><td>Loading state with cancel if feasible.</td><td>Keep original thread visible; do not block reading.</td></tr>
+          <tr><td>AI</td><td>ai.result.ready</td><td>Draft ready.</td><td>Result card with Copy / Insert / Ask again.</td><td>Audit saved locally should be quiet secondary text.</td></tr>
+          <tr><td>AI</td><td>ai.provider.error</td><td>Provider could not finish that request.</td><td>Retry same provider or choose another provider.</td><td>Say local thread is unchanged.</td></tr>
+          <tr><td>AI</td><td>ai.audit.error</td><td>Result ready, but audit save needs attention.</td><td>Copy result first; retry audit save second.</td><td>Protect user output before retry flow.</td></tr>
+        </tbody>
+      </table>
+      <div>
+        <span class="tag">Harry: do not add a sidebar or second inbox layout for any state</span>
+        <span class="tag">Harry: state IDs above should map 1:1 to UI conditions</span>
+        <span class="tag">John: QA every state with cached-mail preservation and no server-claims drift</span>
+      </div>
+    </section>
+
+    <section class="handoff">
+      <div class="section-label">Explicit handoff notes</div>
+      <h3>What Harry builds, what John verifies</h3>
+      <div class="handoff-grid">
+        <div class="handoff-block">
+          <strong>Harry build requirements</strong>
+          <p>Keep the current soft-inbox shell. Add a single state host strategy chosen from A/B/C, then bind every Gmail/search/reader/AI state to the IDs above. Copy must stay outcome-first and local-trust-aware. Do not invent extra badge systems, sidebars, split panes, or placeholder demo rows.</p>
+        </div>
+        <div class="handoff-block">
+          <strong>John QA checks</strong>
+          <p>Verify search never implies remote coverage, cached rows survive sync/auth failures, AI approval always names provider + sent scope, and reader states distinguish missing body vs attachment metadata vs HTML-only body. Check desktop and mobile for one-row mail scan continuity.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
