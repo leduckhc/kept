@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  createJsonMailStore,
+  createMemoryJsonStorage,
+} from '../../../packages/mail-core/src/index.js';
+import {
   combineInboxThreads,
   filterInboxThreads,
   getInboxSearchState,
@@ -64,6 +68,37 @@ test('filterInboxThreads searches synced local inbox fields without remote calls
   assert.deepEqual(filterInboxThreads(rows, '').map((thread) => thread.id), ['gmail-thread', 'local-thread', 'unicode-thread']);
 });
 
+test('filterInboxThreads searches sender, email, subject, snippet, and body after persisted reload', async () => {
+  const storage = createMemoryJsonStorage();
+  const store = createJsonMailStore({ storage });
+  await store.saveSyncResult({
+    accountId: 'acct_local_gmail',
+    provider: 'gmail',
+    cursor: { provider: 'gmail', historyId: 'history-search' },
+    threads: [{
+      ...gmailThread,
+      sender: 'Reload Sender',
+      senderEmail: 'reload@example.com',
+      subject: 'Persisted subject phrase',
+      snippet: 'Durable snippet phrase',
+      body: 'Body-only ledger keyword',
+      textBody: 'Text body reimbursement keyword',
+    }],
+  });
+
+  const reopened = await createJsonMailStore({ storage }).loadSyncState();
+  const threads = getSyncedGmailThreads(reopened);
+
+  assert.equal(threads[0].body, undefined);
+  assert.equal(threads[0].textBody, undefined);
+  assert.equal(threads[0].snippet, 'Durable snippet phrase');
+  assert.deepEqual(filterInboxThreads(threads, 'Reload Sender').map((thread) => thread.id), ['gmail-thread']);
+  assert.deepEqual(filterInboxThreads(threads, 'reload@example.com').map((thread) => thread.id), ['gmail-thread']);
+  assert.deepEqual(filterInboxThreads(threads, 'persisted subject').map((thread) => thread.id), ['gmail-thread']);
+  assert.deepEqual(filterInboxThreads(threads, 'durable snippet').map((thread) => thread.id), ['gmail-thread']);
+  assert.deepEqual(filterInboxThreads(threads, 'ledger reimbursement').map((thread) => thread.id), ['gmail-thread']);
+});
+
 test('getInboxSearchState exposes user-facing search states', () => {
   assert.equal(getInboxSearchState({ totalCount: 0 }).status, 'disabled');
   assert.equal(getInboxSearchState({ totalCount: 2, indexing: true }).status, 'indexing');
@@ -71,4 +106,7 @@ test('getInboxSearchState exposes user-facing search states', () => {
   assert.equal(getInboxSearchState({ totalCount: 2, stale: true }).status, 'stale');
   assert.equal(getInboxSearchState({ totalCount: 2, query: 'missing', visibleCount: 0 }).status, 'no-results');
   assert.equal(getInboxSearchState({ totalCount: 2, errorMessage: 'Could not search local mail.' }).status, 'error');
+  assert.equal(getInboxSearchState({ enabled: false, indexing: true, totalCount: 0 }).status, 'indexing');
+  assert.equal(getInboxSearchState({ enabled: false, errorMessage: 'Could not search local mail.', totalCount: 0 }).status, 'error');
+  assert.equal(getInboxSearchState({ enabled: false, stale: true, totalCount: 0 }).status, 'stale');
 });

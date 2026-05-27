@@ -579,8 +579,30 @@ function parseHeaderDate(dateHeader) {
 }
 
 function stripPrivateBodyForPersistence(thread) {
-  const { body: _body, snippet: _snippet, ...safeThread } = thread;
-  return safeThread;
+  const { body, textBody, ...safeThread } = thread;
+  return {
+    ...safeThread,
+    snippet: thread.snippet || summarizeBody(textBody || body || '') || '',
+    searchTokens: createSearchTokens(thread),
+  };
+}
+
+function createSearchTokens(thread) {
+  return [
+    thread.sender,
+    thread.senderEmail,
+    thread.subject,
+    thread.snippet,
+    thread.body,
+    thread.textBody,
+    ...(Array.isArray(thread.recipients) ? thread.recipients : []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.replace(/^[^\p{L}\p{N}@._-]+|[^\p{L}\p{N}@._-]+$/gu, ''))
+    .filter(Boolean);
 }
 
 function splitMboxMessages(mboxText) {

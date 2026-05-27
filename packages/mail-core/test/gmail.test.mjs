@@ -171,6 +171,7 @@ test('local JSON mail store persists synced Gmail state and reloads without plai
       from: 'Mara Vale <mara@example.com>',
       to: 'you@example.com',
       textBody: 'Secret body that should not be persisted in this UI store',
+      snippet: 'Dinner plan preview',
       receivedAt: '2026-05-27T09:00:00Z',
     },
   ]);
@@ -184,7 +185,11 @@ test('local JSON mail store persists synced Gmail state and reloads without plai
 
   assert.equal(reopened.accounts.acct_local_gmail.cursor.historyId, 'history-private');
   assert.equal(reopened.accounts.acct_local_gmail.threads[0].subject, 'Private dinner note');
+  assert.equal(reopened.accounts.acct_local_gmail.threads[0].snippet, 'Dinner plan preview');
   assert.equal(reopened.accounts.acct_local_gmail.threads[0].body, undefined);
+  assert.equal(reopened.accounts.acct_local_gmail.threads[0].textBody, undefined);
+  assert.ok(reopened.accounts.acct_local_gmail.threads[0].searchTokens.includes('secret'));
+  assert.ok(reopened.accounts.acct_local_gmail.threads[0].searchTokens.includes('body'));
   assert.doesNotMatch(raw, /Secret body/);
   assert.doesNotMatch(raw, /ya29|refresh-token/);
 });

@@ -32,6 +32,7 @@ export function filterInboxThreads(threads, query) {
       thread.snippet,
       thread.body,
       thread.textBody,
+      ...(Array.isArray(thread.searchTokens) ? thread.searchTokens : []),
       ...(Array.isArray(thread.recipients) ? thread.recipients : []),
     ].filter(Boolean).join(' ').toLowerCase();
     return terms.every((term) => haystack.includes(term));
@@ -39,10 +40,10 @@ export function filterInboxThreads(threads, query) {
 }
 
 export function getInboxSearchState({ enabled = true, indexing = false, stale = false, errorMessage = '', query = '', totalCount = 0, visibleCount = 0 } = {}) {
-  if (!enabled || totalCount === 0) return { status: 'disabled', label: 'Search disabled', detail: 'Connect Gmail or import mbox to search local mail.' };
   if (errorMessage) return { status: 'error', label: 'Search error', detail: errorMessage };
   if (indexing) return { status: 'indexing', label: 'Indexing', detail: 'Kept is refreshing local search.' };
   if (stale) return { status: 'stale', label: 'Search updating', detail: 'Saved mail is available; new rows are catching up.' };
+  if (!enabled || totalCount === 0) return { status: 'disabled', label: 'Search disabled', detail: 'Connect Gmail or import mbox to search local mail.' };
   if (String(query || '').trim() && visibleCount === 0) return { status: 'no-results', label: 'No results', detail: 'No synced or imported local mail matches.' };
   return { status: 'ready', label: 'Search ready', detail: 'Offline local search is ready.' };
 }

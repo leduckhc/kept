@@ -60,7 +60,8 @@ function renderApp() {
   const searchState = getInboxSearchState({
     enabled: inboxCount > 0,
     indexing: state.gmail.status === 'syncing',
-    errorMessage: state.gmail.status === 'sync-error' ? state.gmail.errorMessage : '',
+    stale: state.gmail.status === 'sync-error' && state.gmail.threads.length > 0,
+    errorMessage: state.gmail.status === 'sync-error' && state.gmail.threads.length === 0 ? state.gmail.errorMessage : '',
     query: state.searchQuery,
     totalCount: inboxCount,
     visibleCount,
@@ -424,7 +425,28 @@ async function getGmailConnector() {
 
 function toPersistedThread(thread) {
   const { body: _body, textBody: _textBody, ...safeThread } = thread;
-  return safeThread;
+  return {
+    ...safeThread,
+    searchTokens: createSearchTokens(thread),
+  };
+}
+
+function createSearchTokens(thread) {
+  return [
+    thread.sender,
+    thread.senderEmail,
+    thread.subject,
+    thread.snippet,
+    thread.body,
+    thread.textBody,
+    ...(Array.isArray(thread.recipients) ? thread.recipients : []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.replace(/^[^\p{L}\p{N}@._-]+|[^\p{L}\p{N}@._-]+$/gu, ''))
+    .filter(Boolean);
 }
 
 function loadThreads() {
