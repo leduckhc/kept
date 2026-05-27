@@ -467,6 +467,8 @@ export function redactForLogs(value) {
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email-redacted]')
     .replace(/ya29\.[A-Za-z0-9._-]+/g, '[secret-redacted]')
     .replace(/1\/\/[A-Za-z0-9._-]+/g, '[secret-redacted]')
+    .replace(/RAW_[A-Z0-9_]*KEY/g, '[secret-redacted]')
+    .replace(/sk-[A-Za-z0-9._-]+/g, '[secret-redacted]')
     .replace(/(access_token|refresh_token|id_token|client_secret|authorization_code|code_verifier)":"[^"]+"/gi, '$1":"[secret-redacted]"');
 }
 
@@ -808,10 +810,18 @@ export function normalizeAiAuditEntry(entry = {}) {
     threadId: entry.threadId ? String(entry.threadId) : null,
     messageId: entry.messageId ? String(entry.messageId) : null,
     provider: entry.provider || 'none',
+    model: entry.model ? String(entry.model) : null,
     purpose: entry.purpose || 'unknown',
+    action: entry.action || entry.purpose || 'unknown',
+    selectedIds: Array.isArray(entry.selectedIds) ? entry.selectedIds.map(String) : [],
+    payloadPreview: entry.payloadPreview ? String(entry.payloadPreview) : '',
+    payloadHash: entry.payloadHash ? String(entry.payloadHash) : '',
+    approvalState: entry.approvalState || (entry.approved ? 'approved' : 'denied'),
     approved: Boolean(entry.approved),
     requiresExplicitApproval: entry.requiresExplicitApproval ?? true,
     contentDescription: entry.contentDescription || 'selected local mail content',
+    result: redactAuditValue(entry.result ?? null),
+    error: entry.error ? redactForLogs(String(entry.error)) : null,
     createdAt: entry.createdAt || new Date(0).toISOString(),
     metadata: sanitizeSecretFields(entry.metadata || {}),
   };
@@ -1093,6 +1103,20 @@ function normalizeLocalFlags(flags = {}) {
     starred: Boolean(flags.starred),
     archived: Boolean(flags.archived),
   };
+}
+
+function redactAuditValue(value) {
+  if (Array.isArray(value)) return value.map(redactAuditValue);
+  if (typeof value === 'string') return redactForLogs(value);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nested]) => {
+      if (/(access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|client[_-]?secret|authorization[_-]?code|code[_-]?verifier|password|secret)$/i.test(key)) {
+        return [key, '[secret-redacted]'];
+      }
+      return [key, redactAuditValue(nested)];
+    }),
+  );
 }
 
 function sanitizeSecretFields(value) {
