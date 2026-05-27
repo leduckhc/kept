@@ -14,6 +14,7 @@ jobs:
   macos-apple-silicon:
     name: macOS Apple Silicon package
     runs-on: macos-26
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -40,7 +41,7 @@ jobs:
 
       - name: Build Kept desktop package
         env:
-          KEPT_GMAIL_CLIENT_ID: ${{ secrets.KEPT_GMAIL_CLIENT_ID }}
+          KEPT_GMAIL_CLIENT_ID: ${{ vars.KEPT_GMAIL_CLIENT_ID || secrets.KEPT_GMAIL_CLIENT_ID }}
           KEPT_GMAIL_REDIRECT_URI: http://127.0.0.1:49210/oauth/google/callback
         run: npm run tauri:build
 
