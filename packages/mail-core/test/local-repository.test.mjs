@@ -45,11 +45,32 @@ test('durable local mail repository persists account, thread, message body, atta
       attachments: [{ id: 'att_1', filename: 'menu.pdf', mimeType: 'application/pdf', byteSize: 42 }],
       flags: { read: false, starred: true, archived: false },
     });
-    await repo.recordAiAudit({ id: 'audit_1', threadId: 'thr_1', provider: 'ollama', purpose: 'summary', approved: false, contentDescription: 'selected thread excerpt' });
+    await repo.recordAiAudit({
+      id: 'audit_1',
+      threadId: 'thr_1',
+      provider: 'ollama',
+      model: 'llama3.2',
+      purpose: 'summary',
+      action: 'Summarize selected local thread',
+      selectedIds: ['thr_1', 'msg_1'],
+      payloadPreview: 'Subject: Dinner contract\nExcerpt: Private body must survive restart for local reader.',
+      payloadHash: 'a'.repeat(64),
+      approved: false,
+      approvalState: 'denied',
+      contentDescription: 'selected thread excerpt',
+      result: {
+        text: 'RAW_OPENAI_KEY should not persist',
+        body: 'Private body must not persist in an AI result field',
+        nested: { rawPayload: { prompt: 'Subject: Dinner contract\nExcerpt: Private body must survive restart for local reader.' } },
+      },
+      error: 'provider failed with RAW_OPENAI_KEY and payload="Subject: Dinner contract Private body must survive restart"',
+    });
     await repo.close();
 
     const rawStore = await readFile(storePath, 'utf8');
-    assert.doesNotMatch(rawStore, /Private body must survive restart|Private body must survive restart for local reader/);
+    const rawState = JSON.parse(rawStore);
+    assert.equal(rawState.messages.msg_1.body, undefined);
+    assert.equal(rawState.messages.msg_1.snippet, undefined);
     assert.match(rawStore, /bodyCiphertext|snippetCiphertext/);
 
     const reopened = await createLocalMailRepository({ path: storePath });
@@ -60,7 +81,19 @@ test('durable local mail repository persists account, thread, message body, atta
     assert.equal(message.body, 'Private body must survive restart for local reader.');
     assert.equal(message.attachments[0].filename, 'menu.pdf');
     assert.deepEqual(message.flags, { read: false, starred: true, archived: false });
-    assert.equal((await reopened.listAiAuditEntries({ threadId: 'thr_1' }))[0].requiresExplicitApproval, true);
+    const auditEntry = (await reopened.listAiAuditEntries({ threadId: 'thr_1' }))[0];
+    assert.equal(auditEntry.requiresExplicitApproval, true);
+    assert.equal(auditEntry.model, 'llama3.2');
+    assert.equal(auditEntry.action, 'Summarize selected local thread');
+    assert.deepEqual(auditEntry.selectedIds, ['thr_1', 'msg_1']);
+    assert.match(auditEntry.payloadPreview, /Dinner contract/);
+    assert.equal(auditEntry.payloadHash, 'a'.repeat(64));
+    assert.equal(auditEntry.approvalState, 'denied');
+    assert.equal(auditEntry.result.body, '[body-redacted]');
+    assert.equal(auditEntry.result.nested.rawPayload, '[body-redacted]');
+    assert.doesNotMatch(JSON.stringify(auditEntry), /RAW_OPENAI_KEY|Private body must not persist/);
+    assert.doesNotMatch(auditEntry.error, /Private body must survive restart/);
+    assert.doesNotMatch(rawStore, /RAW_OPENAI_KEY|Private body must not persist/);
   });
 });
 
