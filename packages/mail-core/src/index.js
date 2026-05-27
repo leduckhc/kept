@@ -699,6 +699,339 @@ function stableLocalMessageId(messageId, index) {
   return `local_${index}_${messageId.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 48)}`;
 }
 
+export const localMailRepositoryContractVersion = 1;
+
+export const canonicalMailStateMatrix = Object.freeze([
+  {
+    system: 'gmail',
+    sourceOfTruth: 'Remote provider metadata and immutable provider message ids; OAuth tokens stay in keychain only.',
+    persistedLocally: 'historyId cursor, provider ids, normalized headers, body copy after explicit sync/import.',
+    staleDataBehavior: 'Use historyId for incremental sync; if expired, run bounded deduping resync by providerMessageId.',
+    tokenPolicy: 'Never store access tokens, refresh tokens, API keys, or client secrets in the local mail repository.',
+  },
+  {
+    system: 'localStore',
+    sourceOfTruth: 'Durable normalized LocalAccount, LocalThread, LocalMessage, AttachmentMetadata, sync state, flags, and AI audit entries.',
+    persistedLocally: 'Message bodies, snippets, attachments metadata, local flags, provider cursors, and audit records.',
+    staleDataBehavior: 'Reader and search read local snapshots until a sync updates matching provider ids.',
+    tokenPolicy: 'Store non-secret provider cursors only; secret fields are stripped at repository boundaries.',
+  },
+  {
+    system: 'search',
+    sourceOfTruth: 'Rebuildable index derived from localStore messages, never an independent body authority.',
+    persistedLocally: 'Index terms and bounded previews may be regenerated from stored messages.',
+    staleDataBehavior: 'If missing or stale, rebuild from localStore before querying.',
+    tokenPolicy: 'Search rows never include tokens, API keys, or OAuth payloads.',
+  },
+  {
+    system: 'reader',
+    sourceOfTruth: 'LocalMessage body and attachment metadata selected by message id.',
+    persistedLocally: 'Reader state is flags and selected local ids; body content remains in localStore.',
+    staleDataBehavior: 'Render last synced local body clearly; sync refresh can replace by provider id.',
+    tokenPolicy: 'Reader receives no provider credentials.',
+  },
+  {
+    system: 'ai',
+    sourceOfTruth: 'User-approved selected local thread/message excerpts plus AiAuditEntry records.',
+    persistedLocally: 'Audit metadata records provider, purpose, approval, content description, and local ids.',
+    staleDataBehavior: 'AI output is advisory and tied to the local content version described in the audit entry.',
+    tokenPolicy: 'BYO provider keys stay in keychain or local provider config references, never in mail repository rows.',
+  },
+]);
+
+export function normalizeLocalAccount(account = {}) {
+  requireField('account.id', account.id);
+  requireField('account.provider', account.provider);
+  requireField('account.email', account.email);
+  return {
+    id: String(account.id),
+    provider: String(account.provider),
+    email: String(account.email),
+    displayName: account.displayName ? String(account.displayName) : '',
+    createdAt: account.createdAt || new Date(0).toISOString(),
+    updatedAt: account.updatedAt || account.createdAt || new Date(0).toISOString(),
+  };
+}
+
+export function normalizeLocalThread(thread = {}) {
+  requireField('thread.id', thread.id);
+  requireField('thread.accountId', thread.accountId);
+  return {
+    id: String(thread.id),
+    accountId: String(thread.accountId),
+    subject: thread.subject || '(no subject)',
+    updatedAt: thread.updatedAt || thread.receivedAt || new Date(0).toISOString(),
+    messageIds: Array.isArray(thread.messageIds) ? [...new Set(thread.messageIds.map(String))] : [],
+    metadata: sanitizeSecretFields(thread.metadata || {}),
+  };
+}
+
+export function normalizeLocalMessage(message = {}) {
+  requireField('message.id', message.id);
+  requireField('message.accountId', message.accountId);
+  requireField('message.threadId', message.threadId);
+  const sender = normalizeMailContact(message.sender);
+  const body = String(message.body || '');
+  return {
+    id: String(message.id),
+    accountId: String(message.accountId),
+    threadId: String(message.threadId),
+    providerMessageId: message.providerMessageId ? String(message.providerMessageId) : String(message.id),
+    sender,
+    recipients: normalizeRecipients(message.recipients),
+    subject: message.subject || '(no subject)',
+    snippet: message.snippet || summarizeBody(body),
+    body,
+    receivedAt: message.receivedAt || new Date(0).toISOString(),
+    attachments: Array.isArray(message.attachments) ? message.attachments.map(normalizeAttachmentMetadata) : [],
+    flags: normalizeLocalFlags(message.flags),
+    metadata: sanitizeSecretFields(message.metadata || {}),
+  };
+}
+
+export function normalizeAttachmentMetadata(attachment = {}) {
+  requireField('attachment.id', attachment.id);
+  return {
+    id: String(attachment.id),
+    messageId: attachment.messageId ? String(attachment.messageId) : null,
+    filename: attachment.filename ? String(attachment.filename) : 'attachment',
+    mimeType: attachment.mimeType || attachment.mime_type || 'application/octet-stream',
+    byteSize: Number.isFinite(Number(attachment.byteSize ?? attachment.byte_size)) ? Number(attachment.byteSize ?? attachment.byte_size) : 0,
+    metadata: sanitizeSecretFields(attachment.metadata || {}),
+  };
+}
+
+export function normalizeAiAuditEntry(entry = {}) {
+  requireField('aiAudit.id', entry.id);
+  return {
+    id: String(entry.id),
+    threadId: entry.threadId ? String(entry.threadId) : null,
+    messageId: entry.messageId ? String(entry.messageId) : null,
+    provider: entry.provider || 'none',
+    purpose: entry.purpose || 'unknown',
+    approved: Boolean(entry.approved),
+    requiresExplicitApproval: entry.requiresExplicitApproval ?? true,
+    contentDescription: entry.contentDescription || 'selected local mail content',
+    createdAt: entry.createdAt || new Date(0).toISOString(),
+    metadata: sanitizeSecretFields(entry.metadata || {}),
+  };
+}
+
+export async function createLocalMailRepository({ path: storePath, initialData } = {}) {
+  requireField('path', storePath);
+  let state = await loadLocalMailState(storePath, initialData);
+
+  async function persist() {
+    const { mkdir, rename, writeFile, dirname } = await localRepositoryFileOps();
+    await mkdir(dirname(storePath), { recursive: true });
+    const tmpPath = `${storePath}.tmp`;
+    await writeFile(tmpPath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+    await rename(tmpPath, storePath);
+  }
+
+  const api = {
+    path: storePath,
+    async close() { await persist(); },
+    async upsertAccount(account) {
+      const normalized = normalizeLocalAccount(account);
+      state.accounts[normalized.id] = { ...state.accounts[normalized.id], ...normalized };
+      await persist();
+      return state.accounts[normalized.id];
+    },
+    async listAccounts() { return Object.values(state.accounts).map(clone); },
+    async getAccount(accountId) { return clone(state.accounts[accountId] || null); },
+    async upsertThread(thread) {
+      const normalized = normalizeLocalThread(thread);
+      const previous = state.threads[normalized.id] || {};
+      state.threads[normalized.id] = { ...previous, ...normalized, messageIds: normalized.messageIds.length ? normalized.messageIds : (previous.messageIds || []) };
+      await persist();
+      return clone(state.threads[normalized.id]);
+    },
+    async listThreads({ accountId } = {}) {
+      return Object.values(state.threads)
+        .filter((thread) => !accountId || thread.accountId === accountId)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+        .map(clone);
+    },
+    async getThread(threadId) { return clone(state.threads[threadId] || null); },
+    async upsertMessage(message) {
+      const normalizedInput = normalizeLocalMessage(message);
+      const existingId = findMessageIdByProvider(state, normalizedInput.accountId, normalizedInput.providerMessageId);
+      const id = existingId || normalizedInput.id;
+      const normalized = { ...normalizedInput, id, attachments: normalizedInput.attachments.map((attachment) => ({ ...attachment, messageId: id })) };
+      state.messages[id] = normalized;
+      state.attachments = Object.fromEntries(Object.entries(state.attachments).filter(([, attachment]) => attachment.messageId !== id));
+      normalized.attachments.forEach((attachment) => { state.attachments[attachment.id] = attachment; });
+      const thread = state.threads[normalized.threadId] || normalizeLocalThread({ id: normalized.threadId, accountId: normalized.accountId, subject: normalized.subject, updatedAt: normalized.receivedAt });
+      const messageIds = new Set(thread.messageIds || []);
+      messageIds.add(id);
+      state.threads[normalized.threadId] = { ...thread, subject: normalized.subject || thread.subject, updatedAt: normalized.receivedAt || thread.updatedAt, messageIds: [...messageIds] };
+      await persist();
+      return clone(state.messages[id]);
+    },
+    async getMessage(messageId) { return clone(state.messages[messageId] || null); },
+    async listMessages({ accountId, threadId } = {}) {
+      return Object.values(state.messages)
+        .filter((message) => (!accountId || message.accountId === accountId) && (!threadId || message.threadId === threadId))
+        .sort((left, right) => right.receivedAt.localeCompare(left.receivedAt))
+        .map(clone);
+    },
+    async setFlags(messageId, flags) {
+      requireField('messageId', messageId);
+      if (!state.messages[messageId]) throw new Error(`Local message not found: ${messageId}`);
+      state.messages[messageId].flags = normalizeLocalFlags({ ...state.messages[messageId].flags, ...flags });
+      await persist();
+      return clone(state.messages[messageId].flags);
+    },
+    async saveSyncState(accountId, syncState) {
+      requireField('accountId', accountId);
+      state.syncStates[accountId] = sanitizeSecretFields({ ...syncState, updatedAt: syncState.updatedAt || syncState.syncedAt || new Date(0).toISOString() });
+      await persist();
+      return clone(state.syncStates[accountId]);
+    },
+    async getSyncState(accountId) { return clone(state.syncStates[accountId] || null); },
+    async recordAiAudit(entry) {
+      const normalized = normalizeAiAuditEntry(entry);
+      state.aiAudits[normalized.id] = normalized;
+      await persist();
+      return clone(normalized);
+    },
+    async listAiAuditEntries({ threadId, messageId } = {}) {
+      return Object.values(state.aiAudits)
+        .filter((entry) => (!threadId || entry.threadId === threadId) && (!messageId || entry.messageId === messageId))
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map(clone);
+    },
+    async rebuildSearchIndex() {
+      const rows = Object.values(state.messages).map((message) => ({
+        messageId: message.id,
+        threadId: message.threadId,
+        subject: message.subject,
+        sender: message.sender.name || message.sender.email,
+        recipients: message.recipients.map((recipient) => recipient.email || recipient.name),
+        body: message.body,
+        receivedAt: message.receivedAt,
+      }));
+      return createRebuiltSearchIndex(rows);
+    },
+    exportState() { return clone(state); },
+  };
+
+  await persist();
+  return api;
+}
+
+export function createRepositoryCorruptionError(details = '') {
+  const error = new Error(`Kept local mail store is corrupt. Move the store aside and rebuild from provider/local import. Details: ${redactForLogs(String(details)).slice(0, 180)}`);
+  error.code = 'KEPT_LOCAL_STORE_CORRUPT';
+  return error;
+}
+
+async function loadLocalMailState(storePath, initialData) {
+  if (initialData) return migrateLocalMailState(initialData);
+  try {
+    const { readFile } = await localRepositoryFileOps();
+    const raw = await readFile(storePath, 'utf8');
+    return migrateLocalMailState(JSON.parse(raw));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return emptyLocalMailState();
+    if (error?.code === 'KEPT_LOCAL_STORE_CORRUPT') throw error;
+    throw createRepositoryCorruptionError(error?.message || error);
+  }
+}
+
+function migrateLocalMailState(raw) {
+  if (!raw || typeof raw !== 'object') throw createRepositoryCorruptionError('local store root is not an object');
+  const next = emptyLocalMailState();
+  Object.values(raw.accounts || {}).forEach((account) => { next.accounts[account.id] = normalizeLocalAccount(account); });
+  Object.values(raw.threads || {}).forEach((thread) => { next.threads[thread.id] = normalizeLocalThread(thread); });
+  Object.values(raw.messages || {}).forEach((message) => {
+    const normalized = normalizeLocalMessage(message);
+    next.messages[normalized.id] = normalized;
+    normalized.attachments.forEach((attachment) => { next.attachments[attachment.id] = attachment; });
+  });
+  Object.values(raw.attachments || {}).forEach((attachment) => {
+    const normalized = normalizeAttachmentMetadata(attachment);
+    next.attachments[normalized.id] = normalized;
+  });
+  Object.entries(raw.syncStates || {}).forEach(([accountId, syncState]) => { next.syncStates[accountId] = sanitizeSecretFields(syncState); });
+  Object.values(raw.aiAudits || {}).forEach((entry) => { next.aiAudits[entry.id] = normalizeAiAuditEntry(entry); });
+  return next;
+}
+
+function emptyLocalMailState() {
+  return {
+    schemaVersion: localMailRepositoryContractVersion,
+    accounts: {},
+    threads: {},
+    messages: {},
+    attachments: {},
+    syncStates: {},
+    aiAudits: {},
+  };
+}
+
+function createRebuiltSearchIndex(rows) {
+  return {
+    rows: rows.map(clone),
+    async search(query) {
+      const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+      if (terms.length === 0) return [];
+      return rows
+        .map((row) => {
+          const haystack = `${row.subject} ${row.sender} ${row.recipients.join(' ')} ${row.body}`.toLowerCase();
+          const score = terms.reduce((sum, term) => sum + (haystack.includes(term) ? 1 : 0), 0);
+          return { ...clone(row), score, snippet: row.body.slice(0, 160) };
+        })
+        .filter((row) => row.score > 0)
+        .sort((left, right) => right.score - left.score || right.receivedAt.localeCompare(left.receivedAt));
+    },
+  };
+}
+
+function findMessageIdByProvider(state, accountId, providerMessageId) {
+  return Object.values(state.messages).find((message) => message.accountId === accountId && message.providerMessageId === providerMessageId)?.id || null;
+}
+
+function normalizeMailContact(contact) {
+  if (typeof contact === 'string') return parseMailbox(contact);
+  if (!contact || typeof contact !== 'object') return { name: 'unknown sender', email: '' };
+  return { name: contact.name || contact.email || 'unknown sender', email: contact.email || '' };
+}
+
+function normalizeRecipients(recipients) {
+  if (!Array.isArray(recipients)) return [];
+  return recipients.map((recipient) => normalizeMailContact(recipient));
+}
+
+function normalizeLocalFlags(flags = {}) {
+  return {
+    read: Boolean(flags.read),
+    starred: Boolean(flags.starred),
+    archived: Boolean(flags.archived),
+  };
+}
+
+function sanitizeSecretFields(value) {
+  if (Array.isArray(value)) return value.map(sanitizeSecretFields);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !/(access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|client[_-]?secret|authorization[_-]?code|code[_-]?verifier|password|secret)$/i.test(key))
+      .map(([key, nested]) => [key, sanitizeSecretFields(nested)]),
+  );
+}
+
+function clone(value) {
+  return value === null || value === undefined ? value : JSON.parse(JSON.stringify(value));
+}
+
+async function localRepositoryFileOps() {
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  return { ...fs, dirname: path.dirname };
+}
+
 function compareInboxEntries(left, right) {
   const timeDifference = new Date(right.thread.receivedAt).getTime() - new Date(left.thread.receivedAt).getTime();
   return timeDifference || left.index - right.index;
