@@ -1,9 +1,10 @@
 import { brandTokens, renderPipMark } from '/packages/ui/src/index.js';
 import { createBrowserLocalMailRepository, createJsonMailStore, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
-import { disabledProvider } from '/packages/ai-core/src/index.js';
+import { createProviderAdapter, disabledProvider } from '/packages/ai-core/src/index.js';
 import {
   applyLocalReadState,
   createLocalReadStateStore,
+  createThreadSummaryActionController,
   formatAttachmentMeta,
   isThreadOpenKey,
   markThreadRead,
@@ -25,6 +26,7 @@ const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
 const READ_STATE_KEY = 'kept.localThreadReadState.v1';
 const root = document.querySelector('#root');
 const gmailAdapter = window.__KEPT_GMAIL_CONNECT__ || null;
+const aiRuntime = window.__KEPT_AI__ || {};
 const storageAdapter = createLocalStorageAdapter(localStorage);
 const mailStore = createJsonMailStore({ storage: storageAdapter });
 const mailRepositoryPromise = createBrowserLocalMailRepository({
@@ -32,6 +34,20 @@ const mailRepositoryPromise = createBrowserLocalMailRepository({
   key: 'kept.localMailRepository.v1',
 });
 const readStateStore = createLocalReadStateStore(localStorage, READ_STATE_KEY);
+const aiAuditStore = {
+  async recordAiAudit(entry) {
+    const repository = await mailRepositoryPromise;
+    return repository.recordAiAudit(entry);
+  },
+};
+const aiSettings = aiRuntime.settings || disabledProvider;
+const aiAdapter = aiRuntime.adapter || createProviderAdapter(aiSettings, {
+  call: aiRuntime.call,
+  transport: aiRuntime.transport,
+  keyStore: aiRuntime.keyStore,
+  auditStore: aiRuntime.auditStore || aiAuditStore,
+});
+let pendingSummaryController = null;
 
 const state = {
   threads: loadThreads(),
@@ -39,6 +55,12 @@ const state = {
   searchQuery: '',
   activeThreadId: null,
   lastFocusedRowId: null,
+  ai: {
+    approval: null,
+    summary: null,
+    status: 'idle',
+    errorMessage: '',
+  },
   gmail: {
     status: 'never-connected',
     threads: [],
@@ -408,7 +430,7 @@ function renderThreadReader(reader) {
     const gmailLink = el('a', { className: 'secondary-mail-action reader-gmail-link', text: 'Open in Gmail', href: reader.gmailUrl, target: '_blank', rel: 'noreferrer' });
     header.append(gmailLink);
   }
-  surface.append(header, renderReaderMeta(reader));
+  surface.append(header, renderReaderMeta(reader), renderReaderSummaryPanel(reader));
   reader.messages.forEach((message) => surface.append(renderReaderMessage(message)));
   shell.append(surface);
   return shell;
@@ -434,6 +456,50 @@ function renderMetaRow(label, value) {
   const row = el('p', { className: 'reader-meta-row' });
   row.append(el('strong', { text: label }), el('span', { text: value }));
   return row;
+}
+
+function renderReaderSummaryPanel(reader) {
+  const panel = el('section', { className: 'reader-ai-panel', ariaLabel: 'AI thread summary' });
+  panel.append(
+    el('div', { className: 'reader-ai-copy' }),
+  );
+  const copy = panel.querySelector('.reader-ai-copy');
+  copy.append(el('h2', { text: 'Summarize this thread' }));
+  copy.append(el('p', { text: 'Kept only sends this selected thread after you approve the exact provider, model, action, content preview, and hash.' }));
+
+  if (state.ai.summary) {
+    panel.append(el('div', { className: 'reader-ai-result', text: state.ai.summary }));
+  }
+  if (state.ai.errorMessage) {
+    panel.append(el('p', { className: 'reader-ai-error', text: state.ai.errorMessage }));
+  }
+  if (state.ai.approval?.selectedThreadId === reader.id) {
+    panel.append(renderApprovalGate(state.ai.approval));
+  }
+
+  const actions = el('div', { className: 'reader-ai-actions' });
+  actions.append(el('button', { type: 'button', className: 'primary-mail-action', text: state.ai.status === 'preparing' ? 'Preparing…' : 'Summarize selected thread', id: 'summarize-thread', disabled: state.ai.status === 'preparing' || state.ai.status === 'sending' }));
+  panel.append(actions);
+  return panel;
+}
+
+function renderApprovalGate(approval) {
+  const gate = el('section', { className: 'reader-ai-approval', ariaLabel: 'Approve AI request' });
+  gate.append(
+    renderMetaRow('Provider', approval.provider || 'none'),
+    renderMetaRow('Model', approval.model || 'not set'),
+    renderMetaRow('Action', approval.action),
+    renderMetaRow('Content boundary', `Selected thread only: ${approval.selectedThreadId}`),
+    renderMetaRow('Payload hash', approval.payloadHash),
+    el('pre', { className: 'reader-ai-preview', text: approval.payloadPreview }),
+  );
+  const actions = el('div', { className: 'reader-ai-actions' });
+  actions.append(
+    el('button', { type: 'button', className: 'primary-mail-action', text: state.ai.status === 'sending' ? 'Sending…' : 'Approve and send once', id: 'approve-summary', disabled: state.ai.status === 'sending' }),
+    el('button', { type: 'button', className: 'secondary-mail-action', text: 'Cancel', id: 'cancel-summary' }),
+  );
+  gate.append(actions);
+  return gate;
 }
 
 function renderReaderMessage(message) {
@@ -519,6 +585,66 @@ function wireThreadRows() {
 
 function wireThreadReaderControls() {
   document.querySelector('#reader-back')?.addEventListener('click', closeThreadReader);
+  document.querySelector('#summarize-thread')?.addEventListener('click', requestThreadSummary);
+  document.querySelector('#approve-summary')?.addEventListener('click', approveThreadSummary);
+  document.querySelector('#cancel-summary')?.addEventListener('click', cancelThreadSummary);
+}
+
+function createThreadSummaryController() {
+  return createThreadSummaryActionController({
+    threads: applyLocalReadState(combineInboxThreads(state.gmail.threads, state.threads), readStateStore.load()),
+    adapter: aiAdapter,
+  });
+}
+
+async function requestThreadSummary() {
+  if (!state.activeThreadId) return;
+  state.ai = { ...state.ai, status: 'preparing', approval: null, errorMessage: '' };
+  renderApp();
+  try {
+    pendingSummaryController = createThreadSummaryController();
+    const result = await pendingSummaryController.requestSummary(state.activeThreadId);
+    if (result.status === 'approval_required') {
+      state.ai = { ...state.ai, status: 'approval_required', approval: result.approval, errorMessage: '' };
+    } else if (result.status === 'disabled') {
+      state.ai = { ...state.ai, status: 'idle', approval: null, errorMessage: 'BYO AI is off. Enable a provider before sending thread content.' };
+    } else {
+      state.ai = { ...state.ai, status: 'idle', approval: null, errorMessage: userFacingError(result.error || new Error(result.status), 'Could not prepare AI summary approval.') };
+    }
+  } catch (error) {
+    pendingSummaryController = null;
+    state.ai = { ...state.ai, status: 'idle', approval: null, errorMessage: userFacingError(error, 'Could not prepare AI summary approval.') };
+  }
+  renderApp();
+}
+
+async function approveThreadSummary() {
+  if (!state.ai.approval) return;
+  const approval = state.ai.approval;
+  state.ai = { ...state.ai, status: 'sending', errorMessage: '' };
+  renderApp();
+  try {
+    const controller = pendingSummaryController;
+    if (!controller) throw new Error('AI approval expired. Prepare the summary again.');
+    const result = await controller.approveSummary(approval.payloadHash);
+    pendingSummaryController = null;
+    if (result.status === 'ok') {
+      state.ai = { approval: null, summary: result.summary, status: 'done', errorMessage: '' };
+    } else {
+      state.ai = { ...state.ai, approval: null, status: 'idle', errorMessage: userFacingError(result.error || new Error(result.status), 'Could not summarize this thread.') };
+    }
+  } catch (error) {
+    pendingSummaryController = null;
+    state.ai = { ...state.ai, approval: null, status: 'idle', errorMessage: userFacingError(error, 'Could not summarize this thread.') };
+  }
+  renderApp();
+}
+
+function cancelThreadSummary() {
+  pendingSummaryController?.cancelSummary();
+  pendingSummaryController = null;
+  state.ai = { ...state.ai, status: 'cancelled', approval: null, errorMessage: '' };
+  renderApp();
 }
 
 function openThreadReader(threadId, rowId) {

@@ -158,3 +158,27 @@ test('prompt builder scopes content to one selected thread', () => {
   assert.equal(prompt.messages.length, 2);
   assert.match(prompt.contentDescription, /one user-approved thread/);
 });
+
+test('approved provider payload exactly matches the approved preview and hash', async () => {
+  const settings = createAISettings({ enabled: true, provider: 'ollama', model: 'llama3.2' });
+  let sentPayload = null;
+  const adapter = createProviderAdapter(settings, { call: async ({ prompt }) => { sentPayload = JSON.stringify(prompt, null, 2); return { text: 'summary' }; } });
+
+  const preview = await adapter.summarizeThread(thread, { approved: false });
+  const result = await adapter.summarizeThread(thread, { approved: true, expectedPayloadHash: preview.envelope.payloadHash });
+
+  assert.equal(result.status, 'ok');
+  assert.equal(sentPayload, preview.envelope.payloadPreview);
+  assert.equal(result.envelope.payloadHash, preview.envelope.payloadHash);
+});
+
+test('approved provider call fails closed when preview hash does not match', async () => {
+  const settings = createAISettings({ enabled: true, provider: 'ollama', model: 'llama3.2' });
+  let called = false;
+  const adapter = createProviderAdapter(settings, { call: async () => { called = true; return { text: 'summary' }; } });
+
+  const result = await adapter.summarizeThread(thread, { approved: true, expectedPayloadHash: 'not-the-approved-hash' });
+
+  assert.equal(result.status, 'approval_mismatch');
+  assert.equal(called, false);
+});
