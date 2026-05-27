@@ -14,7 +14,7 @@ Kept's real-mail tracks share a normalized local repository contract exported fr
 - AI audit trail: `recordAiAudit`, `listAiAuditEntries`
 - search hook: `rebuildSearchIndex`
 
-The current implementation uses an atomic JSON file with `schemaVersion: 1` as the durable path so the desktop app can move quickly without native SQLite packaging risk. The API boundary is intentionally repository-shaped so a SQLCipher/SQLite implementation can replace the backing file without changing Gmail, reader, search, or AI callers.
+The current implementation uses an atomic JSON file with `schemaVersion: 1` as the durable path so the desktop app can move quickly without native SQLite packaging risk. The API boundary is intentionally repository-shaped so a SQLCipher/SQLite implementation can replace the backing file without changing Gmail, reader, search, or AI callers. Message `body` and `snippet` fields are encrypted before JSON disk writes and decrypted only inside the repository API; callers should pass a keychain-backed `bodyEncryptionKey` in production, while tests/dev can use the deterministic store-path fallback.
 
 ## Stable shapes
 

@@ -43,6 +43,10 @@ test('durable local mail repository persists account, thread, message body, atta
     await repo.recordAiAudit({ id: 'audit_1', threadId: 'thr_1', provider: 'ollama', purpose: 'summary', approved: false, contentDescription: 'selected thread excerpt' });
     await repo.close();
 
+    const rawStore = await readFile(storePath, 'utf8');
+    assert.doesNotMatch(rawStore, /Private body must survive restart|Private body must survive restart for local reader/);
+    assert.match(rawStore, /bodyCiphertext|snippetCiphertext/);
+
     const reopened = await createLocalMailRepository({ path: storePath });
     const message = await reopened.getMessage('msg_1');
 
@@ -60,14 +64,18 @@ test('duplicate provider message ids are idempotent per account and do not creat
     const repo = await createLocalMailRepository({ path: storePath });
     await repo.upsertAccount({ id: 'acct_gmail', provider: 'gmail', email: 'owner@example.com' });
     await repo.upsertThread({ id: 'thr_1', accountId: 'acct_gmail', subject: 'First subject', updatedAt: '2026-05-27T10:00:00Z' });
+    await repo.upsertThread({ id: 'thr_2', accountId: 'acct_gmail', subject: 'Moved subject', updatedAt: '2026-05-27T10:00:30Z' });
     await repo.upsertMessage({ id: 'msg_a', accountId: 'acct_gmail', threadId: 'thr_1', providerMessageId: 'provider-123', sender: 'a@example.com', recipients: ['owner@example.com'], subject: 'First subject', body: 'old body', receivedAt: '2026-05-27T10:00:00Z' });
-    await repo.upsertMessage({ id: 'msg_b', accountId: 'acct_gmail', threadId: 'thr_1', providerMessageId: 'provider-123', sender: 'a@example.com', recipients: ['owner@example.com'], subject: 'Updated subject', body: 'new body', receivedAt: '2026-05-27T10:01:00Z' });
+    await repo.upsertMessage({ id: 'msg_b', accountId: 'acct_gmail', threadId: 'thr_2', providerMessageId: 'provider-123', sender: 'a@example.com', recipients: ['owner@example.com'], subject: 'Updated subject', body: 'new body', receivedAt: '2026-05-27T10:01:00Z' });
 
     const messages = await repo.listMessages({ accountId: 'acct_gmail' });
     assert.equal(messages.length, 1);
     assert.equal(messages[0].id, 'msg_a');
+    assert.equal(messages[0].threadId, 'thr_2');
     assert.equal(messages[0].subject, 'Updated subject');
     assert.equal(messages[0].body, 'new body');
+    assert.deepEqual((await repo.getThread('thr_1')).messageIds, []);
+    assert.deepEqual((await repo.getThread('thr_2')).messageIds, ['msg_a']);
   });
 });
 

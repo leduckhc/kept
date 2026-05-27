@@ -817,15 +817,17 @@ export function normalizeAiAuditEntry(entry = {}) {
   };
 }
 
-export async function createLocalMailRepository({ path: storePath, initialData } = {}) {
+export async function createLocalMailRepository({ path: storePath, initialData, bodyEncryptionKey } = {}) {
   requireField('path', storePath);
-  let state = await loadLocalMailState(storePath, initialData);
+  const bodyEncryption = await createBodyEncryptionContext({ storePath, bodyEncryptionKey });
+  let state = await loadLocalMailState(storePath, initialData, bodyEncryption);
 
   async function persist() {
     const { mkdir, rename, writeFile, dirname } = await localRepositoryFileOps();
     await mkdir(dirname(storePath), { recursive: true });
     const tmpPath = `${storePath}.tmp`;
-    await writeFile(tmpPath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+    const diskState = serializeLocalMailStateForDisk(state, bodyEncryption);
+    await writeFile(tmpPath, `${JSON.stringify(diskState, null, 2)}\n`, 'utf8');
     await rename(tmpPath, storePath);
   }
 
@@ -859,13 +861,22 @@ export async function createLocalMailRepository({ path: storePath, initialData }
       const existingId = findMessageIdByProvider(state, normalizedInput.accountId, normalizedInput.providerMessageId);
       const id = existingId || normalizedInput.id;
       const normalized = { ...normalizedInput, id, attachments: normalizedInput.attachments.map((attachment) => ({ ...attachment, messageId: id })) };
+      const previousMessage = state.messages[id];
+      if (previousMessage?.threadId && previousMessage.threadId !== normalized.threadId && state.threads[previousMessage.threadId]) {
+        state.threads[previousMessage.threadId].messageIds = (state.threads[previousMessage.threadId].messageIds || []).filter((messageId) => messageId !== id);
+      }
       state.messages[id] = normalized;
       state.attachments = Object.fromEntries(Object.entries(state.attachments).filter(([, attachment]) => attachment.messageId !== id));
-      normalized.attachments.forEach((attachment) => { state.attachments[attachment.id] = attachment; });
+      normalized.attachments.forEach((attachment) => { state.attachments[scopedAttachmentKey(id, attachment.id)] = attachment; });
       const thread = state.threads[normalized.threadId] || normalizeLocalThread({ id: normalized.threadId, accountId: normalized.accountId, subject: normalized.subject, updatedAt: normalized.receivedAt });
       const messageIds = new Set(thread.messageIds || []);
       messageIds.add(id);
-      state.threads[normalized.threadId] = { ...thread, subject: normalized.subject || thread.subject, updatedAt: normalized.receivedAt || thread.updatedAt, messageIds: [...messageIds] };
+      state.threads[normalized.threadId] = {
+        ...thread,
+        subject: normalized.subject || thread.subject,
+        updatedAt: maxIsoTimestamp(thread.updatedAt, normalized.receivedAt),
+        messageIds: [...messageIds],
+      };
       await persist();
       return clone(state.messages[id]);
     },
@@ -927,12 +938,12 @@ export function createRepositoryCorruptionError(details = '') {
   return error;
 }
 
-async function loadLocalMailState(storePath, initialData) {
-  if (initialData) return migrateLocalMailState(initialData);
+async function loadLocalMailState(storePath, initialData, bodyEncryption) {
+  if (initialData) return migrateLocalMailState(initialData, bodyEncryption);
   try {
     const { readFile } = await localRepositoryFileOps();
     const raw = await readFile(storePath, 'utf8');
-    return migrateLocalMailState(JSON.parse(raw));
+    return migrateLocalMailState(JSON.parse(raw), bodyEncryption);
   } catch (error) {
     if (error?.code === 'ENOENT') return emptyLocalMailState();
     if (error?.code === 'KEPT_LOCAL_STORE_CORRUPT') throw error;
@@ -940,19 +951,19 @@ async function loadLocalMailState(storePath, initialData) {
   }
 }
 
-function migrateLocalMailState(raw) {
+function migrateLocalMailState(raw, bodyEncryption) {
   if (!raw || typeof raw !== 'object') throw createRepositoryCorruptionError('local store root is not an object');
   const next = emptyLocalMailState();
   Object.values(raw.accounts || {}).forEach((account) => { next.accounts[account.id] = normalizeLocalAccount(account); });
   Object.values(raw.threads || {}).forEach((thread) => { next.threads[thread.id] = normalizeLocalThread(thread); });
   Object.values(raw.messages || {}).forEach((message) => {
-    const normalized = normalizeLocalMessage(message);
+    const normalized = normalizeLocalMessage(deserializeLocalMessageFromDisk(message, bodyEncryption));
     next.messages[normalized.id] = normalized;
-    normalized.attachments.forEach((attachment) => { next.attachments[attachment.id] = attachment; });
+    normalized.attachments.forEach((attachment) => { next.attachments[scopedAttachmentKey(normalized.id, attachment.id)] = attachment; });
   });
   Object.values(raw.attachments || {}).forEach((attachment) => {
     const normalized = normalizeAttachmentMetadata(attachment);
-    next.attachments[normalized.id] = normalized;
+    next.attachments[scopedAttachmentKey(normalized.messageId || 'unscoped', normalized.id)] = normalized;
   });
   Object.entries(raw.syncStates || {}).forEach(([accountId, syncState]) => { next.syncStates[accountId] = sanitizeSecretFields(syncState); });
   Object.values(raw.aiAudits || {}).forEach((entry) => { next.aiAudits[entry.id] = normalizeAiAuditEntry(entry); });
@@ -969,6 +980,78 @@ function emptyLocalMailState() {
     syncStates: {},
     aiAudits: {},
   };
+}
+
+
+function serializeLocalMailStateForDisk(state, bodyEncryption) {
+  const diskState = clone(state);
+  diskState.messages = Object.fromEntries(
+    Object.entries(diskState.messages).map(([id, message]) => {
+      const encrypted = { ...message };
+      encrypted.bodyCiphertext = encryptRepositoryText(message.body || '', bodyEncryption);
+      encrypted.snippetCiphertext = encryptRepositoryText(message.snippet || '', bodyEncryption);
+      delete encrypted.body;
+      delete encrypted.snippet;
+      return [id, encrypted];
+    }),
+  );
+  return diskState;
+}
+
+function deserializeLocalMessageFromDisk(message, bodyEncryption) {
+  if (!message || typeof message !== 'object') return message;
+  if (!message.bodyCiphertext && !message.snippetCiphertext) return message;
+  return {
+    ...message,
+    body: decryptRepositoryText(message.bodyCiphertext, bodyEncryption),
+    snippet: decryptRepositoryText(message.snippetCiphertext, bodyEncryption),
+  };
+}
+
+async function createBodyEncryptionContext({ storePath, bodyEncryptionKey }) {
+  const crypto = await import('node:crypto');
+  const keyMaterial = bodyEncryptionKey
+    ? Buffer.from(String(bodyEncryptionKey))
+    : Buffer.from(`kept-local-mail-repository-v1:${storePath}`);
+  return {
+    crypto,
+    key: crypto.createHash('sha256').update(keyMaterial).digest(),
+    keySource: bodyEncryptionKey ? 'caller-provided' : 'store-path-fallback',
+  };
+}
+
+function encryptRepositoryText(value, bodyEncryption) {
+  const text = String(value || '');
+  const iv = bodyEncryption.crypto.randomBytes(12);
+  const cipher = bodyEncryption.crypto.createCipheriv('aes-256-gcm', bodyEncryption.key, iv);
+  const ciphertext = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `v1:${iv.toString('base64')}:${tag.toString('base64')}:${ciphertext.toString('base64')}`;
+}
+
+function decryptRepositoryText(value, bodyEncryption) {
+  if (!value) return '';
+  const [version, ivBase64, tagBase64, ciphertextBase64] = String(value).split(':');
+  if (version !== 'v1' || !ivBase64 || !tagBase64 || !ciphertextBase64) throw createRepositoryCorruptionError('invalid encrypted body payload');
+  try {
+    const decipher = bodyEncryption.crypto.createDecipheriv('aes-256-gcm', bodyEncryption.key, Buffer.from(ivBase64, 'base64'));
+    decipher.setAuthTag(Buffer.from(tagBase64, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(ciphertextBase64, 'base64')), decipher.final()]).toString('utf8');
+  } catch (error) {
+    throw createRepositoryCorruptionError(error?.message || 'body decrypt failed');
+  }
+}
+
+function scopedAttachmentKey(messageId, attachmentId) {
+  return `${messageId}:${attachmentId}`;
+}
+
+function maxIsoTimestamp(left, right) {
+  const leftValue = Date.parse(left || '');
+  const rightValue = Date.parse(right || '');
+  if (Number.isNaN(leftValue)) return right || left || new Date(0).toISOString();
+  if (Number.isNaN(rightValue)) return left || right || new Date(0).toISOString();
+  return rightValue > leftValue ? right : left;
 }
 
 function createRebuiltSearchIndex(rows) {
