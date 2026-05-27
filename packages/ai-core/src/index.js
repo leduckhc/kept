@@ -7,6 +7,7 @@ export function createAISettings({ enabled = false, provider = null, model = nul
   if (!enabled) return { ...disabledProvider, model: null, keyRef: null };
   if (!supportedProviders.includes(provider)) throw new Error(`Unsupported AI provider: ${provider}`);
   if (!keyRef && provider !== 'ollama') throw new Error('Remote BYO AI providers require a local key reference');
+  if (provider !== 'ollama' && !isKeychainKeyRef(keyRef)) throw new Error('Remote BYO AI providers require a keychain:// key reference');
   return { enabled: true, status: 'enabled by user', provider, model, keyRef };
 }
 
@@ -97,8 +98,9 @@ export function createProviderAdapter(settings, { transport, call, keyStore, aud
       if (!settings.provider) return { status: 'provider_missing', response: null };
       if (!supportedProviders.includes(settings.provider)) return { status: 'provider_missing', response: null };
       if (settings.provider !== 'ollama') {
-        if (!settings.keyRef) return { status: 'key_missing', response: null };
-        if (keyStore?.hasProviderKey && !(await keyStore.hasProviderKey(settings.provider))) return { status: 'key_missing', response: null };
+        if (!isKeychainKeyRef(settings.keyRef)) return { status: 'key_missing', response: null };
+        if (typeof keyStore?.hasProviderKey !== 'function') return { status: 'key_missing', response: null };
+        if (!(await keyStore.hasProviderKey(settings.provider))) return { status: 'key_missing', response: null };
       }
 
       const prompt = buildThreadSummaryPrompt(thread);
@@ -117,6 +119,9 @@ export function createProviderAdapter(settings, { transport, call, keyStore, aud
       }
 
       try {
+        if (settings.provider !== 'ollama' && typeof auditStore?.recordAiAudit !== 'function') {
+          throw new Error('AI audit store unavailable for remote provider preflight');
+        }
         if (auditStore?.recordAiAudit) await auditStore.recordAiAudit({ ...audit, ...envelope, approved: true, result: null, error: null });
       } catch (error) {
         return { status: 'audit_preflight_failed', audit, envelope, error: redactForAudit(error), response: null };
@@ -169,6 +174,10 @@ async function safeRecordAudit(auditStore, entry) {
 
 function createProviderKeyRef(service, provider) {
   return `keychain://${service}/${provider}`;
+}
+
+function isKeychainKeyRef(keyRef) {
+  return typeof keyRef === 'string' && keyRef.startsWith('keychain://') && keyRef.length > 'keychain://'.length;
 }
 
 function stableEnvelopeId(value) {

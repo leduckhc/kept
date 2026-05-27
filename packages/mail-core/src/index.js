@@ -469,7 +469,9 @@ export function redactForLogs(value) {
     .replace(/1\/\/[A-Za-z0-9._-]+/g, '[secret-redacted]')
     .replace(/RAW_[A-Z0-9_]*KEY/g, '[secret-redacted]')
     .replace(/sk-[A-Za-z0-9._-]+/g, '[secret-redacted]')
-    .replace(/(access_token|refresh_token|id_token|client_secret|authorization_code|code_verifier)":"[^"]+"/gi, '$1":"[secret-redacted]"');
+    .replace(/(access_token|refresh_token|id_token|client_secret|authorization_code|code_verifier)":"[^"]+"/gi, '$1":"[secret-redacted]"')
+    .replace(/("?(?:body|raw|payload|prompt|messages|snippet)"?\s*[:=]\s*)"[^"]*"/gi, '$1"[body-redacted]"')
+    .replace(/\b(body|raw|payload|prompt|messages|snippet)\b\s+([^.;\n]+)/gi, '$1 [body-redacted]');
 }
 
 const fakeGmailMessages = [
@@ -1113,6 +1115,9 @@ function redactAuditValue(value) {
     Object.entries(value).map(([key, nested]) => {
       if (/(access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|client[_-]?secret|authorization[_-]?code|code[_-]?verifier|password|secret)$/i.test(key)) {
         return [key, '[secret-redacted]'];
+      }
+      if (/(body|raw|payload|prompt|messages|snippet)/i.test(key)) {
+        return [key, '[body-redacted]'];
       }
       return [key, redactAuditValue(nested)];
     }),

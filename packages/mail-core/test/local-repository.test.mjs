@@ -53,8 +53,12 @@ test('durable local mail repository persists account, thread, message body, atta
       approved: false,
       approvalState: 'denied',
       contentDescription: 'selected thread excerpt',
-      result: { text: 'RAW_OPENAI_KEY should not persist' },
-      error: 'provider failed with RAW_OPENAI_KEY',
+      result: {
+        text: 'RAW_OPENAI_KEY should not persist',
+        body: 'Private body must not persist in an AI result field',
+        nested: { rawPayload: { prompt: 'Subject: Dinner contract\nExcerpt: Private body must survive restart for local reader.' } },
+      },
+      error: 'provider failed with RAW_OPENAI_KEY and payload="Subject: Dinner contract Private body must survive restart"',
     });
     await repo.close();
 
@@ -80,7 +84,11 @@ test('durable local mail repository persists account, thread, message body, atta
     assert.match(auditEntry.payloadPreview, /Dinner contract/);
     assert.equal(auditEntry.payloadHash, 'a'.repeat(64));
     assert.equal(auditEntry.approvalState, 'denied');
-    assert.doesNotMatch(JSON.stringify(auditEntry), /RAW_OPENAI_KEY/);
+    assert.equal(auditEntry.result.body, '[body-redacted]');
+    assert.equal(auditEntry.result.nested.rawPayload, '[body-redacted]');
+    assert.doesNotMatch(JSON.stringify(auditEntry), /RAW_OPENAI_KEY|Private body must not persist/);
+    assert.doesNotMatch(auditEntry.error, /Private body must survive restart/);
+    assert.doesNotMatch(rawStore, /RAW_OPENAI_KEY|Private body must not persist/);
   });
 });
 

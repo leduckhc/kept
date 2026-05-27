@@ -35,18 +35,20 @@ test('ai is default-off and audits explicit content disclosure', () => {
 
 test('remote providers require a local key reference', () => {
   assert.throws(() => createAISettings({ enabled: true, provider: 'openai' }), /key reference/);
+  assert.throws(() => createAISettings({ enabled: true, provider: 'openai', keyRef: 'sk-plaintext' }), /keychain:\/\//);
   assert.equal(createAISettings({ enabled: true, provider: 'openai', keyRef: 'keychain://openai' }).provider, 'openai');
+  assert.equal(createAISettings({ enabled: true, provider: 'ollama' }).provider, 'ollama');
 });
 
 test('keychain AI key store keeps raw provider keys out of settings', async () => {
   const keychain = createMemoryKeychain();
   const keyStore = createAIKeychainStore({ keychain });
-  const saved = await keyStore.saveProviderKey('openai', 'sk-live-secret');
+  const saved = await keyStore.saveProviderKey('openai', 'provider-test-value');
 
   assert.deepEqual(saved, { provider: 'openai', keyRef: 'keychain://kept.ai.provider-keys/openai', stored: 'keychain' });
   assert.equal(await keyStore.hasProviderKey('openai'), true);
-  assert.equal(await keyStore.loadProviderKey('openai'), 'sk-live-secret');
-  assert.doesNotMatch(JSON.stringify(createAISettings({ enabled: true, provider: 'openai', model: 'gpt-4o-mini', keyRef: saved.keyRef })), /sk-live-secret/);
+  assert.equal(await keyStore.loadProviderKey('openai'), 'provider-test-value');
+  assert.doesNotMatch(JSON.stringify(createAISettings({ enabled: true, provider: 'openai', model: 'gpt-4o-mini', keyRef: saved.keyRef })), /provider-test-value/);
 });
 
 test('disabled adapter never calls a provider', async () => {
@@ -63,8 +65,26 @@ test('missing provider and missing key block remote calls', async () => {
   const missingProvider = createProviderAdapter({ enabled: true, provider: null, model: 'gpt', keyRef: 'keychain://openai' }, { call: async () => { called = true; } });
   assert.equal((await missingProvider.summarizeThread(thread, { approved: true })).status, 'provider_missing');
 
+  const rawKeyRef = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'sk-plaintext' }, { call: async () => { called = true; }, keyStore: { hasProviderKey: async () => true } });
+  assert.equal((await rawKeyRef.summarizeThread(thread, { approved: true })).status, 'key_missing');
+
+  const missingKeyStore = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'keychain://openai' }, { call: async () => { called = true; } });
+  assert.equal((await missingKeyStore.summarizeThread(thread, { approved: true })).status, 'key_missing');
+
   const missingKey = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'keychain://openai' }, { call: async () => { called = true; }, keyStore: { hasProviderKey: async () => false } });
   assert.equal((await missingKey.summarizeThread(thread, { approved: true })).status, 'key_missing');
+  assert.equal(called, false);
+});
+
+test('remote provider calls fail closed when audit preflight store is missing', async () => {
+  const keyStore = { hasProviderKey: async () => true };
+  let called = false;
+  const settings = createAISettings({ enabled: true, provider: 'openai', model: 'gpt-4o-mini', keyRef: 'keychain://openai' });
+  const adapter = createProviderAdapter(settings, { keyStore, call: async () => { called = true; } });
+  const result = await adapter.summarizeThread(thread, { approved: true });
+
+  assert.equal(result.status, 'audit_preflight_failed');
+  assert.match(result.error, /audit store unavailable/);
   assert.equal(called, false);
 });
 
