@@ -213,6 +213,163 @@ export function getInboxSections(threads, { now = new Date() } = {}) {
 }
 
 export const gmailMinimalScopes = ['https://www.googleapis.com/auth/gmail.readonly'];
+export const gmailOAuthTokenKeyPrefix = 'kept.gmail.oauth';
+
+export async function createPkcePair({ cryptoImpl = globalThis.crypto } = {}) {
+  const verifier = createPkceVerifier({ cryptoImpl });
+  const challenge = await createPkceChallenge(verifier, { cryptoImpl });
+  return { verifier, challenge, method: 'S256' };
+}
+
+export function createPkceVerifier({ cryptoImpl = globalThis.crypto, byteLength = 64 } = {}) {
+  if (!cryptoImpl?.getRandomValues) throw new Error('Web Crypto getRandomValues is required for Gmail PKCE');
+  const bytes = new Uint8Array(byteLength);
+  cryptoImpl.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+export async function createPkceChallenge(verifier, { cryptoImpl = globalThis.crypto } = {}) {
+  requireField('verifier', verifier);
+  if (!cryptoImpl?.subtle?.digest) throw new Error('Web Crypto subtle.digest is required for Gmail PKCE');
+  const bytes = new TextEncoder().encode(verifier);
+  const digest = await cryptoImpl.subtle.digest('SHA-256', bytes);
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+export function parseGmailOAuthCallback(callbackUrl, { expectedState } = {}) {
+  requireField('callbackUrl', callbackUrl);
+  requireField('expectedState', expectedState);
+  const parsed = new URL(callbackUrl, 'http://127.0.0.1');
+  const state = parsed.searchParams.get('state') || '';
+  if (state !== expectedState) throw new Error('Gmail OAuth state mismatch');
+  const error = parsed.searchParams.get('error');
+  if (error) return { ok: false, state, error, errorDescription: parsed.searchParams.get('error_description') || '' };
+  const code = parsed.searchParams.get('code');
+  if (!code) throw new Error('Gmail OAuth callback missing authorization code');
+  return { ok: true, state, code };
+}
+
+export function createKeychainTokenStore({ keychain, service = gmailOAuthTokenKeyPrefix } = {}) {
+  requireField('keychain', keychain);
+  ['setPassword', 'getPassword', 'deletePassword'].forEach((method) => {
+    if (typeof keychain[method] !== 'function') throw new Error(`keychain.${method} is required`);
+  });
+
+  return {
+    async saveTokens(accountId, tokens) {
+      requireField('accountId', accountId);
+      validateTokenPayload(tokens);
+      await keychain.setPassword(service, accountId, JSON.stringify(normalizeTokenPayload(tokens)));
+      return { accountId, service, stored: 'keychain' };
+    },
+    async loadTokens(accountId) {
+      requireField('accountId', accountId);
+      const raw = await keychain.getPassword(service, accountId);
+      return raw ? JSON.parse(raw) : null;
+    },
+    async clearTokens(accountId) {
+      requireField('accountId', accountId);
+      await keychain.deletePassword(service, accountId);
+    },
+  };
+}
+
+export function createMemoryKeychain() {
+  const entries = new Map();
+  return {
+    entries,
+    async setPassword(service, account, secret) { entries.set(`${service}:${account}`, secret); },
+    async getPassword(service, account) { return entries.get(`${service}:${account}`) || null; },
+    async deletePassword(service, account) { entries.delete(`${service}:${account}`); },
+  };
+}
+
+export function createGmailApiConnector({ tokenStore, fetchImpl = globalThis.fetch, accountId = 'acct_gmail_primary' } = {}) {
+  requireField('tokenStore', tokenStore);
+  requireField('fetchImpl', fetchImpl);
+
+  return {
+    provider: 'gmail',
+    async listRecentMessages({ maxResults = 25 } = {}) {
+      const accessToken = await readAccessToken(tokenStore, accountId);
+      const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+      listUrl.searchParams.set('labelIds', 'INBOX');
+      listUrl.searchParams.set('maxResults', String(maxResults));
+      const listJson = await fetchGmailJson(fetchImpl, listUrl, accessToken);
+      const messageRefs = Array.isArray(listJson.messages) ? listJson.messages : [];
+      const messages = [];
+      for (const ref of messageRefs) {
+        const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(ref.id)}`);
+        messageUrl.searchParams.set('format', 'full');
+        messages.push(normalizeGmailApiMessage(await fetchGmailJson(fetchImpl, messageUrl, accessToken)));
+      }
+      return { historyId: listJson.historyId || messages.at(-1)?.historyId || null, messages };
+    },
+  };
+}
+
+export function normalizeGmailApiMessage(message) {
+  const headers = Object.fromEntries((message.payload?.headers || []).map((header) => [String(header.name || '').toLowerCase(), header.value || '']));
+  const textBody = extractGmailTextBody(message.payload);
+  const receivedAt = gmailInternalDateToIso(message.internalDate) || parseHeaderDate(headers.date);
+  return {
+    id: message.id,
+    threadId: message.threadId || message.id,
+    historyId: message.historyId || null,
+    subject: headers.subject || '(no subject)',
+    from: headers.from || 'unknown sender',
+    to: headers.to || '',
+    snippet: summarizeBody(textBody) || '',
+    textBody,
+    receivedAt,
+  };
+}
+
+export function createJsonMailStore({ storage, key = 'kept.gmail.sync.v1' } = {}) {
+  requireField('storage', storage);
+  ['getItem', 'setItem', 'removeItem'].forEach((method) => {
+    if (typeof storage[method] !== 'function') throw new Error(`storage.${method} is required`);
+  });
+
+  return {
+    async saveSyncResult(syncResult) {
+      const existing = await this.loadSyncState();
+      const nextAccounts = { ...existing.accounts };
+      nextAccounts[syncResult.accountId] = {
+        provider: syncResult.provider,
+        cursor: syncResult.cursor,
+        threads: syncResult.threads.map(stripPrivateBodyForPersistence),
+        savedAt: new Date(0).toISOString(),
+      };
+      const payload = { version: 1, accounts: nextAccounts };
+      await storage.setItem(key, JSON.stringify(payload));
+      return payload;
+    },
+    async loadSyncState() {
+      const raw = await storage.getItem(key);
+      if (!raw) return { version: 1, accounts: {} };
+      const parsed = JSON.parse(raw);
+      return { version: 1, accounts: parsed.accounts || {} };
+    },
+    async clear() { await storage.removeItem(key); },
+  };
+}
+
+export function createMemoryJsonStorage() {
+  const entries = new Map();
+  return {
+    entries,
+    async getItem(key) { return entries.get(key) || null; },
+    async setItem(key, value) { entries.set(key, String(value)); },
+    async removeItem(key) { entries.delete(key); },
+  };
+}
+
+export async function syncGmailInbox({ connector, accountId, mailStore, maxResults = 25 } = {}) {
+  const result = await ingestGmailMessages({ connector, accountId, maxResults });
+  if (mailStore) await mailStore.saveSyncResult(result);
+  return result;
+}
 
 export const gmailSyncCursorPlan = {
   primary: 'Store the Gmail historyId returned with each successful list/get batch and use users.history.list for the next incremental sync.',
@@ -272,18 +429,26 @@ export async function ingestGmailMessages({ connector, accountId, maxResults = 1
 }
 
 export function gmailMessageToThread(message, accountId) {
+  const parsedSender = parseMailbox(message.from || 'unknown sender');
+  const body = message.textBody || message.snippet || '';
   return {
     id: message.threadId || message.id,
     accountId,
     subject: message.subject || '(no subject)',
-    sender: message.from || 'unknown sender',
+    sender: parsedSender.name,
+    senderEmail: parsedSender.email,
     recipients: message.to ? [message.to] : [],
-    body: message.textBody || message.snippet || '',
-    snippet: message.snippet || summarizeBody(message.textBody || ''),
+    body,
+    snippet: message.snippet || summarizeBody(body),
     receivedAt: message.receivedAt || new Date(0).toISOString(),
     providerMessageId: message.id,
     historyId: message.historyId,
+    isPriority: false,
+    isUnread: true,
+    isNewSender: false,
     isSynthetic: false,
+    avatarInitials: initialsFor(parsedSender.name),
+    avatarColor: '#ddd7f2',
   };
 }
 
@@ -337,10 +502,85 @@ function redactStructuredValue(value) {
   return Object.fromEntries(
     Object.entries(value).map(([key, nested]) => {
       if (/body|raw|payload|snippet/i.test(key)) return [key, '[body-redacted]'];
-      if (/token|secret|codeVerifier|code_verifier|authorization_code/i.test(key)) return [key, '[secret-redacted]'];
+      if (/token|secret|codeVerifier|code_verifier|authorization_code|code$/i.test(key)) return [key, '[secret-redacted]'];
       return [key, redactStructuredValue(nested)];
     }),
   );
+}
+
+function base64UrlEncode(bytes) {
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function validateTokenPayload(tokens) {
+  requireField('tokens', tokens);
+  requireField('accessToken', tokens.accessToken);
+}
+
+function normalizeTokenPayload(tokens) {
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken || null,
+    expiresAt: tokens.expiresAt || null,
+    scope: tokens.scope || gmailMinimalScopes.join(' '),
+    tokenType: tokens.tokenType || 'Bearer',
+  };
+}
+
+async function readAccessToken(tokenStore, accountId) {
+  const tokens = await tokenStore.loadTokens(accountId);
+  if (!tokens?.accessToken) throw new Error('Gmail access token not found in keychain');
+  return tokens.accessToken;
+}
+
+async function fetchGmailJson(fetchImpl, url, accessToken) {
+  const response = await fetchImpl(String(url), {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  });
+  if (!response?.ok) throw new Error(`Gmail API request failed with ${response?.status || 'unknown'} status`);
+  return response.json();
+}
+
+function extractGmailTextBody(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/plain' && payload.body?.data) return decodeGmailBody(payload.body.data);
+  const parts = Array.isArray(payload.parts) ? payload.parts : [];
+  const textPart = parts.find((part) => part.mimeType === 'text/plain' && part.body?.data);
+  if (textPart) return decodeGmailBody(textPart.body.data);
+  for (const part of parts) {
+    const text = extractGmailTextBody(part);
+    if (text) return text;
+  }
+  return payload.mimeType === 'text/html' ? '' : (payload.body?.data ? decodeGmailBody(payload.body.data) : '');
+}
+
+function decodeGmailBody(data) {
+  try {
+    const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='));
+    return new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0))).trim();
+  } catch (_error) {
+    return '';
+  }
+}
+
+function gmailInternalDateToIso(internalDate) {
+  const millis = Number(internalDate);
+  if (!Number.isFinite(millis)) return null;
+  const parsed = new Date(millis);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function parseHeaderDate(dateHeader) {
+  const parsed = new Date(dateHeader || 0);
+  return Number.isNaN(parsed.getTime()) ? new Date(0).toISOString() : parsed.toISOString();
+}
+
+function stripPrivateBodyForPersistence(thread) {
+  const { body: _body, snippet: _snippet, ...safeThread } = thread;
+  return safeThread;
 }
 
 function splitMboxMessages(mboxText) {
