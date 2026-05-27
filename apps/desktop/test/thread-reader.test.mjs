@@ -5,6 +5,7 @@ import {
   createLocalReadStateStore,
   createMemoryReadStateStore,
   createThreadReaderController,
+  createThreadSummaryActionController,
   formatAttachmentMeta,
   normalizeReaderThread,
   safeGmailThreadUrl,
@@ -103,4 +104,43 @@ test('safeGmailThreadUrl only creates token-free Gmail links for Gmail thread id
   assert.equal(safeGmailThreadUrl({ source: 'gmail', providerMessageId: 'msg-1' }), 'https://mail.google.com/mail/u/0/#inbox/msg-1');
   assert.equal(safeGmailThreadUrl({ source: 'local', providerThreadId: 'abc123' }), null);
   assert.equal(safeGmailThreadUrl({ source: 'gmail', providerThreadId: 'ya29.secret' }), null);
+});
+
+test('summary action prepares an approval preview, cancels without provider calls, and approves only the exact preview hash', async () => {
+  const calls = [];
+  const adapter = {
+    async summarizeThread(thread, options = {}) {
+      calls.push({ thread, options });
+      return options.approved
+        ? { status: 'ok', envelope: { payloadHash: 'hash-1' }, response: { text: 'Summary for dinner packet.' } }
+        : { status: 'approval_denied', envelope: { provider: 'ollama', model: 'llama3.2', action: 'Summarize selected local thread', payloadPreview: '{"messages":[]}', payloadHash: 'hash-1' } };
+    },
+  };
+  const controller = createThreadSummaryActionController({ threads: [baseThread], adapter });
+
+  const preview = await controller.requestSummary('thr_local');
+  assert.equal(preview.status, 'approval_required');
+  assert.deepEqual(preview.approval, {
+    provider: 'ollama',
+    model: 'llama3.2',
+    action: 'Summarize selected local thread',
+    selectedThreadId: 'thr_local',
+    payloadPreview: '{"messages":[]}',
+    payloadHash: 'hash-1',
+  });
+
+  assert.equal(controller.cancelSummary().status, 'cancelled');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.approved, false);
+
+  await controller.requestSummary('thr_local');
+  const approved = await controller.approveSummary('hash-1');
+  assert.equal(approved.status, 'ok');
+  assert.equal(approved.summary, 'Summary for dinner packet.');
+  assert.equal(calls.at(-1).options.approved, true);
+
+  await controller.requestSummary('thr_local');
+  const staleApproval = await controller.approveSummary('different-hash');
+  assert.equal(staleApproval.status, 'approval_mismatch');
+  assert.equal(calls.filter((call) => call.options.approved).length, 1);
 });

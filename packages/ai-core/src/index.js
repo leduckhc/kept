@@ -94,7 +94,7 @@ export function createProviderAdapter(settings, { transport, call, keyStore, aud
   const providerCall = call || transport?.call || mockProviderCall;
   return {
     name: settings.provider || 'missing',
-    async summarizeThread(thread, { approved = false } = {}) {
+    async summarizeThread(thread, { approved = false, expectedPayloadHash = null } = {}) {
       if (!settings.provider) return { status: 'provider_missing', response: null };
       if (!supportedProviders.includes(settings.provider)) return { status: 'provider_missing', response: null };
       if (settings.provider !== 'ollama') {
@@ -116,6 +116,12 @@ export function createProviderAdapter(settings, { transport, call, keyStore, aud
         const deniedEnvelope = { ...envelope, approvalState: 'denied' };
         if (auditStore?.recordAiAudit) await safeRecordAudit(auditStore, { ...audit, ...deniedEnvelope, approved: false });
         return { status: 'approval_denied', audit, envelope: deniedEnvelope, prompt };
+      }
+
+      if (expectedPayloadHash && expectedPayloadHash !== envelope.payloadHash) {
+        const mismatchEnvelope = { ...envelope, approvalState: 'denied', error: 'Approved preview hash did not match provider payload hash' };
+        if (auditStore?.recordAiAudit) await safeRecordAudit(auditStore, { ...audit, ...mismatchEnvelope, approved: false });
+        return { status: 'approval_mismatch', audit, envelope: mismatchEnvelope, error: mismatchEnvelope.error, response: null };
       }
 
       try {

@@ -91,6 +91,63 @@ export function createThreadReaderController({ threads, readStateStore, focusRow
   };
 }
 
+export function createThreadSummaryActionController({ threads, adapter } = {}) {
+  if (!adapter || typeof adapter.summarizeThread !== 'function') throw new Error('summary adapter is required');
+  let pending = null;
+  let latestSummary = null;
+
+  function getThread(threadId) {
+    return threads.find((candidate) => candidate.id === threadId) || null;
+  }
+
+  return {
+    async requestSummary(threadId) {
+      const thread = getThread(threadId);
+      if (!thread) return { status: 'thread_missing', approval: null };
+      const reader = normalizeReaderThread(thread);
+      const summaryThread = readerThreadForSummary(reader);
+      const preview = await adapter.summarizeThread(summaryThread, { approved: false });
+      if (preview.status !== 'approval_denied' || !preview.envelope) {
+        return { status: preview.status || 'preview_unavailable', approval: null, error: preview.error || null };
+      }
+      pending = {
+        thread: summaryThread,
+        approval: {
+          provider: preview.envelope.provider,
+          model: preview.envelope.model,
+          action: preview.envelope.action,
+          selectedThreadId: summaryThread.id,
+          payloadPreview: preview.envelope.payloadPreview,
+          payloadHash: preview.envelope.payloadHash,
+        },
+      };
+      return { status: 'approval_required', approval: pending.approval };
+    },
+    cancelSummary() {
+      pending = null;
+      return { status: 'cancelled' };
+    },
+    async approveSummary(approvedPayloadHash) {
+      if (!pending) return { status: 'approval_missing', summary: latestSummary };
+      if (approvedPayloadHash !== pending.approval.payloadHash) return { status: 'approval_mismatch', summary: latestSummary };
+      const current = pending;
+      pending = null;
+      const result = await adapter.summarizeThread(current.thread, { approved: true, expectedPayloadHash: current.approval.payloadHash });
+      if (result.status === 'ok') {
+        latestSummary = result.response?.text || String(result.response || '');
+        return { status: 'ok', summary: latestSummary, envelope: result.envelope };
+      }
+      return { status: result.status, error: result.error || null, summary: latestSummary, envelope: result.envelope || null };
+    },
+    currentSummary() {
+      return latestSummary;
+    },
+    currentApproval() {
+      return pending?.approval || null;
+    },
+  };
+}
+
 export function markThreadRead(readStateStore, threadId, read) {
   const readState = readStateStore.load();
   readState[threadId] = Boolean(read);
@@ -117,6 +174,16 @@ export function formatReaderDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown date';
   return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
+function readerThreadForSummary(reader) {
+  return {
+    id: reader.id,
+    subject: reader.subject,
+    sender: reader.sender.label,
+    receivedAt: reader.receivedAt,
+    body: reader.messages.map((message) => `${message.sender.label} (${message.dateTime})\n${message.body}`).join('\n\n---\n\n'),
+  };
 }
 
 function normalizeReaderMessages(thread) {
