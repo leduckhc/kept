@@ -2,6 +2,14 @@ import { brandTokens, renderPipMark } from '/packages/ui/src/index.js';
 import { createJsonMailStore, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
 import { disabledProvider } from '/packages/ai-core/src/index.js';
 import {
+  applyLocalReadState,
+  createLocalReadStateStore,
+  formatAttachmentMeta,
+  isThreadOpenKey,
+  markThreadRead,
+  normalizeReaderThread,
+} from './thread-reader.js';
+import {
   GMAIL_ACCOUNT_ID,
   combineInboxThreads,
   createLocalStorageAdapter,
@@ -11,14 +19,18 @@ import {
 
 const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
+const READ_STATE_KEY = 'kept.localThreadReadState.v1';
 const root = document.querySelector('#root');
 const gmailAdapter = window.__KEPT_GMAIL_CONNECT__ || null;
 const mailStore = createJsonMailStore({ storage: createLocalStorageAdapter(localStorage) });
+const readStateStore = createLocalReadStateStore(localStorage, READ_STATE_KEY);
 
 const state = {
   threads: loadThreads(),
   importMeta: loadImportMeta(),
   searchQuery: '',
+  activeThreadId: null,
+  lastFocusedRowId: null,
   gmail: {
     status: 'idle',
     threads: [],
@@ -34,6 +46,11 @@ renderApp();
 initializeGmailState();
 
 window.addEventListener('keydown', (event) => {
+  if (state.activeThreadId && event.key === 'Escape') {
+    event.preventDefault();
+    closeThreadReader();
+    return;
+  }
   const wantsCommandSearch = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
   if (!wantsCommandSearch) return;
   event.preventDefault();
@@ -48,7 +65,15 @@ async function initializeGmailState() {
 }
 
 function renderApp() {
-  const allThreads = combineInboxThreads(state.gmail.threads, state.threads);
+  const allThreads = applyLocalReadState(combineInboxThreads(state.gmail.threads, state.threads), readStateStore.load());
+  const activeThread = state.activeThreadId ? allThreads.find((thread) => thread.id === state.activeThreadId) : null;
+  if (state.activeThreadId && !activeThread) state.activeThreadId = null;
+  if (activeThread) {
+    root.replaceChildren(renderThreadReader(normalizeReaderThread(activeThread)));
+    wireThreadReaderControls();
+    return;
+  }
+
   const visibleThreads = filterInboxThreads(allThreads, state.searchQuery);
   const inboxNow = newestThreadDate(visibleThreads) || newestThreadDate(allThreads) || new Date();
   const sections = getInboxSections(visibleThreads, { now: inboxNow });
@@ -61,6 +86,7 @@ function renderApp() {
   wireGmailControls();
   wireImportControls();
   wireSearchControl();
+  wireThreadRows();
 }
 
 function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders }) {
@@ -306,12 +332,13 @@ function renderThreadSection(section) {
 }
 
 function renderThreadRow(thread, sectionId) {
-  const row = el('article', {
+  const row = el('button', {
+    type: 'button',
     className: `thread-row${thread.isUnread ? ' unread' : ''}${sectionId === 'priority' ? ' priority' : ''}`,
-    role: 'listitem',
-    tabIndex: 0,
-    ariaLabel: `${thread.sender}, ${thread.subject}, ${formatTime(thread.receivedAt)}`,
+    ariaLabel: `${thread.sender}, ${thread.subject}, ${formatTime(thread.receivedAt)}. Open thread`,
   });
+  row.id = rowIdForThread(thread.id);
+  row.dataset.threadId = thread.id;
 
   row.append(
     el('span', { className: 'unread-dot', ariaHidden: 'true' }),
@@ -321,11 +348,72 @@ function renderThreadRow(thread, sectionId) {
     el('span', { className: 'snippet', text: thread.snippet || '' }),
     el('time', { className: 'time', text: formatTime(thread.receivedAt), dateTime: thread.receivedAt }),
   );
-
-  const actions = el('div', { className: 'row-actions', ariaLabel: `Actions for ${thread.subject}` });
-  actions.append(el('button', { type: 'button', text: '⋯', ariaLabel: `More actions for ${thread.subject}` }));
-  row.append(actions);
   return row;
+}
+
+function renderThreadReader(reader) {
+  const shell = el('main', { className: 'shell reader-shell', ariaLabel: 'Kept thread reader' });
+  const surface = el('article', { className: 'reader-surface' });
+  const header = el('header', { className: 'reader-header' });
+  header.append(
+    el('button', { type: 'button', className: 'secondary-mail-action reader-back', text: '← Back to inbox', id: 'reader-back' }),
+    renderReaderTitle(reader),
+  );
+  if (reader.gmailUrl) {
+    const gmailLink = el('a', { className: 'secondary-mail-action reader-gmail-link', text: 'Open in Gmail', href: reader.gmailUrl, target: '_blank', rel: 'noreferrer' });
+    header.append(gmailLink);
+  }
+  surface.append(header, renderReaderMeta(reader));
+  reader.messages.forEach((message) => surface.append(renderReaderMessage(message)));
+  shell.append(surface);
+  return shell;
+}
+
+function renderReaderTitle(reader) {
+  const title = el('div', { className: 'reader-title' });
+  title.append(el('p', { className: 'eyebrow', text: 'Local thread' }), el('h1', { text: reader.subject }));
+  return title;
+}
+
+function renderReaderMeta(reader) {
+  const meta = el('section', { className: 'reader-meta', ariaLabel: 'Thread metadata' });
+  meta.append(
+    renderMetaRow('From', reader.sender.label),
+    renderMetaRow('To', reader.recipients.length ? reader.recipients.map((recipient) => recipient.label).join(', ') : 'No recipients saved'),
+    renderMetaRow('Date', reader.dateLabel),
+  );
+  return meta;
+}
+
+function renderMetaRow(label, value) {
+  const row = el('p', { className: 'reader-meta-row' });
+  row.append(el('strong', { text: label }), el('span', { text: value }));
+  return row;
+}
+
+function renderReaderMessage(message) {
+  const article = el('section', { className: 'reader-message', ariaLabel: `Message from ${message.sender.label}` });
+  article.append(renderMessageHeader(message), el('pre', { className: 'reader-body', text: message.body }));
+  if (message.attachments.length > 0) article.append(renderAttachments(message.attachments));
+  return article;
+}
+
+function renderMessageHeader(message) {
+  const header = el('div', { className: 'reader-message-header' });
+  header.append(
+    el('strong', { text: message.sender.label }),
+    el('time', { text: message.dateLabel, dateTime: message.dateTime }),
+  );
+  return header;
+}
+
+function renderAttachments(attachments) {
+  const section = el('section', { className: 'reader-attachments', ariaLabel: 'Attachment metadata' });
+  section.append(el('h2', { text: 'Attachments' }));
+  const list = el('ul');
+  attachments.forEach((attachment) => list.append(el('li', { text: formatAttachmentMeta(attachment) })));
+  section.append(list);
+  return section;
 }
 
 function wireGmailControls() {
@@ -373,6 +461,36 @@ function wireSearchControl() {
   });
 }
 
+function wireThreadRows() {
+  document.querySelectorAll('[data-thread-id]').forEach((row) => {
+    row.addEventListener('click', () => openThreadReader(row.dataset.threadId, row.id));
+    row.addEventListener('keydown', (event) => {
+      if (!isThreadOpenKey(event)) return;
+      event.preventDefault();
+      openThreadReader(row.dataset.threadId, row.id);
+    });
+  });
+}
+
+function wireThreadReaderControls() {
+  document.querySelector('#reader-back')?.addEventListener('click', closeThreadReader);
+}
+
+function openThreadReader(threadId, rowId) {
+  if (!threadId) return;
+  state.activeThreadId = threadId;
+  state.lastFocusedRowId = rowId || rowIdForThread(threadId);
+  markThreadRead(readStateStore, threadId, true);
+  renderApp();
+}
+
+function closeThreadReader() {
+  const rowId = state.lastFocusedRowId;
+  state.activeThreadId = null;
+  renderApp();
+  if (rowId) document.getElementById(rowId)?.focus();
+}
+
 async function startGmailConnect() {
   state.gmail.status = 'oauth';
   state.gmail.errorMessage = '';
@@ -414,7 +532,7 @@ async function getGmailConnector() {
 }
 
 function toPersistedThread(thread) {
-  const { body: _body, textBody: _textBody, ...safeThread } = thread;
+  const { raw: _raw, payload: _payload, accessToken: _accessToken, refreshToken: _refreshToken, ...safeThread } = thread;
   return safeThread;
 }
 
@@ -456,6 +574,10 @@ function newestThreadDate(threads) {
     .filter((date) => !Number.isNaN(date.getTime()))
     .sort((left, right) => right.getTime() - left.getTime())[0];
   return newest || null;
+}
+
+function rowIdForThread(threadId) {
+  return `thread-row-${String(threadId).replace(/[^a-z0-9_-]/gi, '-')}`;
 }
 
 function renderSectionHeader(title, meta) {
