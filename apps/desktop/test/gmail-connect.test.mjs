@@ -128,27 +128,35 @@ test('repositoryMessagesToInboxThreads lets desktop render repository-backed Gma
       id: 'gmail-message-1',
       threadId: 'gmail-thread',
       providerMessageId: 'gmail-message-1',
+      providerThreadId: 'gmail-thread-provider',
+      accountId: 'acct_local_gmail',
       sender: { name: 'Mara Vale', email: 'mara@example.com' },
       recipients: [{ email: 'you@example.com' }],
       subject: 'Repository-backed Gmail',
       body: 'Body should remain behind the repository boundary',
       snippet: 'Repository-backed preview',
       receivedAt: '2026-05-27T09:00:00Z',
-      flags: { read: false },
+      flags: { read: false, starred: true, archived: false },
     },
   ]);
 
   assert.deepEqual(rows, [{
     id: 'gmail-thread',
+    localMessageId: 'gmail-message-1',
     providerMessageId: 'gmail-message-1',
+    providerThreadId: 'gmail-thread-provider',
+    accountId: 'acct_local_gmail',
     sender: 'Mara Vale',
     senderEmail: 'mara@example.com',
     subject: 'Repository-backed Gmail',
     snippet: 'Repository-backed preview',
     recipients: ['you@example.com'],
     receivedAt: '2026-05-27T09:00:00Z',
-    isPriority: false,
+    flags: { read: false, starred: true, archived: false },
+    isPriority: true,
     isUnread: true,
+    isStarred: true,
+    isArchived: false,
     isNewSender: false,
     source: 'gmail',
   }]);
@@ -160,4 +168,11 @@ test('desktop Gmail sync passes the durable repository into syncGmailInbox', asy
 
   assert.match(source, /createBrowserLocalMailRepository\(/);
   assert.match(source, /syncGmailInbox\(\{[^}]*repository[^}]*mailStore[^}]*maxResults: 25/s);
+  assert.match(source, /from '\.\/triage-actions\.js'/);
+  assert.match(source, /filterArchivedInboxThreads\(/);
+  assert.match(source, /createTriageActionController\(/);
+  assert.match(source, /data-triage-intent/);
+  assert.match(source, /statusCopyForTriage\(/);
+  assert.match(source, /retryQueuedTriageActions\(repository, connector\)/);
+  assert.match(source, /retryQueuedActions\(\)/);
 });
