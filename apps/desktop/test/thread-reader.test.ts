@@ -374,3 +374,22 @@ test('filterBannedSenderThreads returns all threads unchanged when trustStore is
   const result = filterBannedSenderThreads(threads, null);
   assert.equal(result.length, 2);
 });
+test('normalizeReaderThread preserves rawBody for image URL extraction', () => {
+  const htmlBody = '<p>Hello!</p><img src="https://tracker.example.com/pixel.gif"><img src="https://cdn.example.com/banner.png">';
+  const thread = {
+    id: 'thr_rawbody',
+    sender: 'Promo',
+    senderEmail: 'promo@example.com',
+    subject: 'Sale',
+    receivedAt: '2026-05-27T12:00:00Z',
+    htmlBody,
+  };
+  const reader = normalizeReaderThread(thread);
+  assert.equal(reader.messages[0].rawBody, htmlBody);
+  assert.equal(reader.messages[0].remoteImagesBlocked, true);
+  // plain text body should also expose rawBody
+  const plain = normalizeReaderThread({ ...thread, htmlBody: undefined, body: 'Just text' });
+  assert.equal(plain.messages[0].rawBody, 'Just text');
+  assert.equal(plain.messages[0].remoteImagesBlocked, false);
+});
+

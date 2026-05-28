@@ -1,7 +1,8 @@
+use base64::Engine as _;
 use serde::Serialize;
 use std::env;
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, TcpListener, TcpStream};
 use std::time::{Duration, Instant};
 use url::Url;
 
@@ -141,6 +142,109 @@ fn validate_keychain_request(service: &str, account: &str) -> Result<(), String>
     Ok(())
 }
 
+// RFC 1918 + loopback + link-local private ranges
+fn is_private_ip(addr: IpAddr) -> bool {
+    match addr {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            // loopback 127.0.0.0/8
+            o[0] == 127
+            // 10.0.0.0/8
+            || o[0] == 10
+            // 172.16.0.0/12
+            || (o[0] == 172 && o[1] >= 16 && o[1] <= 31)
+            // 192.168.0.0/16
+            || (o[0] == 192 && o[1] == 168)
+            // link-local 169.254.0.0/16
+            || (o[0] == 169 && o[1] == 254)
+            // 0.0.0.0/8
+            || o[0] == 0
+        }
+        IpAddr::V6(v6) => {
+            // loopback ::1
+            v6.is_loopback()
+            // link-local fe80::/10
+            || (v6.segments()[0] & 0xffc0) == 0xfe80
+            // unique local fc00::/7
+            || (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+    }
+}
+
+const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
+
+#[tauri::command]
+async fn fetch_image(url: String) -> Result<String, String> {
+    let parsed = Url::parse(&url).map_err(|_| "Image URL is not valid".to_string())?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("Image URL must use http or https".to_string());
+    }
+    let host = parsed.host_str().ok_or_else(|| "Image URL must include a host".to_string())?;
+
+    // Resolve host to IP and reject private ranges (blocking DNS on a thread pool thread)
+    use std::net::ToSocketAddrs;
+    let port = parsed.port_or_known_default().unwrap_or(443);
+    let addrs: Vec<IpAddr> = format!("{}:{}", host, port)
+        .to_socket_addrs()
+        .map_err(|_| "Image host could not be resolved".to_string())?
+        .map(|addr| addr.ip())
+        .collect();
+    if addrs.is_empty() {
+        return Err("Image host could not be resolved".to_string());
+    }
+    for addr in &addrs {
+        if is_private_ip(*addr) {
+            return Err("Image URL resolves to a private or loopback address".to_string());
+        }
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (compatible; Kept Mail)")
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|_| "Could not create image fetch client".to_string())?;
+
+    let response = client
+        .get(url.as_str())
+        .header("Referrer-Policy", "no-referrer")
+        .send()
+        .await
+        .map_err(|_| "Could not fetch image".to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("Image fetch returned status {}", response.status().as_u16()));
+    }
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("image/jpeg")
+        .split(';')
+        .next()
+        .unwrap_or("image/jpeg")
+        .trim()
+        .to_string();
+
+    // Verify it looks like an image MIME type
+    if !content_type.starts_with("image/") {
+        return Err("URL did not return an image content type".to_string());
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|_| "Could not read image bytes".to_string())?;
+
+    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+        return Err("Image is too large to proxy".to_string());
+    }
+
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", content_type, encoded))
+}
+
 fn read_callback_url(stream: &mut TcpStream, host: &str, port: u16) -> Result<String, String> {
     let mut buffer = [0_u8; MAX_CALLBACK_BYTES];
     let count = stream
@@ -178,6 +282,7 @@ fn main() {
             gmail_keychain_set,
             gmail_keychain_get,
             gmail_keychain_delete,
+            fetch_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kept desktop app");

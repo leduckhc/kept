@@ -36,6 +36,7 @@ import {
   resolveTriageAction,
   statusCopyForTriage,
 } from './triage-actions.js';
+import { isImageProxyAvailable, proxyImage } from './tauri-image-proxy.js';
 
 const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
@@ -101,7 +102,13 @@ const state = {
   triage: {
     statusByThreadId: {},
   },
-  imagePermissionByMessageId: {},
+  imageProxy: {
+    // keyed by message id: 'idle' | 'loading' | 'loaded' | 'error'
+    statusByMessageId: {},
+    // keyed by message id: Map<originalSrc, dataUri>
+    dataByMessageId: {},
+    errorByMessageId: {},
+  },
 };
 
 // CSS custom properties are now owned by styles.css (dual-theme token system).
@@ -776,23 +783,30 @@ function renderReaderMessage(message) {
   const article = el('section', { className: 'reader-message', ariaLabel: `Message from ${message.sender.label}` });
   article.append(renderMessageHeader(message));
   if (message.remoteImagesBlocked) {
-    if (state.imagePermissionByMessageId[message.id]) {
-      const badge = el('p', { className: 'reader-remote-images-loaded', text: '🔓 Remote images loaded.' });
-      article.append(badge);
-      const bodyDiv = el('div', { className: 'reader-body reader-body-html' });
-      bodyDiv.innerHTML = sanitizeHtmlForDisplay(message.htmlBody || message.body);
-      article.append(bodyDiv);
+    const proxyStatus = state.imageProxy.statusByMessageId[message.id] || 'idle';
+    if (proxyStatus === 'loaded') {
+      article.append(el('p', { className: 'reader-remote-images-loaded', text: '🛡 Images loaded via proxy — sender cannot track you.' }));
+    } else if (proxyStatus === 'loading') {
+      article.append(el('p', { className: 'reader-remote-images-blocked', text: '🔒 Loading images via proxy…' }));
+    } else if (proxyStatus === 'error') {
+      const errorMsg = state.imageProxy.errorByMessageId[message.id] || 'Could not load images.';
+      article.append(el('p', { className: 'reader-remote-images-blocked', text: `🔒 ${errorMsg}` }));
+      if (isImageProxyAvailable()) {
+        const retryBtn = el('button', { type: 'button', className: 'secondary-mail-action reader-load-images', text: 'Retry loading images (via proxy)' });
+        retryBtn.setAttribute('data-load-images-message-id', message.id);
+        retryBtn.setAttribute('data-load-images-raw-body', message.rawBody || '');
+        article.append(retryBtn);
+      }
     } else {
-      const badge = el('p', { className: 'reader-remote-images-blocked' });
-      badge.append(el('span', { text: '🔒 Remote images blocked — message text only.' }));
-      const loadBtn = el('button', { type: 'button', className: 'load-images-btn', text: 'Load images' });
-      loadBtn.setAttribute('data-message-id', message.id);
-      badge.append(loadBtn);
-      article.append(badge);
-      article.append(el('pre', { className: 'reader-body', text: message.body }));
+      // idle — show blocked badge + load button if proxy is available
+      article.append(el('p', { className: 'reader-remote-images-blocked', text: '🔒 Remote images blocked — message text only.' }));
+      if (isImageProxyAvailable()) {
+        const loadBtn = el('button', { type: 'button', className: 'secondary-mail-action reader-load-images', text: 'Load images (via proxy)' });
+        loadBtn.setAttribute('data-load-images-message-id', message.id);
+        loadBtn.setAttribute('data-load-images-raw-body', message.rawBody || '');
+        article.append(loadBtn);
+      }
     }
-  } else {
-    article.append(el('pre', { className: 'reader-body', text: message.body }));
   }
   if (message.attachments.length > 0) article.append(renderAttachments(message.attachments));
   return article;
@@ -950,35 +964,8 @@ function wireThreadReaderControls() {
   document.querySelector('#summarize-thread')?.addEventListener('click', requestThreadSummary);
   document.querySelector('#approve-summary')?.addEventListener('click', approveThreadSummary);
   document.querySelector('#cancel-summary')?.addEventListener('click', cancelThreadSummary);
-  document.querySelectorAll('.load-images-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const messageId = btn.getAttribute('data-message-id');
-      if (messageId) {
-        state.imagePermissionByMessageId[messageId] = true;
-        renderApp();
-      }
-    });
-  });
-  document.querySelectorAll('[data-trust-action]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const action = btn.getAttribute('data-trust-action');
-      const email = btn.getAttribute('data-trust-email');
-      if (!email) return;
-      const card = btn.closest('.sender-trust-card');
-      if (card) {
-        card.classList.add('sender-trust-card--dismissed');
-      }
-      if (action === 'accept') {
-        senderTrustStore.trust(email);
-        setTimeout(() => renderApp(), 220);
-      } else if (action === 'ban') {
-        senderTrustStore.ban(email);
-        setTimeout(() => {
-          state.activeThreadId = null;
-          renderApp();
-        }, 220);
-      }
-    });
+  document.querySelectorAll('[data-load-images-message-id]').forEach((button) => {
+    button.addEventListener('click', () => loadImagesViaProxy(button.getAttribute('data-load-images-message-id'), button.getAttribute('data-load-images-raw-body') || ''));
   });
 }
 
@@ -1119,6 +1106,56 @@ function cancelThreadSummary() {
   pendingSummaryController?.cancelSummary();
   pendingSummaryController = null;
   state.ai = { ...state.ai, status: 'cancelled', approval: null, errorMessage: '' };
+  renderApp();
+}
+
+async function loadImagesViaProxy(messageId, rawBody) {
+  if (!messageId || !isImageProxyAvailable()) return;
+  state.imageProxy.statusByMessageId[messageId] = 'loading';
+  state.imageProxy.errorByMessageId[messageId] = '';
+  renderApp();
+
+  // Extract all remote image src values from the raw HTML body
+  const srcRe = /<img[^>]+src\s*=\s*["'](https?:\/\/[^"'>\s]+)["']/gi;
+  const srcs = [];
+  let match;
+  const body = rawBody || '';
+  // eslint-disable-next-line no-cond-assign
+  while ((match = srcRe.exec(body)) !== null) {
+    if (!srcs.includes(match[1])) srcs.push(match[1]);
+  }
+
+  if (srcs.length === 0) {
+    // No src values in raw body (body was already stripped) — mark loaded with no images
+    state.imageProxy.statusByMessageId[messageId] = 'loaded';
+    state.imageProxy.dataByMessageId[messageId] = {};
+    renderApp();
+    return;
+  }
+
+  try {
+    const results = await Promise.allSettled(srcs.map((src) => proxyImage(src).then((dataUri) => ({ src, dataUri }))));
+    const data = {};
+    const errors = [];
+    results.forEach((result) => {
+      if (result.status === 'fulfilled' && result.value.dataUri) {
+        data[result.value.src] = result.value.dataUri;
+      } else {
+        errors.push(result.reason?.message || 'Could not load one or more images.');
+      }
+    });
+    state.imageProxy.dataByMessageId[messageId] = data;
+    if (errors.length > 0 && Object.keys(data).length === 0) {
+      state.imageProxy.statusByMessageId[messageId] = 'error';
+      state.imageProxy.errorByMessageId[messageId] = errors[0];
+    } else {
+      state.imageProxy.statusByMessageId[messageId] = 'loaded';
+      state.imageProxy.errorByMessageId[messageId] = '';
+    }
+  } catch (error) {
+    state.imageProxy.statusByMessageId[messageId] = 'error';
+    state.imageProxy.errorByMessageId[messageId] = userFacingError(error, 'Could not load images via proxy.');
+  }
   renderApp();
 }
 
