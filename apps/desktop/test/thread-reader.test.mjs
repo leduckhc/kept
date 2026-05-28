@@ -7,6 +7,7 @@ import {
   createThreadReaderController,
   createThreadSummaryActionController,
   formatAttachmentMeta,
+  hasRemoteImages,
   normalizeReaderThread,
   safeGmailThreadUrl,
 } from '../src/thread-reader.js';
@@ -143,4 +144,40 @@ test('summary action prepares an approval preview, cancels without provider call
   const staleApproval = await controller.approveSummary('different-hash');
   assert.equal(staleApproval.status, 'approval_mismatch');
   assert.equal(calls.filter((call) => call.options.approved).length, 1);
+});
+
+test('hasRemoteImages detects remote img src and ignores local images and non-image tags', () => {
+  assert.equal(hasRemoteImages('<img src="https://tracker.example.com/pixel.gif">'), true);
+  assert.equal(hasRemoteImages('<img src="http://cdn.example.com/header.png">'), true);
+  assert.equal(hasRemoteImages('<img src="https://example.com/a.jpg" alt="logo">'), true);
+  assert.equal(hasRemoteImages('<p>No images here.</p>'), false);
+  assert.equal(hasRemoteImages('<img src="cid:part1.2" alt="inline attachment">'), false);
+  assert.equal(hasRemoteImages(''), false);
+  assert.equal(hasRemoteImages(null), false);
+  assert.equal(hasRemoteImages(undefined), false);
+});
+
+test('normalizeReaderThread sets remoteImagesBlocked on messages that contain remote images', () => {
+  const htmlThread = {
+    id: 'thr_img',
+    sender: 'Promo Bot',
+    senderEmail: 'promo@example.com',
+    subject: 'Big sale!',
+    receivedAt: '2026-05-27T12:00:00Z',
+    htmlBody: '<p>Check this out!</p><img src="https://tracker.example.com/pixel.gif">',
+  };
+  const textThread = {
+    id: 'thr_text',
+    sender: 'Promo Bot',
+    senderEmail: 'promo@example.com',
+    subject: 'Big sale!',
+    receivedAt: '2026-05-27T12:00:00Z',
+    body: 'Just plain text, no images.',
+  };
+
+  const imgReader = normalizeReaderThread(htmlThread);
+  assert.equal(imgReader.messages[0].remoteImagesBlocked, true);
+
+  const textReader = normalizeReaderThread(textThread);
+  assert.equal(textReader.messages[0].remoteImagesBlocked, false);
 });

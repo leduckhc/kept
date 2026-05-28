@@ -191,13 +191,15 @@ function normalizeReaderMessages(thread) {
   return rawMessages
     .map((message, index) => {
       const receivedAt = message.receivedAt || thread.receivedAt || new Date(0).toISOString();
+      const rawBody = message.body ?? message.textBody ?? message.htmlBody ?? thread.body ?? thread.textBody ?? thread.htmlBody;
       return {
         id: String(message.id || `${thread.id || 'thread'}-${index}`),
         threadId: String(message.threadId || thread.id || ''),
         subject: message.subject || thread.subject || '(no subject)',
         sender: normalizeContact(message.sender || thread.sender || thread.senderEmail || 'Unknown sender', message.senderEmail || thread.senderEmail),
         recipients: normalizeRecipients(message.recipients || thread.recipients || []),
-        body: normalizeBody(message.body ?? message.textBody ?? message.htmlBody ?? thread.body ?? thread.textBody ?? thread.htmlBody),
+        body: normalizeBody(rawBody),
+        remoteImagesBlocked: hasRemoteImages(rawBody),
         receivedAt,
         dateTime: receivedAt,
         dateLabel: formatReaderDate(receivedAt),
@@ -205,6 +207,12 @@ function normalizeReaderMessages(thread) {
       };
     })
     .sort((left, right) => left.receivedAt.localeCompare(right.receivedAt));
+}
+
+const REMOTE_IMAGE_RE = /<img[^>]+src\s*=\s*["']https?:\/\//i;
+
+export function hasRemoteImages(rawBody) {
+  return REMOTE_IMAGE_RE.test(String(rawBody || ''));
 }
 
 function normalizeBody(value) {
