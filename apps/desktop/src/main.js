@@ -66,6 +66,7 @@ const state = {
   searchQuery: '',
   activeThreadId: null,
   lastFocusedRowId: null,
+  lastOpenedWasUnread: false,
   ai: {
     approval: null,
     summary: null,
@@ -146,7 +147,7 @@ function renderApp() {
   const activeThread = state.activeThreadId ? allThreads.find((thread) => thread.id === state.activeThreadId) : null;
   if (state.activeThreadId && !activeThread) state.activeThreadId = null;
   if (activeThread) {
-    root.replaceChildren(renderThreadReader(normalizeReaderThread(activeThread), activeThread));
+    root.replaceChildren(renderThreadReader(normalizeReaderThread(activeThread), activeThread, { wasUnread: state.lastOpenedWasUnread }));
     wireThreadReaderControls();
     return;
   }
@@ -509,7 +510,7 @@ function triageButton(intent, label, ariaLabel, pressed = false) {
   return button;
 }
 
-function renderThreadReader(reader, sourceThread = null) {
+function renderThreadReader(reader, sourceThread = null, { wasUnread = false } = {}) {
   const shell = el('main', { className: 'shell reader-shell', ariaLabel: 'Kept thread reader' });
   const surface = el('article', { className: 'reader-surface' });
   const header = el('header', { className: 'reader-header' });
@@ -520,6 +521,10 @@ function renderThreadReader(reader, sourceThread = null) {
   if (reader.gmailUrl) {
     const gmailLink = el('a', { className: 'secondary-mail-action reader-gmail-link', text: 'Open in Gmail', href: reader.gmailUrl, target: '_blank', rel: 'noreferrer' });
     header.append(gmailLink);
+  }
+  if (wasUnread) {
+    const chip = el('div', { className: 'reader-marked-read-chip', role: 'status', ariaLive: 'polite', text: 'Marked read' });
+    surface.append(chip);
   }
   surface.append(header, renderReaderTriageBar(sourceThread || reader), renderReaderMeta(reader), renderReaderSummaryPanel(reader));
   reader.messages.forEach((message) => surface.append(renderReaderMessage(message)));
@@ -597,8 +602,11 @@ function renderReaderMessage(message) {
   const article = el('section', { className: 'reader-message', ariaLabel: `Message from ${message.sender.label}` });
   article.append(renderMessageHeader(message));
   if (message.remoteImagesBlocked) {
-    const badge = el('p', { className: 'reader-remote-images-blocked', text: '🔒 Remote images blocked — message text only.' });
-    article.append(badge);
+    const bar = el('div', { className: 'reader-safe-html-bar' });
+    const label = el('span', { text: 'Safe HTML — remote images blocked, scripts stripped' });
+    const toggle = el('button', { type: 'button', className: 'reader-safe-html-toggle', text: 'Show anyway', 'data-message-id': message.id });
+    bar.append(label, toggle);
+    article.append(bar);
   }
   article.append(el('pre', { className: 'reader-body', text: message.body }));
   if (message.attachments.length > 0) article.append(renderAttachments(message.attachments));
@@ -705,6 +713,17 @@ function wireThreadReaderControls() {
   document.querySelector('#summarize-thread')?.addEventListener('click', requestThreadSummary);
   document.querySelector('#approve-summary')?.addEventListener('click', approveThreadSummary);
   document.querySelector('#cancel-summary')?.addEventListener('click', cancelThreadSummary);
+  // "Show anyway" toggle: dismiss the safe-html bar and note user consent
+  document.querySelectorAll('.reader-safe-html-toggle').forEach((button) => {
+    button.addEventListener('click', () => {
+      const bar = button.closest('.reader-safe-html-bar');
+      if (bar) {
+        bar.classList.add('reader-safe-html-bar--dismissed');
+        // After the fade-out transition, remove from DOM
+        bar.addEventListener('transitionend', () => bar.remove(), { once: true });
+      }
+    });
+  });
 }
 
 async function applyTriageToActiveThread(intent) {
@@ -849,6 +868,10 @@ function cancelThreadSummary() {
 
 function openThreadReader(threadId, rowId) {
   if (!threadId) return;
+  // Capture unread status before marking read so we can show the "Marked read" chip
+  const allThreads = applyLocalReadState(combineInboxThreads(state.gmail.threads, state.threads), readStateStore.load());
+  const thread = allThreads.find((candidate) => candidate.id === threadId);
+  state.lastOpenedWasUnread = Boolean(thread?.isUnread);
   state.activeThreadId = threadId;
   state.lastFocusedRowId = rowId || rowIdForThread(threadId);
   markThreadRead(readStateStore, threadId, true);
