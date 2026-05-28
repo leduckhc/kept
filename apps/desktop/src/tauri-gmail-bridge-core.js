@@ -42,16 +42,25 @@ export function createTauriGmailBridge({
         timeoutMs: config.callbackTimeoutMs || 120000,
       });
       const parsed = mailCore.parseGmailOAuthCallback(callbackUrl, { expectedState: state });
-      if (!parsed.ok) throw new Error('Gmail authorization was cancelled.');
-      const tokens = await exchangeAuthorizationCode({
-        fetchImpl,
-        tokenUrl,
-        clientId: config.clientId,
-        redirectUri,
-        code: parsed.code,
-        verifier: pkce.verifier,
-      });
-      await tokenStore.saveTokens(accountId, tokens);
+      if (!parsed.ok) throw new Error('Gmail authorization was cancelled before Kept received an authorization code.');
+      let tokens;
+      try {
+        tokens = await exchangeAuthorizationCode({
+          fetchImpl,
+          tokenUrl,
+          clientId: config.clientId,
+          redirectUri,
+          code: parsed.code,
+          verifier: pkce.verifier,
+        });
+      } catch (error) {
+        throw new Error(`Gmail sign-in reached Kept, but Google rejected the token exchange: ${redactBridgeError(error)}`);
+      }
+      try {
+        await tokenStore.saveTokens(accountId, tokens);
+      } catch (error) {
+        throw new Error(`Gmail sign-in reached Kept, but Kept could not save tokens to the OS keychain: ${redactBridgeError(error)}`);
+      }
       return { accountId, stored: 'keychain' };
     } catch (error) {
       throw new Error(redactBridgeError(error));
@@ -99,8 +108,42 @@ export async function exchangeAuthorizationCode({ fetchImpl, tokenUrl, clientId,
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body,
   });
-  if (!response.ok) throw new Error('Gmail OAuth token exchange failed.');
-  return normalizeGoogleOAuthTokens(await response.json());
+  const payload = await parseTokenResponsePayload(response);
+  if (!response.ok) throw new Error(formatGoogleTokenError(payload, response.status));
+  return normalizeGoogleOAuthTokens(payload);
+}
+
+async function parseTokenResponsePayload(response) {
+  try {
+    return await response.json();
+  } catch (_error) {
+    return {};
+  }
+}
+
+function formatGoogleTokenError(payload = {}, status) {
+  const code = safeGoogleErrorField(payload.error) || `http_${status || 'error'}`;
+  const description = safeGoogleErrorField(payload.error_description);
+  const hint = tokenExchangeHint(code, description);
+  return ['Gmail OAuth token exchange failed', code, description, hint].filter(Boolean).join(': ');
+}
+
+function safeGoogleErrorField(value) {
+  return String(value || '')
+    .replace(/(access_token|refresh_token|id_token|code|code_verifier|client_secret)=([^\s&]+)/gi, '$1=[redacted]')
+    .replace(/[^\p{L}\p{N}\s._:/@+-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 220);
+}
+
+function tokenExchangeHint(code, description) {
+  const message = `${code} ${description}`.toLowerCase();
+  if (message.includes('redirect_uri')) return 'Check that the OAuth Desktop client allows the exact loopback redirect URI shown in Kept.';
+  if (message.includes('invalid_grant')) return 'The browser callback reached Kept, but Google rejected the one-time authorization code. Retry once; if it repeats, the client ID and redirect configuration do not match.';
+  if (message.includes('invalid_client')) return 'The packaged Kept OAuth client ID is not valid for this Google Cloud project/client type.';
+  if (message.includes('access_denied') || message.includes('verification')) return 'Keep the Google Auth Platform publishing status in Testing and add this exact Google account as a test user for the project that owns the packaged client ID.';
+  return '';
 }
 
 function normalizeGoogleOAuthTokens(tokens, { now = () => new Date() } = {}) {

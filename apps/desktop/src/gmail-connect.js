@@ -92,6 +92,7 @@ export function userFacingGmailOAuthError(error, fallback = 'Could not finish Gm
   if (/oauth is not configured|desktop bridge is not available|sync bridge is not available/i.test(message)) {
     return 'Gmail Connect is not enabled in this desktop build. Import a Gmail Takeout mbox for local mail until the packaged build is configured.';
   }
+  if (/gmail sign-in reached kept/i.test(message)) return message;
   if (/token|secret|authorization\s*code|code_verifier|access_token|refresh_token/i.test(message)) return fallback;
   return message;
 }

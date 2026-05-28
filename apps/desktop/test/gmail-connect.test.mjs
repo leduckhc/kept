@@ -132,6 +132,10 @@ test('userFacingGmailOAuthError explains Google verification blocks without leak
   assert.match(timeout, /did not return to Kept/);
   assert.match(timeout, /Access blocked/);
 
+  const postCallback = userFacingGmailOAuthError(new Error('Gmail sign-in reached Kept, but Google rejected the token exchange: Gmail OAuth token exchange failed: invalid_grant: redirect_uri mismatch'));
+  assert.match(postCallback, /reached Kept/);
+  assert.match(postCallback, /invalid_grant/);
+
   const redacted = userFacingGmailOAuthError(new Error('authorization code=secret-code access_token=secret-token'), 'Could not finish Gmail sign-in.');
   assert.equal(redacted, 'Could not finish Gmail sign-in.');
 });

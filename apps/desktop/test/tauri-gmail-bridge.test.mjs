@@ -151,6 +151,36 @@ test('exchangeAuthorizationCode normalizes Google snake_case tokens for the mail
   assert.match(tokens.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
+test('exchangeAuthorizationCode surfaces safe Google token exchange errors after loopback callback', async () => {
+  await assert.rejects(
+    exchangeAuthorizationCode({
+      fetchImpl: async () => ({
+        ok: false,
+        status: 400,
+        async json() {
+          return {
+            error: 'invalid_grant',
+            error_description: 'Bad Request: code=secret-code redirect_uri mismatch',
+          };
+        },
+      }),
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      clientId: 'desktop-client.apps.googleusercontent.com',
+      redirectUri: 'http://127.0.0.1:49210/oauth/google/callback',
+      code: 'secret-code',
+      verifier: 'verifier-secret',
+    }),
+    (error) => {
+      assert.match(error.message, /Gmail OAuth token exchange failed/);
+      assert.match(error.message, /invalid_grant/);
+      assert.match(error.message, /redirect_uri/);
+      assert.match(error.message, /redacted/);
+      assert.equal(error.message.includes('secret-code'), false);
+      return true;
+    },
+  );
+});
+
 test('createConnector returns Gmail API connector backed by Tauri keychain adapter', async () => {
   const bridge = createTauriGmailBridge({
     mailCore: makeMailCore(),
