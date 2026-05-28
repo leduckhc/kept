@@ -1,4 +1,6 @@
 import { brandTokens, renderPipMark } from '/packages/ui/src/index.js';
+import { classifyThread } from './classifier.js';
+import { loadInboxSectionsState, saveInboxSectionsState } from './inbox-sections-state.js';
 import { createBrowserLocalMailRepository, createJsonMailStore, flagsForTriageAction, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
 import { createProviderAdapter, disabledProvider } from '/packages/ai-core/src/index.js';
 import {
@@ -38,6 +40,7 @@ const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
 const READ_STATE_KEY = 'kept.localThreadReadState.v1';
 const TRUST_STORE_KEY = 'kept.senderTrust.v1';
+const inboxSectionsCollapsed = loadInboxSectionsState(typeof localStorage !== 'undefined' ? localStorage : null);
 const root = document.querySelector('#root');
 const gmailAdapter = window.__KEPT_GMAIL_CONNECT__ || null;
 const aiRuntime = window.__KEPT_AI__ || {};
@@ -184,7 +187,19 @@ function renderApp() {
 
   const visibleThreads = filterInboxThreads(filterArchivedInboxThreads(allThreads), state.searchQuery);
   const inboxNow = newestThreadDate(visibleThreads) || newestThreadDate(allThreads) || new Date();
-  const sections = getInboxSections(visibleThreads, { now: inboxNow });
+
+  // Split into primary / newsletters / updates before date-grouping
+  const primaryThreads = [];
+  const newsletterThreads = [];
+  const updateThreads = [];
+  visibleThreads.forEach((thread) => {
+    const category = classifyThread(thread);
+    if (category === 'newsletter') newsletterThreads.push(thread);
+    else if (category === 'update') updateThreads.push(thread);
+    else primaryThreads.push(thread);
+  });
+
+  const sections = getInboxSections(primaryThreads, { now: inboxNow });
   const inboxCount = allThreads.length;
   const visibleCount = visibleThreads.length;
   const unreadCount = visibleThreads.filter((thread) => thread.isUnread).length;
@@ -199,14 +214,15 @@ function renderApp() {
     visibleCount,
   });
 
-  root.replaceChildren(renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState }));
+  root.replaceChildren(renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState, newsletterThreads, updateThreads }));
   wireGmailControls();
   wireImportControls();
   wireSearchControl();
   wireThreadRows();
+  wireInboxSectionToggles();
 }
 
-function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState }) {
+function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState, newsletterThreads = [], updateThreads = [] }) {
   const shell = el('main', { className: 'shell', ariaLabel: 'Kept inbox' });
   const surface = el('section', { className: 'inbox-surface' });
   surface.append(renderTopBar({ inboxCount, visibleCount, unreadCount, searchState }), renderGmailStatus());
@@ -216,6 +232,12 @@ function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, new
     surface.append(renderSearchEmptyState());
   } else {
     surface.append(renderNewSenders(newSenders), renderInboxSections(sections));
+    if (newsletterThreads.length > 0) {
+      surface.append(renderCollapsibleCategory('newsletters', 'Newsletters', newsletterThreads));
+    }
+    if (updateThreads.length > 0) {
+      surface.append(renderCollapsibleCategory('updates', 'Updates', updateThreads));
+    }
   }
   shell.append(surface);
   return shell;
@@ -1084,6 +1106,61 @@ function newestThreadDate(threads) {
 
 function rowIdForThread(threadId) {
   return `thread-row-${String(threadId).replace(/[^a-z0-9_-]/gi, '-')}`;
+}
+
+/**
+ * Render a collapsible Newsletters or Updates section.
+ * @param {'newsletters'|'updates'} key
+ * @param {string} label
+ * @param {Array} threads
+ */
+function renderCollapsibleCategory(key, label, threads) {
+  const PREVIEW_COUNT = 2;
+  const collapsed = inboxSectionsCollapsed[key];
+  const container = el('section', { className: `collapsible-category${collapsed ? ' collapsed' : ''}`, ariaLabel: label });
+  container.dataset.categoryKey = key;
+
+  // Header
+  const header = el('button', {
+    type: 'button',
+    className: 'collapsible-category-header',
+    ariaExpanded: String(!collapsed),
+  });
+  header.setAttribute('data-section-toggle', key);
+  header.append(
+    el('span', { className: 'category-label', text: label }),
+    el('span', { className: 'category-count', text: String(threads.length) }),
+    el('span', { className: 'category-chevron', text: collapsed ? '▸' : '▾', ariaHidden: 'true' }),
+  );
+  container.append(header);
+
+  // Rows
+  const rows = el('div', { className: 'rows', role: 'list' });
+  const visibleThreads = collapsed ? threads.slice(0, PREVIEW_COUNT) : threads;
+  visibleThreads.forEach((thread) => rows.append(renderThreadRow(thread, key)));
+  container.append(rows);
+
+  // "… and N more" hint when collapsed and there are hidden rows
+  const hiddenCount = threads.length - PREVIEW_COUNT;
+  if (collapsed && hiddenCount > 0) {
+    const more = el('p', { className: 'category-more', text: `… and ${hiddenCount} more` });
+    more.setAttribute('data-section-toggle', key);
+    container.append(more);
+  }
+
+  return container;
+}
+
+function wireInboxSectionToggles() {
+  document.querySelectorAll('[data-section-toggle]').forEach((trigger) => {
+    trigger.addEventListener('click', () => {
+      const key = trigger.getAttribute('data-section-toggle');
+      if (key !== 'newsletters' && key !== 'updates') return;
+      inboxSectionsCollapsed[key] = !inboxSectionsCollapsed[key];
+      saveInboxSectionsState(inboxSectionsCollapsed, localStorage);
+      renderApp();
+    });
+  });
 }
 
 function renderSectionHeader(title, meta) {
