@@ -15,6 +15,7 @@ import {
   normalizeReaderThread,
   sanitizeHtmlForDisplay,
   safeGmailThreadUrl,
+  parseListUnsubscribeHeaders,
 } from '../src/thread-reader.js';
 
 const baseThread = {
@@ -393,3 +394,92 @@ test('normalizeReaderThread preserves rawBody for image URL extraction', () => {
   assert.equal(plain.messages[0].remoteImagesBlocked, false);
 });
 
+
+test('parseListUnsubscribeHeaders extracts https URL from angle brackets', () => {
+  const result = parseListUnsubscribeHeaders('<https://example.com/unsub?id=abc>');
+  assert.equal(result.unsubscribeUrl, 'https://example.com/unsub?id=abc');
+  assert.equal(result.unsubscribeMailto, null);
+  assert.equal(result.oneClickPost, false);
+});
+
+test('parseListUnsubscribeHeaders extracts mailto from angle brackets', () => {
+  const result = parseListUnsubscribeHeaders('<mailto:unsub@example.com?subject=unsubscribe>');
+  assert.equal(result.unsubscribeUrl, null);
+  assert.equal(result.unsubscribeMailto, 'mailto:unsub@example.com?subject=unsubscribe');
+  assert.equal(result.oneClickPost, false);
+});
+
+test('parseListUnsubscribeHeaders extracts both https and mailto when both present', () => {
+  const header = '<https://example.com/unsub>, <mailto:unsub@example.com>';
+  const result = parseListUnsubscribeHeaders(header);
+  assert.equal(result.unsubscribeUrl, 'https://example.com/unsub');
+  assert.equal(result.unsubscribeMailto, 'mailto:unsub@example.com');
+  assert.equal(result.oneClickPost, false);
+});
+
+test('parseListUnsubscribeHeaders sets oneClickPost true when List-Unsubscribe-Post header present', () => {
+  const result = parseListUnsubscribeHeaders(
+    '<https://example.com/unsub>',
+    'List-Unsubscribe=One-Click',
+  );
+  assert.equal(result.unsubscribeUrl, 'https://example.com/unsub');
+  assert.equal(result.oneClickPost, true);
+});
+
+test('parseListUnsubscribeHeaders returns null fields for empty or missing header', () => {
+  const empty = parseListUnsubscribeHeaders('');
+  assert.equal(empty.unsubscribeUrl, null);
+  assert.equal(empty.unsubscribeMailto, null);
+  assert.equal(empty.oneClickPost, false);
+
+  const noArgs = parseListUnsubscribeHeaders();
+  assert.equal(noArgs.unsubscribeUrl, null);
+  assert.equal(noArgs.unsubscribeMailto, null);
+  assert.equal(noArgs.oneClickPost, false);
+});
+
+test('normalizeReaderThread picks up list-unsubscribe fields on messages', () => {
+  const thread = {
+    id: 'thr_newsletter',
+    sender: 'Newsletter Bot',
+    senderEmail: 'news@example.com',
+    subject: 'Weekly digest',
+    receivedAt: '2026-05-27T12:00:00Z',
+    body: 'This week in news.',
+    listUnsubscribe: '<https://example.com/unsub>, <mailto:unsub@example.com>',
+    listUnsubscribePost: 'List-Unsubscribe=One-Click',
+  };
+  const reader = normalizeReaderThread(thread);
+  const msg = reader.messages[0];
+  assert.equal(msg.unsubscribeUrl, 'https://example.com/unsub');
+  assert.equal(msg.unsubscribeMailto, 'mailto:unsub@example.com');
+  assert.equal(msg.oneClickPost, true);
+});
+
+test('normalizeReaderThread sets null unsubscribe fields when no header present', () => {
+  const reader = normalizeReaderThread(baseThread);
+  const msg = reader.messages[0];
+  assert.equal(msg.unsubscribeUrl, null);
+  assert.equal(msg.unsubscribeMailto, null);
+  assert.equal(msg.oneClickPost, false);
+});
+
+test('createLocalUnsubscribeStore round-trips state and handles corrupt data gracefully', () => {
+  const values = new Map();
+  const storage = {
+    getItem(key) { return values.get(key) ?? null; },
+    setItem(key, value) { values.set(key, value); },
+  };
+  const store = createLocalUnsubscribeStore(storage, 'test.unsubState');
+
+  assert.equal(store.isUnsubscribed('thr_1'), false);
+
+  store.markUnsubscribed('thr_1');
+  assert.equal(store.isUnsubscribed('thr_1'), true);
+  assert.equal(store.isUnsubscribed('thr_2'), false);
+
+  // corrupt storage
+  values.set('test.unsubState', 'not json {{');
+  assert.equal(store.isUnsubscribed('thr_1'), false);
+  assert.deepEqual(store.load(), {});
+});
