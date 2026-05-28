@@ -49,12 +49,17 @@ export function createTauriGmailBridge({
           fetchImpl,
           tokenUrl,
           clientId: config.clientId,
+          clientSecret: config.clientSecret,
           redirectUri,
           code: parsed.code,
           verifier: pkce.verifier,
         });
       } catch (error) {
-        throw new Error(`Gmail sign-in reached Kept, but Google rejected the token exchange: ${redactBridgeError(error)}`);
+        const detail = redactBridgeError(error);
+        if (/client_secret is missing/i.test(detail)) {
+          throw new Error(`Gmail sign-in reached Kept, but Google rejected the token exchange: ${detail}. ${oauthConfigHint(config)}`);
+        }
+        throw new Error(`Gmail sign-in reached Kept, but Google rejected the token exchange: ${detail}`);
       }
       try {
         await tokenStore.saveTokens(accountId, tokens);
@@ -96,10 +101,11 @@ export function createTauriKeychainAdapter({ invoke }) {
   };
 }
 
-export async function exchangeAuthorizationCode({ fetchImpl, tokenUrl, clientId, redirectUri, code, verifier }) {
+export async function exchangeAuthorizationCode({ fetchImpl, tokenUrl, clientId, clientSecret, redirectUri, code, verifier }) {
   const body = new URLSearchParams();
   body.set('grant_type', 'authorization_code');
   body.set('client_id', clientId);
+  if (clientSecret) body.set('client_secret', clientSecret);
   body.set('redirect_uri', redirectUri);
   body.set('code', code);
   body.set('code_verifier', verifier);
@@ -141,9 +147,17 @@ function tokenExchangeHint(code, description) {
   const message = `${code} ${description}`.toLowerCase();
   if (message.includes('redirect_uri')) return 'Check that the OAuth Desktop client allows the exact loopback redirect URI shown in Kept.';
   if (message.includes('invalid_grant')) return 'The browser callback reached Kept, but Google rejected the one-time authorization code. Retry once; if it repeats, the client ID and redirect configuration do not match.';
+  if (message.includes('client_secret')) return 'The packaged OAuth client is configured as a Google Web client. Add KEPT_GMAIL_CLIENT_SECRET to the release build or switch KEPT_GMAIL_CLIENT_ID to an OAuth Desktop client.';
   if (message.includes('invalid_client')) return 'The packaged Kept OAuth client ID is not valid for this Google Cloud project/client type.';
   if (message.includes('access_denied') || message.includes('verification')) return 'Keep the Google Auth Platform publishing status in Testing and add this exact Google account as a test user for the project that owns the packaged client ID.';
   return '';
+}
+
+function oauthConfigHint(config = {}) {
+  const clientId = String(config?.clientId || '');
+  const clientIdTail = clientId ? clientId.slice(-8) : 'missing';
+  const clientSecretPresent = Boolean(String(config?.clientSecret || '').trim());
+  return `Kept build diagnostics: clientSecretPresent=${clientSecretPresent}; clientIdTail=${clientIdTail}. If false, KEPT_GMAIL_CLIENT_SECRET is not reaching this packaged app build.`;
 }
 
 function normalizeGoogleOAuthTokens(tokens, { now = () => new Date() } = {}) {

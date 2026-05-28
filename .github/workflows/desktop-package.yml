@@ -42,6 +42,7 @@ jobs:
       - name: Build Kept desktop package
         env:
           KEPT_GMAIL_CLIENT_ID: ${{ vars.KEPT_GMAIL_CLIENT_ID || secrets.KEPT_GMAIL_CLIENT_ID }}
+          KEPT_GMAIL_CLIENT_SECRET: ${{ secrets.KEPT_GMAIL_CLIENT_SECRET || secrets.GMAIL_CLIENT_SECRET }}
           KEPT_GMAIL_REDIRECT_URI: http://127.0.0.1:49210/oauth/google/callback
         run: npm run tauri:build
 

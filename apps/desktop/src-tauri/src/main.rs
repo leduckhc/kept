@@ -16,6 +16,7 @@ const MAX_CALLBACK_BYTES: usize = 8192;
 struct GmailOAuthConfig {
     enabled: bool,
     client_id: Option<String>,
+    client_secret: Option<String>,
     redirect_uri: String,
     token_url: String,
     callback_timeout_ms: u64,
@@ -35,6 +36,10 @@ fn gmail_oauth_config() -> GmailOAuthConfig {
             .or(option_env!("GMAIL_CLIENT_ID"))
             .or(Some(DEFAULT_GMAIL_CLIENT_ID)),
     );
+    let client_secret = config_value(
+        "KEPT_GMAIL_CLIENT_SECRET",
+        option_env!("KEPT_GMAIL_CLIENT_SECRET").or(option_env!("GMAIL_CLIENT_SECRET")),
+    );
     let redirect_uri = config_value("KEPT_GMAIL_REDIRECT_URI", option_env!("KEPT_GMAIL_REDIRECT_URI"))
         .unwrap_or_else(|| DEFAULT_REDIRECT_URI.to_string());
     let token_url = config_value("KEPT_GMAIL_TOKEN_URL", option_env!("KEPT_GMAIL_TOKEN_URL"))
@@ -43,6 +48,7 @@ fn gmail_oauth_config() -> GmailOAuthConfig {
     GmailOAuthConfig {
         enabled: client_id.is_some(),
         client_id,
+        client_secret,
         redirect_uri,
         token_url,
         callback_timeout_ms: 120_000,

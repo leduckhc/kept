@@ -151,6 +151,23 @@ test('exchangeAuthorizationCode normalizes Google snake_case tokens for the mail
   assert.match(tokens.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
+test('exchangeAuthorizationCode includes client_secret when packaged with a Google Web OAuth client', async () => {
+  await exchangeAuthorizationCode({
+    fetchImpl: async (_url, options) => {
+      const body = new URLSearchParams(options.body);
+      assert.equal(body.get('client_id'), 'web-client.apps.googleusercontent.com');
+      assert.equal(body.get('client_secret'), 'web-client-secret');
+      return { ok: true, async json() { return { access_token: 'access-value', expires_in: 3600 }; } };
+    },
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    clientId: 'web-client.apps.googleusercontent.com',
+    clientSecret: 'web-client-secret',
+    redirectUri: 'http://127.0.0.1:49210/oauth/google/callback',
+    code: 'real-auth-code',
+    verifier: 'verifier-secret',
+  });
+});
+
 test('exchangeAuthorizationCode surfaces safe Google token exchange errors after loopback callback', async () => {
   await assert.rejects(
     exchangeAuthorizationCode({
@@ -175,6 +192,35 @@ test('exchangeAuthorizationCode surfaces safe Google token exchange errors after
       assert.match(error.message, /invalid_grant/);
       assert.match(error.message, /redirect_uri/);
       assert.match(error.message, /redacted/);
+      assert.equal(error.message.includes('secret-code'), false);
+      return true;
+    },
+  );
+});
+
+test('exchangeAuthorizationCode explains missing client_secret configuration without leaking secrets', async () => {
+  await assert.rejects(
+    exchangeAuthorizationCode({
+      fetchImpl: async () => ({
+        ok: false,
+        status: 400,
+        async json() {
+          return {
+            error: 'invalid_request',
+            error_description: 'client_secret is missing.',
+          };
+        },
+      }),
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      clientId: 'web-client.apps.googleusercontent.com',
+      redirectUri: 'http://127.0.0.1:49210/oauth/google/callback',
+      code: 'secret-code',
+      verifier: 'verifier-secret',
+    }),
+    (error) => {
+      assert.match(error.message, /invalid_request/);
+      assert.match(error.message, /client_secret is missing/);
+      assert.match(error.message, /KEPT_GMAIL_CLIENT_SECRET/);
       assert.equal(error.message.includes('secret-code'), false);
       return true;
     },
@@ -215,6 +261,8 @@ test('desktop shell loads bridge before main and exposes Tauri globals for packa
   assert.match(tauriConfig.app.security.csp, /https:\/\/gmail\.googleapis\.com/);
   assert.match(rustMain, /option_env!\("KEPT_GMAIL_CLIENT_ID"\)/);
   assert.match(rustMain, /option_env!\("GMAIL_CLIENT_ID"\)/);
+  assert.match(rustMain, /option_env!\("KEPT_GMAIL_CLIENT_SECRET"\)/);
+  assert.match(rustMain, /option_env!\("GMAIL_CLIENT_SECRET"\)/);
   assert.match(rustMain, /770442354658-ju4vt9tuurrq4a4r936b4ef08l36nati\.apps\.googleusercontent\.com/);
   for (const command of ['gmail_oauth_config', 'gmail_start_oauth', 'gmail_keychain_set', 'gmail_keychain_get', 'gmail_keychain_delete']) {
     assert.match(rustMain, new RegExp(command));
