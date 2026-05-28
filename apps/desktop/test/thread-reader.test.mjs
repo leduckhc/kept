@@ -9,6 +9,7 @@ import {
   formatAttachmentMeta,
   hasRemoteImages,
   normalizeReaderThread,
+  sanitizeHtmlForDisplay,
   safeGmailThreadUrl,
 } from '../src/thread-reader.js';
 
@@ -180,4 +181,63 @@ test('normalizeReaderThread sets remoteImagesBlocked on messages that contain re
 
   const textReader = normalizeReaderThread(textThread);
   assert.equal(textReader.messages[0].remoteImagesBlocked, false);
+});
+
+test('sanitizeHtmlForDisplay strips script, style, and event handlers but keeps structural tags and img', () => {
+  // script blocks removed
+  assert.ok(!sanitizeHtmlForDisplay('<script>alert(1)</script>Hello').includes('<script>'));
+  assert.ok(sanitizeHtmlForDisplay('<script>alert(1)</script>Hello').includes('Hello'));
+
+  // style blocks removed
+  assert.ok(!sanitizeHtmlForDisplay('<style>body{color:red}</style><p>Hi</p>').includes('<style>'));
+  assert.ok(sanitizeHtmlForDisplay('<style>body{color:red}</style><p>Hi</p>').includes('<p>Hi</p>'));
+
+  // on* event handlers stripped from img
+  const imgResult = sanitizeHtmlForDisplay('<img onclick="xss()" onerror="bad()" src="https://example.com/a.jpg">');
+  assert.ok(!imgResult.includes('onclick'));
+  assert.ok(!imgResult.includes('onerror'));
+  assert.ok(imgResult.includes('src="https://example.com/a.jpg"'));
+
+  // javascript: hrefs neutralized
+  const jsHref = sanitizeHtmlForDisplay('<a href="javascript:void(0)">click</a>');
+  assert.ok(!jsHref.includes('javascript:'));
+
+  // data: src neutralized
+  const dataSrc = sanitizeHtmlForDisplay('<img src="data:image/png;base64,abc">');
+  assert.ok(!dataSrc.includes('data:'));
+
+  // https hrefs kept
+  const goodHref = sanitizeHtmlForDisplay('<a href="https://example.com">link</a>');
+  assert.ok(goodHref.includes('href="https://example.com"'));
+
+  // structural tags kept
+  const structural = sanitizeHtmlForDisplay('<p>Hello</p><strong>world</strong>');
+  assert.ok(structural.includes('<p>Hello</p>'));
+  assert.ok(structural.includes('<strong>world</strong>'));
+});
+
+test('normalizeReaderThread sets htmlBody on HTML messages and null on plain text', () => {
+  const htmlThread = {
+    id: 'thr_html',
+    sender: 'Sender',
+    senderEmail: 'sender@example.com',
+    subject: 'HTML mail',
+    receivedAt: '2026-05-27T12:00:00Z',
+    htmlBody: '<p>Hello</p><img src="https://example.com/a.jpg">',
+  };
+  const textThread = {
+    id: 'thr_plain',
+    sender: 'Sender',
+    senderEmail: 'sender@example.com',
+    subject: 'Plain mail',
+    receivedAt: '2026-05-27T12:00:00Z',
+    body: 'Just plain text, no HTML here.',
+  };
+
+  const htmlReader = normalizeReaderThread(htmlThread);
+  assert.ok(htmlReader.messages[0].htmlBody, 'htmlBody should be set for HTML content');
+  assert.ok(htmlReader.messages[0].htmlBody.includes('<p>Hello</p>'), 'htmlBody should preserve HTML tags');
+
+  const textReader = normalizeReaderThread(textThread);
+  assert.equal(textReader.messages[0].htmlBody, null, 'htmlBody should be null for plain text');
 });
