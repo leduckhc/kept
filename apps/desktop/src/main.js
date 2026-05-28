@@ -6,6 +6,7 @@ import {
   createLocalReadStateStore,
   createThreadSummaryActionController,
   formatAttachmentMeta,
+  hasRemoteImages,
   isThreadOpenKey,
   markThreadRead,
   normalizeReaderThread,
@@ -594,7 +595,12 @@ function renderApprovalGate(approval) {
 
 function renderReaderMessage(message) {
   const article = el('section', { className: 'reader-message', ariaLabel: `Message from ${message.sender.label}` });
-  article.append(renderMessageHeader(message), el('pre', { className: 'reader-body', text: message.body }));
+  article.append(renderMessageHeader(message));
+  if (message.remoteImagesBlocked) {
+    const badge = el('p', { className: 'reader-remote-images-blocked', text: '🔒 Remote images blocked — message text only.' });
+    article.append(badge);
+  }
+  article.append(el('pre', { className: 'reader-body', text: message.body }));
   if (message.attachments.length > 0) article.append(renderAttachments(message.attachments));
   return article;
 }
