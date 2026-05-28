@@ -1,6 +1,7 @@
 import { brandTokens, renderPipMark } from '../../packages/ui/src/index.js';
 import { classifyThread } from './classifier.js';
 import { loadInboxSectionsState, saveInboxSectionsState } from './inbox-sections-state.js';
+import { clearSelection, getBulkDominantReadState, getSectionCheckboxState, selectSection, toggleThreadSelection } from './bulk-selection.js';
 import { createBrowserLocalMailRepository, createJsonMailStore, flagsForTriageAction, getInboxSections, parseMboxToThreads, syncGmailInbox } from '../../packages/mail-core/src/index.js';
 import { createProviderAdapter, disabledProvider } from '../../packages/ai-core/src/index.js';
 import {
@@ -84,6 +85,7 @@ const state = {
   activeThreadId: null,
   lastFocusedRowId: null,
   lastOpenedWasUnread: false,
+  selectedThreadIds: new Set(),
   ai: {
     approval: null,
     summary: null,
@@ -124,6 +126,12 @@ window.addEventListener('keydown', (event) => {
   if (state.activeThreadId && event.key === 'Escape') {
     event.preventDefault();
     closeThreadReader();
+    return;
+  }
+  if (!state.activeThreadId && event.key === 'Escape' && state.selectedThreadIds.size > 0) {
+    event.preventDefault();
+    state.selectedThreadIds = clearSelection();
+    renderApp();
     return;
   }
   if (state.activeThreadId && isTriageShortcutEvent(event)) {
@@ -223,7 +231,7 @@ function renderApp() {
     visibleCount,
   });
 
-  root.replaceChildren(renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState, newsletterThreads, updateThreads }));
+  root.replaceChildren(renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState, newsletterThreads, updateThreads, allVisibleThreads: visibleThreads }));
   wireGmailControls();
   wireImportControls();
   wireSearchControl();
@@ -231,9 +239,10 @@ function renderApp() {
   wireInboxSectionToggles();
 }
 
-function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState, newsletterThreads = [], updateThreads = [] }) {
+function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, newSenders, searchState, newsletterThreads = [], updateThreads = [], allVisibleThreads = [] }) {
   const shell = el('main', { className: 'shell', ariaLabel: 'Kept inbox' });
-  const surface = el('section', { className: 'inbox-surface' });
+  const hasSelection = state.selectedThreadIds.size > 0;
+  const surface = el('section', { className: `inbox-surface${hasSelection ? ' selection-active' : ''}` });
   surface.append(renderTopBar({ inboxCount, visibleCount, unreadCount, searchState }), renderGmailStatus());
   if (inboxCount === 0) {
     surface.append(renderEmptyGmailState());
@@ -249,6 +258,10 @@ function renderInboxShell({ sections, inboxCount, visibleCount, unreadCount, new
     }
   }
   shell.append(surface);
+  if (hasSelection) {
+    const dominantRead = getBulkDominantReadState(allVisibleThreads, state.selectedThreadIds);
+    shell.append(renderBulkActionBar(state.selectedThreadIds.size, dominantRead));
+  }
   return shell;
 }
 
@@ -500,7 +513,8 @@ function renderInboxSections(sections) {
 
 function renderThreadSection(section) {
   const group = el('section', { className: 'thread-section', ariaLabel: section.title });
-  group.append(renderSectionHeader(section.title, formatPlural(section.threads.length, 'message')));
+  const sectionThreadIds = section.threads.map((t) => t.id);
+  group.append(renderSectionHeader(section.title, formatPlural(section.threads.length, 'message'), sectionThreadIds));
 
   const rows = el('div', { className: 'rows', role: 'list' });
   if (section.threads.length === 0) {
@@ -515,12 +529,22 @@ function renderThreadSection(section) {
 function renderThreadRow(thread, sectionId) {
   const triage = getThreadTriageState(thread);
   const status = state.triage.statusByThreadId[thread.id];
+  const isSelected = state.selectedThreadIds.has(thread.id);
   const row = el('article', {
-    className: `thread-row${triage.read ? '' : ' unread'}${triage.starred ? ' starred' : ''}${sectionId === 'priority' ? ' priority' : ''}`,
+    className: `thread-row${triage.read ? '' : ' unread'}${triage.starred ? ' starred' : ''}${sectionId === 'priority' ? ' priority' : ''}${isSelected ? ' selected' : ''}`,
     ariaLabel: `${thread.sender}, ${thread.subject}, ${formatTime(thread.receivedAt)}`,
   });
   row.id = rowIdForThread(thread.id);
   row.dataset.threadId = thread.id;
+
+  // Row checkbox (circular, hidden by default; visible on hover / when any selection active)
+  const checkbox = el('button', {
+    type: 'button',
+    className: `thread-checkbox${isSelected ? ' checked' : ''}`,
+    ariaLabel: isSelected ? 'Deselect thread' : 'Select thread',
+  });
+  checkbox.dataset.selectThread = thread.id;
+  if (isSelected) checkbox.setAttribute('aria-pressed', 'true');
 
   const open = el('button', {
     type: 'button',
@@ -538,7 +562,7 @@ function renderThreadRow(thread, sectionId) {
     el('time', { className: 'time', text: formatTime(thread.receivedAt), dateTime: thread.receivedAt }),
   );
 
-  row.append(open, renderThreadTriageControls(thread));
+  row.append(checkbox, open, renderThreadTriageControls(thread));
   return row;
 }
 
@@ -581,6 +605,58 @@ function triageButton(intent, label, ariaLabel, pressed = false) {
   button.setAttribute('data-triage-intent', intent);
   if (pressed) button.setAttribute('aria-pressed', 'true');
   return button;
+}
+
+function renderBulkActionBar(count, dominantRead) {
+  const bar = el('div', { className: 'bulk-action-bar', role: 'toolbar', ariaLabel: 'Bulk actions' });
+
+  const left = el('div', { className: 'bulk-action-left' });
+  const clearBtn = el('button', { type: 'button', className: 'bulk-clear', ariaLabel: 'Clear selection', text: '✕' });
+  clearBtn.dataset.bulkAction = 'clear';
+  left.append(clearBtn, el('span', { className: 'bulk-count', text: `${count} selected` }));
+
+  const right = el('div', { className: 'bulk-action-right' });
+  const archiveBtn = el('button', { type: 'button', className: 'bulk-btn', text: 'Archive', ariaLabel: 'Archive selected threads' });
+  archiveBtn.dataset.bulkAction = 'archive';
+  const readLabel = dominantRead === 'unread' ? 'Mark read' : 'Mark unread';
+  const readBtn = el('button', { type: 'button', className: 'bulk-btn', text: readLabel, ariaLabel: `${readLabel} for selected threads` });
+  readBtn.dataset.bulkAction = dominantRead === 'unread' ? 'mark-read' : 'mark-unread';
+  const muteBtn = el('button', { type: 'button', className: 'bulk-btn', text: 'Mute senders', ariaLabel: 'Mute senders of selected threads' });
+  muteBtn.dataset.bulkAction = 'mute-senders';
+  right.append(archiveBtn, readBtn, muteBtn);
+
+  bar.append(left, right);
+  return bar;
+}
+
+function applyBulkArchive(selectedIds) {
+  const ids = [...selectedIds];
+  ids.forEach((id) => {
+    updateThreadFlags(id, { archived: true });
+    state.triage.statusByThreadId[id] = 'saved-locally';
+  });
+  state.selectedThreadIds = clearSelection();
+}
+
+function applyBulkReadState(selectedIds, readState) {
+  const ids = [...selectedIds];
+  const desiredFlags = { read: readState === 'read' };
+  ids.forEach((id) => {
+    updateThreadFlags(id, desiredFlags);
+    state.triage.statusByThreadId[id] = 'saved-locally';
+  });
+  state.selectedThreadIds = clearSelection();
+}
+
+function applyBulkMuteSenders(selectedIds, allThreads) {
+  const ids = [...selectedIds];
+  ids.forEach((id) => {
+    const thread = allThreads.find((t) => t.id === id);
+    if (!thread) return;
+    const senderEmail = String(thread.senderEmail || thread.sender || '').toLowerCase().trim();
+    if (senderEmail) senderTrustStore.ban(senderEmail);
+  });
+  state.selectedThreadIds = clearSelection();
 }
 
 function renderThreadReader(reader, sourceThread = null, { wasUnread = false, isSenderNew = false, senderEmail = '' } = {}) {
@@ -787,6 +863,58 @@ function wireSearchControl() {
 }
 
 function wireThreadRows() {
+  // Selection: row checkboxes
+  document.querySelectorAll('[data-select-thread]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const threadId = btn.dataset.selectThread;
+      if (threadId) {
+        state.selectedThreadIds = toggleThreadSelection(state.selectedThreadIds, threadId);
+        renderApp();
+      }
+    });
+  });
+
+  // Selection: section checkboxes
+  document.querySelectorAll('[data-select-section]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        const sectionThreadIds = JSON.parse(btn.dataset.selectSection);
+        state.selectedThreadIds = selectSection(state.selectedThreadIds, sectionThreadIds);
+        renderApp();
+      } catch (_err) { /* ignore */ }
+    });
+  });
+
+  // Bulk action bar
+  document.querySelectorAll('[data-bulk-action]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const action = btn.dataset.bulkAction;
+      const allThreads = currentThreads();
+      if (action === 'clear') {
+        state.selectedThreadIds = clearSelection();
+        renderApp();
+      } else if (action === 'archive') {
+        applyBulkArchive(state.selectedThreadIds);
+        renderApp();
+      } else if (action === 'mark-read') {
+        applyBulkReadState(state.selectedThreadIds, 'read');
+        renderApp();
+      } else if (action === 'mark-unread') {
+        applyBulkReadState(state.selectedThreadIds, 'unread');
+        renderApp();
+      } else if (action === 'mute-senders') {
+        applyBulkMuteSenders(state.selectedThreadIds, allThreads);
+        renderApp();
+      }
+    });
+  });
+
   document.querySelectorAll('[data-triage-intent]').forEach((button) => {
     button.addEventListener('click', (event) => {
       event.preventDefault();
@@ -1184,8 +1312,19 @@ function wireInboxSectionToggles() {
   });
 }
 
-function renderSectionHeader(title, meta) {
+function renderSectionHeader(title, meta, sectionThreadIds = null) {
   const header = el('div', { className: 'section-header' });
+  if (sectionThreadIds && sectionThreadIds.length > 0) {
+    const checkState = getSectionCheckboxState(sectionThreadIds, state.selectedThreadIds);
+    const sectionCb = el('button', {
+      type: 'button',
+      className: `section-checkbox${checkState === 'all' ? ' checked' : checkState === 'indeterminate' ? ' indeterminate' : ''}`,
+      ariaLabel: checkState === 'all' ? `Deselect all in ${title}` : `Select all in ${title}`,
+    });
+    sectionCb.dataset.selectSection = JSON.stringify(sectionThreadIds);
+    if (checkState === 'all') sectionCb.setAttribute('aria-pressed', 'true');
+    header.append(sectionCb);
+  }
   header.append(el('h2', { text: title }), el('span', { text: meta }));
   return header;
 }
