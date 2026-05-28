@@ -1,5 +1,7 @@
 export const GMAIL_ACCOUNT_ID = 'acct_local_gmail';
 export const GMAIL_SYNC_STORAGE_KEY = 'kept.gmail.sync.v1';
+export const GMAIL_OAUTH_VERIFICATION_BLOCKED_MESSAGE = 'Google blocked this alpha OAuth app. Ask the Kept operator to add your Google account as a test user, or import a Gmail Takeout mbox while verification is pending.';
+export const GMAIL_OAUTH_TIMEOUT_MESSAGE = 'Gmail sign-in did not return to Kept. If Google showed “Access blocked,” ask to be added as a Kept test user; otherwise try Connect Gmail again.';
 export const inboxSearchStates = Object.freeze(['disabled', 'indexing', 'ready', 'stale', 'no-results', 'error']);
 
 export function getSyncedGmailThreads(syncState, { accountId = GMAIL_ACCOUNT_ID } = {}) {
@@ -82,6 +84,18 @@ export function getInboxSearchState({ enabled = true, indexing = false, stale = 
   return { status: 'ready', label: 'Search ready', detail: 'Offline local search is ready.' };
 }
 
+export function userFacingGmailOAuthError(error, fallback = 'Could not finish Gmail sign-in.') {
+  const message = String(error?.message || error || '').trim();
+  if (!message) return fallback;
+  if (isGoogleVerificationBlocked(message)) return GMAIL_OAUTH_VERIFICATION_BLOCKED_MESSAGE;
+  if (/timed?\s*out|timeout|before the browser returned/i.test(message)) return GMAIL_OAUTH_TIMEOUT_MESSAGE;
+  if (/oauth is not configured|desktop bridge is not available|sync bridge is not available/i.test(message)) {
+    return 'Gmail Connect is not enabled in this desktop build. Import a Gmail Takeout mbox for local mail until the packaged build is configured.';
+  }
+  if (/token|secret|authorization\s*code|code_verifier|access_token|refresh_token/i.test(message)) return fallback;
+  return message;
+}
+
 export function createLocalStorageAdapter(storage) {
   return {
     async getItem(key) { return storage.getItem(key); },
@@ -96,6 +110,13 @@ function normalizeInboxSearchTerms(query) {
     .split(/\s+/)
     .map((term) => term.replace(/^[^\p{L}\p{N}@._-]+|[^\p{L}\p{N}@._-]+$/gu, ''))
     .filter(Boolean);
+}
+
+function isGoogleVerificationBlocked(message) {
+  return /access blocked/i.test(message)
+    || /not completed (the )?google verification process/i.test(message)
+    || /app has not completed verification/i.test(message)
+    || /unverified app/i.test(message);
 }
 
 function compareNewestFirst(left, right) {

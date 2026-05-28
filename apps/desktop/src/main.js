@@ -19,6 +19,7 @@ import {
   getInboxSearchState,
   getSyncedGmailThreads,
   repositoryMessagesToInboxThreads,
+  userFacingGmailOAuthError,
 } from './gmail-connect.js';
 import {
   createTriageActionController,
@@ -272,8 +273,8 @@ function gmailStatusCopy() {
   }
   if (state.gmail.status === 'oauth-denied') {
     return {
-      title: 'Gmail sign-in needs attention',
-      detail: state.gmail.errorMessage || 'Try connecting Gmail again.',
+      title: 'Gmail sign-in is blocked for this alpha',
+      detail: state.gmail.errorMessage || 'Ask to be added as a Kept Google OAuth test user, or import a Gmail Takeout mbox while verification is pending.',
     };
   }
   if (state.gmail.status === 'sync-error') {
@@ -330,10 +331,11 @@ function emptyStateCopy() {
     };
   }
   if (state.gmail.status === 'oauth-denied' || state.gmail.status === 'auth-revoked') {
+    const isRevoked = state.gmail.status === 'auth-revoked';
     return {
-      eyebrow: state.gmail.status === 'auth-revoked' ? 'Reconnect needed' : 'Sign-in interrupted',
-      title: state.gmail.status === 'auth-revoked' ? 'Gmail access expired.' : 'Gmail did not connect yet.',
-      body: state.gmail.status === 'auth-revoked' ? 'Reconnect Gmail to keep triage syncing. Existing local mail stays available.' : 'Nothing synced locally yet. Try Gmail again, or use the local mbox fallback if you would rather import manually.',
+      eyebrow: isRevoked ? 'Reconnect needed' : 'Google verification needed',
+      title: isRevoked ? 'Gmail access expired.' : 'Google blocked this alpha sign-in.',
+      body: isRevoked ? 'Reconnect Gmail to keep triage syncing. Existing local mail stays available.' : (state.gmail.errorMessage || 'Your Google account must be added as a Kept test user before Gmail sync can finish. Nothing synced locally yet.'),
       actionLabel: 'Connect Gmail',
       help: 'The mbox fallback above still gives you a local Gmail Takeout import path without OAuth.',
     };
@@ -847,7 +849,7 @@ async function startGmailConnect() {
     await syncGmail();
   } catch (error) {
     state.gmail.status = error?.code === 'GMAIL_AUTH_REVOKED' ? 'auth-revoked' : 'oauth-denied';
-    state.gmail.errorMessage = userFacingError(error, 'Could not finish Gmail sign-in.');
+    state.gmail.errorMessage = userFacingGmailOAuthError(error, 'Could not finish Gmail sign-in.');
     renderApp();
   }
 }

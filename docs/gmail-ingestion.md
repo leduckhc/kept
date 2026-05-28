@@ -34,6 +34,18 @@ Product copy: “Kept can read mail so it can build your private local search in
 
 We should not request compose, modify, send, settings, or broad Google account scopes for this milestone.
 
+## Google verification and alpha test users
+
+Gmail readonly is still a sensitive Google scope. For the internal alpha, Google may show “Access blocked: Kept has not completed the Google verification process” even when the desktop bridge and readonly scope are correct.
+
+Operational resolution:
+
+1. In the Kept Google Cloud OAuth consent screen, add the alpha user's Google account as a test user.
+2. If Kept needs public Gmail sync, complete Google app verification before inviting non-test users.
+3. Do not work around this by requesting broader scopes or committing OAuth secrets.
+
+User-facing fallback while verification is pending: import a Gmail Takeout `.mbox`; it keeps mail local and avoids OAuth.
+
 ## Incremental sync cursor
 
 - Store the newest Gmail `historyId` after each successful ingestion batch.

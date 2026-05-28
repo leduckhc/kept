@@ -12,6 +12,7 @@ import {
   getInboxSearchState,
   getSyncedGmailThreads,
   repositoryMessagesToInboxThreads,
+  userFacingGmailOAuthError,
 } from '../src/gmail-connect.js';
 
 const gmailThread = {
@@ -120,6 +121,19 @@ test('getInboxSearchState exposes user-facing search states', () => {
   assert.equal(getInboxSearchState({ enabled: false, indexing: true, totalCount: 0 }).status, 'indexing');
   assert.equal(getInboxSearchState({ enabled: false, errorMessage: 'Could not search local mail.', totalCount: 0 }).status, 'error');
   assert.equal(getInboxSearchState({ enabled: false, stale: true, totalCount: 0 }).status, 'stale');
+});
+
+test('userFacingGmailOAuthError explains Google verification blocks without leaking OAuth internals', () => {
+  const blocked = userFacingGmailOAuthError(new Error('Access blocked: Kept has not completed the Google verification process.'));
+  assert.match(blocked, /test user/);
+  assert.match(blocked, /mbox/i);
+
+  const timeout = userFacingGmailOAuthError(new Error('Gmail sign-in timed out before the browser returned to Kept'));
+  assert.match(timeout, /did not return to Kept/);
+  assert.match(timeout, /Access blocked/);
+
+  const redacted = userFacingGmailOAuthError(new Error('authorization code=secret-code access_token=secret-token'), 'Could not finish Gmail sign-in.');
+  assert.equal(redacted, 'Could not finish Gmail sign-in.');
 });
 
 test('repositoryMessagesToInboxThreads lets desktop render repository-backed Gmail sync rows without body leakage', () => {
