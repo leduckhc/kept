@@ -40,6 +40,15 @@ const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
 const READ_STATE_KEY = 'kept.localThreadReadState.v1';
 const TRUST_STORE_KEY = 'kept.senderTrust.v1';
+
+// Icon SVGs — defined at module top so they are available when function declarations run
+const TRIAGE_ICONS = {
+  archive:            `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="3" rx="1"/><path d="M2 6v7a1 1 0 001 1h10a1 1 0 001-1V6"/><path d="M6 10h4"/></svg>`,
+  'read-toggle-read':   `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>`,
+  'read-toggle-unread': `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/><line x1="2" y1="2" x2="14" y2="14"/></svg>`,
+  'star-toggle-off':    `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="8 1.5 10 6 15 6.5 11.5 10 12.5 15 8 12.5 3.5 15 4.5 10 1 6.5 6 6"/></svg>`,
+  'star-toggle-on':     `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="8 1.5 10 6 15 6.5 11.5 10 12.5 15 8 12.5 3.5 15 4.5 10 1 6.5 6 6"/></svg>`,
+};
 const inboxSectionsCollapsed = loadInboxSectionsState(typeof localStorage !== 'undefined' ? localStorage : null);
 const root = document.querySelector('#root');
 const gmailAdapter = window.__KEPT_GMAIL_CONNECT__ || null;
@@ -472,10 +481,11 @@ function renderSenderCard(sender) {
   );
 
   const actions = el('div', { className: 'sender-actions' });
-  actions.append(
-    el('button', { type: 'button', className: 'accept', text: 'Keep', ariaLabel: `Keep ${sender.sender}` }),
-    el('button', { type: 'button', className: 'block', text: 'Mute', ariaLabel: `Mute ${sender.sender}` }),
-  );
+  const keepBtn = el('button', { type: 'button', className: 'accept', ariaLabel: `Keep ${sender.sender}` });
+  keepBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>`;
+  const muteBtn = el('button', { type: 'button', className: 'block', ariaLabel: `Mute ${sender.sender}` });
+  muteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>`;
+  actions.append(keepBtn, muteBtn);
   bottom.append(actions);
 
   card.append(top, bottom);
@@ -561,7 +571,13 @@ function renderTriageStatus(status, { inline = false } = {}) {
 }
 
 function triageButton(intent, label, ariaLabel, pressed = false) {
-  const button = el('button', { type: 'button', className: `triage-action ${intent}`, text: label, ariaLabel });
+  const iconKey = intent === 'read-toggle'
+    ? (label === 'Unread' ? 'read-toggle-read' : 'read-toggle-unread')
+    : intent === 'star-toggle'
+    ? (pressed ? 'star-toggle-on' : 'star-toggle-off')
+    : intent;
+  const button = el('button', { type: 'button', className: `triage-action ${intent}`, ariaLabel });
+  button.innerHTML = TRIAGE_ICONS[iconKey] || label;
   button.setAttribute('data-triage-intent', intent);
   if (pressed) button.setAttribute('aria-pressed', 'true');
   return button;
