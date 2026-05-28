@@ -288,7 +288,19 @@ export function createKeychainTokenStore({ keychain, service = gmailOAuthTokenKe
     async saveTokens(accountId, tokens) {
       requireField('accountId', accountId);
       validateTokenPayload(tokens);
-      await keychain.setPassword(service, accountId, JSON.stringify(normalizeTokenPayload(tokens)));
+      const normalized = normalizeTokenPayload(tokens);
+      const existingRaw = await keychain.getPassword(service, accountId);
+      if (existingRaw) {
+        try {
+          const existing = normalizeTokenPayload(JSON.parse(existingRaw));
+          if (JSON.stringify(existing) === JSON.stringify(normalized)) {
+            return { accountId, service, stored: 'keychain', skipped: true };
+          }
+        } catch (_error) {
+          // Fall through and rewrite malformed legacy payloads safely.
+        }
+      }
+      await keychain.setPassword(service, accountId, JSON.stringify(normalized));
       return { accountId, service, stored: 'keychain' };
     },
     async loadTokens(accountId) {

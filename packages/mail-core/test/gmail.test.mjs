@@ -160,18 +160,48 @@ test('token store keeps OAuth tokens behind injected keychain adapter', async ()
   await tokenStore.saveTokens('acct_local_gmail', {
     accessToken: 'ya29.access-token',
     refreshToken: '1//refresh-token',
-    expiresAt: '2026-05-27T10:00:00Z',
+    expiresAt: '2026-05-27T09:00:00Z',
   });
 
   assert.deepEqual(await tokenStore.loadTokens('acct_local_gmail'), {
     accessToken: 'ya29.access-token',
     refreshToken: '1//refresh-token',
-    expiresAt: '2026-05-27T10:00:00Z',
-    scope: gmailMinimalScopes.join(' '),
+    expiresAt: '2026-05-27T09:00:00Z',
     tokenType: 'Bearer',
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
   });
   assert.equal(keychain.entries.size, 1);
   assert.equal([...keychain.entries.keys()][0], 'kept.gmail.oauth:acct_local_gmail');
+});
+
+test('token store skips redundant keychain writes when OAuth tokens are unchanged', async () => {
+  const baseKeychain = createMemoryKeychain();
+  let setCalls = 0;
+  const keychain = {
+    async setPassword(service, account, secret) {
+      setCalls += 1;
+      return baseKeychain.setPassword(service, account, secret);
+    },
+    async getPassword(service, account) {
+      return baseKeychain.getPassword(service, account);
+    },
+    async deletePassword(service, account) {
+      return baseKeychain.deletePassword(service, account);
+    },
+  };
+  const tokenStore = createKeychainTokenStore({ keychain });
+
+  const tokens = {
+    accessToken: 'ya29.access-token',
+    refreshToken: '1//refresh-token',
+    expiresAt: '2026-05-27T09:00:00Z',
+    tokenType: 'Bearer',
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+  };
+  await tokenStore.saveTokens('acct_local_gmail', tokens);
+  await tokenStore.saveTokens('acct_local_gmail', tokens);
+
+  assert.equal(setCalls, 1);
 });
 
 test('Gmail API connector fetches inbox list, loads full messages, and normalizes safely', async () => {
