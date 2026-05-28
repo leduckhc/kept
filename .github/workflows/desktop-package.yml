@@ -39,6 +39,18 @@ jobs:
       - name: Verify web workspace
         run: npm run verify
 
+      - name: Validate Gmail OAuth release env
+        env:
+          KEPT_GMAIL_CLIENT_ID: ${{ vars.KEPT_GMAIL_CLIENT_ID || secrets.KEPT_GMAIL_CLIENT_ID }}
+          KEPT_GMAIL_CLIENT_SECRET: ${{ secrets.KEPT_GMAIL_CLIENT_SECRET || secrets.GMAIL_CLIENT_SECRET }}
+          KEPT_GMAIL_REDIRECT_URI: http://127.0.0.1:49210/oauth/google/callback
+        run: |
+          set -euo pipefail
+          test -n "${KEPT_GMAIL_CLIENT_ID:-}" || { echo "Missing KEPT_GMAIL_CLIENT_ID"; exit 1; }
+          test -n "${KEPT_GMAIL_CLIENT_SECRET:-}" || { echo "Missing KEPT_GMAIL_CLIENT_SECRET"; exit 1; }
+          test -n "${KEPT_GMAIL_REDIRECT_URI:-}" || { echo "Missing KEPT_GMAIL_REDIRECT_URI"; exit 1; }
+          echo "Gmail OAuth release env present. clientIdTail=${KEPT_GMAIL_CLIENT_ID: -8} clientSecretPresent=true redirect=${KEPT_GMAIL_REDIRECT_URI}"
+
       - name: Build Kept desktop package
         env:
           KEPT_GMAIL_CLIENT_ID: ${{ vars.KEPT_GMAIL_CLIENT_ID || secrets.KEPT_GMAIL_CLIENT_ID }}
