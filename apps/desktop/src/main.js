@@ -1,5 +1,5 @@
 import { brandTokens, renderPipMark } from '/packages/ui/src/index.js';
-import { createBrowserLocalMailRepository, createJsonMailStore, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
+import { createBrowserLocalMailRepository, createJsonMailStore, flagsForTriageAction, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
 import { createProviderAdapter, disabledProvider } from '/packages/ai-core/src/index.js';
 import {
   applyLocalReadState,
@@ -20,6 +20,14 @@ import {
   getSyncedGmailThreads,
   repositoryMessagesToInboxThreads,
 } from './gmail-connect.js';
+import {
+  createTriageActionController,
+  filterArchivedInboxThreads,
+  getThreadTriageState,
+  isTriageShortcutEvent,
+  resolveTriageAction,
+  statusCopyForTriage,
+} from './triage-actions.js';
 
 const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
@@ -67,6 +75,9 @@ const state = {
     errorMessage: '',
     accountId: GMAIL_ACCOUNT_ID,
   },
+  triage: {
+    statusByThreadId: {},
+  },
 };
 
 document.documentElement.style.setProperty('--accent', brandTokens.color.accent);
@@ -81,6 +92,14 @@ window.addEventListener('keydown', (event) => {
     closeThreadReader();
     return;
   }
+  if (state.activeThreadId && isTriageShortcutEvent(event)) {
+    const intent = triageIntentForShortcut(event);
+    if (intent) {
+      event.preventDefault();
+      applyTriageToActiveThread(intent);
+      return;
+    }
+  }
   const wantsCommandSearch = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
   if (!wantsCommandSearch) return;
   event.preventDefault();
@@ -91,7 +110,9 @@ async function initializeGmailState() {
   const repository = await mailRepositoryPromise;
   const repositoryMessages = await repository.listMessages({ accountId: state.gmail.accountId });
   if (repositoryMessages.length > 0) {
-    state.gmail.threads = repositoryMessagesToInboxThreads(repositoryMessages);
+    const connector = await getOptionalGmailConnector();
+    if (connector) await retryQueuedTriageActions(repository, connector);
+    state.gmail.threads = repositoryMessagesToInboxThreads(await repository.listMessages({ accountId: state.gmail.accountId }));
     state.gmail.status = (await repository.getSyncState(state.gmail.accountId))?.status || 'connected';
   } else {
     const syncState = await mailStore.loadSyncState();
@@ -102,16 +123,16 @@ async function initializeGmailState() {
 }
 
 function renderApp() {
-  const allThreads = applyLocalReadState(combineInboxThreads(state.gmail.threads, state.threads), readStateStore.load());
+  const allThreads = applyLocalReadState(combineInboxThreads(state.gmail.threads, state.threads), readStateStore.load()).map(applyTriageStatus);
   const activeThread = state.activeThreadId ? allThreads.find((thread) => thread.id === state.activeThreadId) : null;
   if (state.activeThreadId && !activeThread) state.activeThreadId = null;
   if (activeThread) {
-    root.replaceChildren(renderThreadReader(normalizeReaderThread(activeThread)));
+    root.replaceChildren(renderThreadReader(normalizeReaderThread(activeThread), activeThread));
     wireThreadReaderControls();
     return;
   }
 
-  const visibleThreads = filterInboxThreads(allThreads, state.searchQuery);
+  const visibleThreads = filterInboxThreads(filterArchivedInboxThreads(allThreads), state.searchQuery);
   const inboxNow = newestThreadDate(visibleThreads) || newestThreadDate(allThreads) || new Date();
   const sections = getInboxSections(visibleThreads, { now: inboxNow });
   const inboxCount = allThreads.length;
@@ -189,7 +210,12 @@ function renderTopBar({ inboxCount, visibleCount, unreadCount, searchState }) {
 }
 
 function renderGmailStatus() {
-  const status = el('section', { className: `gmail-status ${state.gmail.status}`, ariaLabel: 'Gmail connection status' });
+  const status = el('section', {
+    className: `gmail-status ${state.gmail.status}`,
+    ariaLabel: 'Gmail connection status',
+    role: 'status',
+    ariaLive: 'polite',
+  });
   const copy = el('div');
   const statusCopy = gmailStatusCopy();
   copy.append(
@@ -217,7 +243,7 @@ function gmailStatusCopy() {
   if (state.gmail.status === 'oauth-pending') {
     return {
       title: 'Opening Gmail sign-in',
-      detail: 'Finish the readonly Gmail consent in your browser, then return to Kept.',
+      detail: 'Finish Gmail sign-in in your browser, then return to Kept. Mail stays local on this device.',
     };
   }
   if (state.gmail.status === 'syncing') {
@@ -241,7 +267,7 @@ function gmailStatusCopy() {
   if (state.gmail.status === 'auth-revoked') {
     return {
       title: 'Gmail access needs reconnecting',
-      detail: state.gmail.errorMessage || 'Reconnect Gmail to refresh readonly access. Existing local mail stays available.',
+      detail: state.gmail.errorMessage || 'Reconnect Gmail to keep triage syncing. Existing local mail stays available.',
     };
   }
   if (state.gmail.status === 'oauth-denied') {
@@ -253,12 +279,12 @@ function gmailStatusCopy() {
   if (state.gmail.status === 'sync-error') {
     return {
       title: 'Gmail sync did not finish',
-      detail: state.gmail.errorMessage || 'Try syncing again. Existing local mail stays available.',
+      detail: state.gmail.errorMessage || 'Try syncing again. Existing local mail stays available and triage will queue safely.',
     };
   }
   return {
     title: 'Real mail only — no demo inbox loaded',
-    detail: 'Connect Gmail for readonly local sync, or import a Gmail Takeout mbox fallback.',
+    detail: 'Connect Gmail for local sync, or import a Gmail Takeout mbox fallback. No mock inbox is loaded.',
   };
 }
 
@@ -280,7 +306,7 @@ function emptyStateCopy() {
     return {
       eyebrow: 'Browser sign-in',
       title: 'Finish Gmail in your browser.',
-      body: 'Kept opened the readonly consent flow. Return here once Gmail approval is complete.',
+      body: 'Kept opened Gmail sign-in. Return here once approval is complete and Kept will keep mail local on this device.',
       actionLabel: '',
       help: 'Prefer no OAuth? You can still skip this and use the mbox fallback above for a local Gmail Takeout import.',
     };
@@ -307,7 +333,7 @@ function emptyStateCopy() {
     return {
       eyebrow: state.gmail.status === 'auth-revoked' ? 'Reconnect needed' : 'Sign-in interrupted',
       title: state.gmail.status === 'auth-revoked' ? 'Gmail access expired.' : 'Gmail did not connect yet.',
-      body: state.gmail.status === 'auth-revoked' ? 'Reconnect Gmail to refresh readonly access. Existing local mail stays available.' : 'Nothing synced locally. Try Gmail again, or use the local mbox fallback if you would rather import manually.',
+      body: state.gmail.status === 'auth-revoked' ? 'Reconnect Gmail to keep triage syncing. Existing local mail stays available.' : 'Nothing synced locally yet. Try Gmail again, or use the local mbox fallback if you would rather import manually.',
       actionLabel: 'Connect Gmail',
       help: 'The mbox fallback above still gives you a local Gmail Takeout import path without OAuth.',
     };
@@ -399,26 +425,71 @@ function renderThreadSection(section) {
 }
 
 function renderThreadRow(thread, sectionId) {
-  const row = el('button', {
-    type: 'button',
-    className: `thread-row${thread.isUnread ? ' unread' : ''}${sectionId === 'priority' ? ' priority' : ''}`,
-    ariaLabel: `${thread.sender}, ${thread.subject}, ${formatTime(thread.receivedAt)}. Open thread`,
+  const triage = getThreadTriageState(thread);
+  const status = state.triage.statusByThreadId[thread.id];
+  const row = el('article', {
+    className: `thread-row${triage.read ? '' : ' unread'}${triage.starred ? ' starred' : ''}${sectionId === 'priority' ? ' priority' : ''}`,
+    ariaLabel: `${thread.sender}, ${thread.subject}, ${formatTime(thread.receivedAt)}`,
   });
   row.id = rowIdForThread(thread.id);
   row.dataset.threadId = thread.id;
 
-  row.append(
+  const open = el('button', {
+    type: 'button',
+    className: 'thread-open-button',
+    ariaLabel: `${thread.sender}, ${thread.subject}, ${formatTime(thread.receivedAt)}. Open thread`,
+  });
+  open.setAttribute('data-thread-open', 'true');
+  open.append(
     el('span', { className: 'unread-dot', ariaHidden: 'true' }),
     renderAvatar(thread),
     el('strong', { className: 'sender-name', text: thread.sender }),
     el('span', { className: 'subject', text: thread.subject }),
     el('span', { className: 'snippet', text: thread.snippet || '' }),
+    status ? renderTriageStatus(status, { inline: true }) : null,
     el('time', { className: 'time', text: formatTime(thread.receivedAt), dateTime: thread.receivedAt }),
   );
+
+  row.append(open, renderThreadTriageControls(thread));
   return row;
 }
 
-function renderThreadReader(reader) {
+function renderThreadTriageControls(thread) {
+  const triage = getThreadTriageState(thread);
+  const actions = el('div', { className: 'triage-actions', ariaLabel: `Actions for ${thread.sender}: ${thread.subject}` });
+  actions.append(
+    triageButton('archive', 'Archive', 'Archive message'),
+    triageButton('read-toggle', triage.read ? 'Unread' : 'Read', triage.read ? 'Mark unread' : 'Mark read'),
+    triageButton('star-toggle', triage.starred ? 'Starred' : 'Star', triage.starred ? 'Remove star' : 'Star message', triage.starred),
+  );
+  return actions;
+}
+
+function renderReaderTriageBar(thread) {
+  const bar = el('section', { className: 'reader-triage-bar', ariaLabel: `Triage thread: ${thread.subject || 'message'}` });
+  bar.append(renderThreadTriageControls(thread));
+  const status = state.triage.statusByThreadId[thread.id];
+  if (status) bar.append(renderTriageStatus(status));
+  return bar;
+}
+
+function renderTriageStatus(status, { inline = false } = {}) {
+  return el('span', {
+    className: `triage-status${inline ? ' triage-status-inline' : ''}`,
+    text: statusCopyForTriage(status),
+    role: 'status',
+    ariaLive: 'polite',
+  });
+}
+
+function triageButton(intent, label, ariaLabel, pressed = false) {
+  const button = el('button', { type: 'button', className: `triage-action ${intent}`, text: label, ariaLabel });
+  button.setAttribute('data-triage-intent', intent);
+  if (pressed) button.setAttribute('aria-pressed', 'true');
+  return button;
+}
+
+function renderThreadReader(reader, sourceThread = null) {
   const shell = el('main', { className: 'shell reader-shell', ariaLabel: 'Kept thread reader' });
   const surface = el('article', { className: 'reader-surface' });
   const header = el('header', { className: 'reader-header' });
@@ -430,7 +501,7 @@ function renderThreadReader(reader) {
     const gmailLink = el('a', { className: 'secondary-mail-action reader-gmail-link', text: 'Open in Gmail', href: reader.gmailUrl, target: '_blank', rel: 'noreferrer' });
     header.append(gmailLink);
   }
-  surface.append(header, renderReaderMeta(reader), renderReaderSummaryPanel(reader));
+  surface.append(header, renderReaderTriageBar(sourceThread || reader), renderReaderMeta(reader), renderReaderSummaryPanel(reader));
   reader.messages.forEach((message) => surface.append(renderReaderMessage(message)));
   shell.append(surface);
   return shell;
@@ -573,21 +644,124 @@ function wireSearchControl() {
 }
 
 function wireThreadRows() {
-  document.querySelectorAll('[data-thread-id]').forEach((row) => {
-    row.addEventListener('click', () => openThreadReader(row.dataset.threadId, row.id));
-    row.addEventListener('keydown', (event) => {
+  document.querySelectorAll('[data-triage-intent]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const threadId = button.closest('[data-thread-id]')?.dataset.threadId || state.activeThreadId;
+      applyTriageToThread(threadId, button.getAttribute('data-triage-intent'));
+    });
+  });
+  document.querySelectorAll('[data-thread-open]').forEach((open) => {
+    const row = open.closest('[data-thread-id]');
+    open.addEventListener('click', () => openThreadReader(row?.dataset.threadId, row?.id));
+    open.addEventListener('keydown', (event) => {
+      if (isTriageShortcutEvent(event)) {
+        const intent = triageIntentForShortcut(event);
+        if (intent) {
+          event.preventDefault();
+          applyTriageToThread(row?.dataset.threadId, intent);
+          return;
+        }
+      }
       if (!isThreadOpenKey(event)) return;
       event.preventDefault();
-      openThreadReader(row.dataset.threadId, row.id);
+      openThreadReader(row?.dataset.threadId, row?.id);
     });
   });
 }
 
 function wireThreadReaderControls() {
   document.querySelector('#reader-back')?.addEventListener('click', closeThreadReader);
+  document.querySelectorAll('[data-triage-intent]').forEach((button) => {
+    button.addEventListener('click', () => applyTriageToActiveThread(button.getAttribute('data-triage-intent')));
+  });
   document.querySelector('#summarize-thread')?.addEventListener('click', requestThreadSummary);
   document.querySelector('#approve-summary')?.addEventListener('click', approveThreadSummary);
   document.querySelector('#cancel-summary')?.addEventListener('click', cancelThreadSummary);
+}
+
+async function applyTriageToActiveThread(intent) {
+  if (!state.activeThreadId) return;
+  await applyTriageToThread(state.activeThreadId, intent);
+}
+
+async function applyTriageToThread(threadId, intent) {
+  if (!threadId || !intent) return;
+  const thread = currentThreads().find((candidate) => candidate.id === threadId);
+  if (!thread) return;
+  const action = resolveTriageAction(thread, intent);
+  const desiredFlags = flagsForTriageAction(action);
+  updateThreadFlags(threadId, desiredFlags);
+  state.triage.statusByThreadId[threadId] = thread.providerMessageId ? 'queued' : 'saved-locally';
+  if (desiredFlags.archived) state.activeThreadId = null;
+  renderApp();
+
+  try {
+    const repository = await mailRepositoryPromise;
+    const connector = thread.providerMessageId ? await getOptionalGmailConnector() : null;
+    const controller = createTriageActionController({ repository, connector, accountId: state.gmail.accountId });
+    const result = await controller.applyThreadAction({ ...thread, flags: { ...getThreadTriageState(thread), ...desiredFlags } }, action);
+    updateThreadFlags(threadId, desiredFlags);
+    state.triage.statusByThreadId[threadId] = result.status;
+  } catch (error) {
+    state.triage.statusByThreadId[threadId] = thread.providerMessageId ? 'queued' : 'saved-locally';
+  }
+  renderApp();
+}
+
+function currentThreads() {
+  return applyLocalReadState(combineInboxThreads(state.gmail.threads, state.threads), readStateStore.load()).map(applyTriageStatus);
+}
+
+function updateThreadFlags(threadId, desiredFlags) {
+  state.gmail.threads = state.gmail.threads.map((thread) => applyFlagsToThread(thread, threadId, desiredFlags));
+  state.threads = state.threads.map((thread) => applyFlagsToThread(thread, threadId, desiredFlags));
+  saveLocalImport();
+}
+
+function applyFlagsToThread(thread, threadId, desiredFlags) {
+  if (thread.id !== threadId) return thread;
+  const flags = { ...getThreadTriageState(thread), ...desiredFlags };
+  return applyTriageStatus({ ...thread, flags });
+}
+
+function applyTriageStatus(thread) {
+  const triage = getThreadTriageState(thread);
+  return {
+    ...thread,
+    flags: { ...triage },
+    isUnread: !triage.read,
+    isPriority: triage.starred,
+    isStarred: triage.starred,
+    isArchived: triage.archived,
+  };
+}
+
+function triageIntentForShortcut(event) {
+  const key = event?.key === 'Enter' ? 'Enter' : String(event?.key || '').toLowerCase();
+  if (key === 'e') return 'archive';
+  if (key === 'u') return 'read-toggle';
+  if (key === 's') return 'star-toggle';
+  return '';
+}
+
+async function getOptionalGmailConnector() {
+  try {
+    return await getGmailConnector();
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function retryQueuedTriageActions(repository, connector) {
+  if (!repository || !connector?.applyTriageAction) return [];
+  const controller = createTriageActionController({ repository, connector, accountId: state.gmail.accountId });
+  const results = await controller.retryQueuedActions();
+  results.forEach((entry) => {
+    if (entry.threadId) state.triage.statusByThreadId[entry.threadId] = entry.status;
+  });
+  return results;
 }
 
 function createThreadSummaryController() {
@@ -686,6 +860,7 @@ async function syncGmail() {
   try {
     const connector = await getGmailConnector();
     const repository = await mailRepositoryPromise;
+    await retryQueuedTriageActions(repository, connector);
     const result = await syncGmailInbox({ connector, accountId: state.gmail.accountId, repository, mailStore, maxResults: 25 });
     const repositoryMessages = await repository.listMessages({ accountId: state.gmail.accountId });
     state.gmail.threads = repositoryMessagesToInboxThreads(repositoryMessages).map(toPersistedThread);
@@ -819,6 +994,7 @@ function el(tagName, options = {}) {
     if (key === 'text') node.textContent = value;
     else if (key === 'className') node.className = value;
     else if (key === 'ariaLabel') node.setAttribute('aria-label', value);
+    else if (key === 'ariaLive') node.setAttribute('aria-live', value);
     else if (key === 'ariaHidden') node.setAttribute('aria-hidden', String(value));
     else if (key === 'dateTime') node.setAttribute('datetime', value);
     else if (key === 'dataImportMbox') node.setAttribute('data-import-mbox', 'true');

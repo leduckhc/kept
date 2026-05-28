@@ -455,7 +455,7 @@ kbd {
   width: 100%;
   min-width: 0;
   min-height: 44px;
-  gap: 11px;
+  gap: 8px;
   padding: 5px 10px;
   border: 1px solid rgba(232, 227, 244, 0.92);
   border-radius: 17px;
@@ -463,6 +463,22 @@ kbd {
   color: var(--ink);
   text-align: left;
   box-shadow: 0 7px 22px rgba(68, 49, 113, 0.035);
+}
+
+.thread-open-button {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 11px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .thread-row.priority {
@@ -522,9 +538,20 @@ kbd {
   white-space: nowrap;
 }
 
-.row-actions {
-  position: absolute;
-  right: 8px;
+.triage-status-inline {
+  flex: none;
+  margin-left: auto;
+  padding: 4px 9px;
+  border: 1px solid rgba(232, 227, 244, 0.94);
+  border-radius: 999px;
+  background: rgba(247, 244, 255, 0.72);
+}
+
+.triage-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: none;
   gap: 6px;
   opacity: 0;
   transform: translateX(4px);
@@ -532,16 +559,55 @@ kbd {
   transition: opacity 140ms ease, transform 140ms ease;
 }
 
-.thread-row:hover .row-actions,
-.thread-row:focus-within .row-actions {
+.thread-row:hover .triage-actions,
+.thread-row:focus-within .triage-actions,
+.reader-triage-bar .triage-actions {
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
 }
 
-.thread-row:hover .time,
-.thread-row:focus-within .time {
-  opacity: 0;
+.triage-action {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(232, 227, 244, 0.96);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.triage-action:hover,
+.triage-action:focus-visible,
+.triage-action[aria-pressed='true'] {
+  color: var(--ink);
+  border-color: rgba(124, 92, 255, 0.28);
+  background: rgba(247, 244, 255, 0.96);
+}
+
+.triage-action.archive {
+  color: #8a839b;
+}
+
+.reader-triage-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 18px;
+  padding: 10px 12px;
+  border: 1px solid rgba(232, 227, 244, 0.92);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.triage-status {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
 }
 
 .empty-row {
@@ -796,6 +862,11 @@ kbd {
     flex-wrap: nowrap;
   }
 
+  .thread-open-button {
+    gap: 8px;
+    min-height: 44px;
+  }
+
   .thread-row .avatar {
     width: 30px;
     height: 30px;
@@ -823,12 +894,60 @@ kbd {
     font-size: 11px;
   }
 
-  .row-actions {
+  .triage-status-inline {
     display: none;
+  }
+
+  .triage-actions {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .triage-action {
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  .triage-action.read-toggle {
+    order: 1;
+  }
+
+  .triage-action.star-toggle {
+    order: 2;
+  }
+
+  .triage-action.archive {
+    order: 3;
   }
 
   .thread-row:hover .time,
   .thread-row:focus-within .time {
     opacity: 1;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .triage-actions {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .triage-action {
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  .triage-action.read-toggle {
+    order: 1;
+  }
+
+  .triage-action.star-toggle {
+    order: 2;
+  }
+
+  .triage-action.archive {
+    order: 3;
   }
 }
