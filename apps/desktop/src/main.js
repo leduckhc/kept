@@ -210,7 +210,12 @@ function renderTopBar({ inboxCount, visibleCount, unreadCount, searchState }) {
 }
 
 function renderGmailStatus() {
-  const status = el('section', { className: `gmail-status ${state.gmail.status}`, ariaLabel: 'Gmail connection status' });
+  const status = el('section', {
+    className: `gmail-status ${state.gmail.status}`,
+    ariaLabel: 'Gmail connection status',
+    role: 'status',
+    ariaLive: 'polite',
+  });
   const copy = el('div');
   const statusCopy = gmailStatusCopy();
   copy.append(
@@ -238,7 +243,7 @@ function gmailStatusCopy() {
   if (state.gmail.status === 'oauth-pending') {
     return {
       title: 'Opening Gmail sign-in',
-      detail: 'Finish the readonly Gmail consent in your browser, then return to Kept.',
+      detail: 'Finish Gmail sign-in in your browser, then return to Kept. Mail stays local on this device.',
     };
   }
   if (state.gmail.status === 'syncing') {
@@ -262,7 +267,7 @@ function gmailStatusCopy() {
   if (state.gmail.status === 'auth-revoked') {
     return {
       title: 'Gmail access needs reconnecting',
-      detail: state.gmail.errorMessage || 'Reconnect Gmail to refresh readonly access. Existing local mail stays available.',
+      detail: state.gmail.errorMessage || 'Reconnect Gmail to keep triage syncing. Existing local mail stays available.',
     };
   }
   if (state.gmail.status === 'oauth-denied') {
@@ -274,12 +279,12 @@ function gmailStatusCopy() {
   if (state.gmail.status === 'sync-error') {
     return {
       title: 'Gmail sync did not finish',
-      detail: state.gmail.errorMessage || 'Try syncing again. Existing local mail stays available.',
+      detail: state.gmail.errorMessage || 'Try syncing again. Existing local mail stays available and triage will queue safely.',
     };
   }
   return {
     title: 'Real mail only — no demo inbox loaded',
-    detail: 'Connect Gmail for readonly local sync, or import a Gmail Takeout mbox fallback.',
+    detail: 'Connect Gmail for local sync, or import a Gmail Takeout mbox fallback. No mock inbox is loaded.',
   };
 }
 
@@ -301,7 +306,7 @@ function emptyStateCopy() {
     return {
       eyebrow: 'Browser sign-in',
       title: 'Finish Gmail in your browser.',
-      body: 'Kept opened the readonly consent flow. Return here once Gmail approval is complete.',
+      body: 'Kept opened Gmail sign-in. Return here once approval is complete and Kept will keep mail local on this device.',
       actionLabel: '',
       help: 'Prefer no OAuth? You can still skip this and use the mbox fallback above for a local Gmail Takeout import.',
     };
@@ -328,7 +333,7 @@ function emptyStateCopy() {
     return {
       eyebrow: state.gmail.status === 'auth-revoked' ? 'Reconnect needed' : 'Sign-in interrupted',
       title: state.gmail.status === 'auth-revoked' ? 'Gmail access expired.' : 'Gmail did not connect yet.',
-      body: state.gmail.status === 'auth-revoked' ? 'Reconnect Gmail to refresh readonly access. Existing local mail stays available.' : 'Nothing synced locally. Try Gmail again, or use the local mbox fallback if you would rather import manually.',
+      body: state.gmail.status === 'auth-revoked' ? 'Reconnect Gmail to keep triage syncing. Existing local mail stays available.' : 'Nothing synced locally yet. Try Gmail again, or use the local mbox fallback if you would rather import manually.',
       actionLabel: 'Connect Gmail',
       help: 'The mbox fallback above still gives you a local Gmail Takeout import path without OAuth.',
     };
@@ -421,6 +426,7 @@ function renderThreadSection(section) {
 
 function renderThreadRow(thread, sectionId) {
   const triage = getThreadTriageState(thread);
+  const status = state.triage.statusByThreadId[thread.id];
   const row = el('article', {
     className: `thread-row${triage.read ? '' : ' unread'}${triage.starred ? ' starred' : ''}${sectionId === 'priority' ? ' priority' : ''}`,
     ariaLabel: `${thread.sender}, ${thread.subject}, ${formatTime(thread.receivedAt)}`,
@@ -440,6 +446,7 @@ function renderThreadRow(thread, sectionId) {
     el('strong', { className: 'sender-name', text: thread.sender }),
     el('span', { className: 'subject', text: thread.subject }),
     el('span', { className: 'snippet', text: thread.snippet || '' }),
+    status ? renderTriageStatus(status, { inline: true }) : null,
     el('time', { className: 'time', text: formatTime(thread.receivedAt), dateTime: thread.receivedAt }),
   );
 
@@ -449,7 +456,7 @@ function renderThreadRow(thread, sectionId) {
 
 function renderThreadTriageControls(thread) {
   const triage = getThreadTriageState(thread);
-  const actions = el('div', { className: 'triage-actions', ariaLabel: 'Message actions' });
+  const actions = el('div', { className: 'triage-actions', ariaLabel: `Actions for ${thread.sender}: ${thread.subject}` });
   actions.append(
     triageButton('archive', 'Archive', 'Archive message'),
     triageButton('read-toggle', triage.read ? 'Unread' : 'Read', triage.read ? 'Mark unread' : 'Mark read'),
@@ -459,11 +466,20 @@ function renderThreadTriageControls(thread) {
 }
 
 function renderReaderTriageBar(thread) {
-  const bar = el('section', { className: 'reader-triage-bar', ariaLabel: 'Triage this thread' });
+  const bar = el('section', { className: 'reader-triage-bar', ariaLabel: `Triage thread: ${thread.subject || 'message'}` });
   bar.append(renderThreadTriageControls(thread));
   const status = state.triage.statusByThreadId[thread.id];
-  if (status) bar.append(el('span', { className: 'triage-status', text: statusCopyForTriage(status) }));
+  if (status) bar.append(renderTriageStatus(status));
   return bar;
+}
+
+function renderTriageStatus(status, { inline = false } = {}) {
+  return el('span', {
+    className: `triage-status${inline ? ' triage-status-inline' : ''}`,
+    text: statusCopyForTriage(status),
+    role: 'status',
+    ariaLive: 'polite',
+  });
 }
 
 function triageButton(intent, label, ariaLabel, pressed = false) {
@@ -978,6 +994,7 @@ function el(tagName, options = {}) {
     if (key === 'text') node.textContent = value;
     else if (key === 'className') node.className = value;
     else if (key === 'ariaLabel') node.setAttribute('aria-label', value);
+    else if (key === 'ariaLive') node.setAttribute('aria-live', value);
     else if (key === 'ariaHidden') node.setAttribute('aria-hidden', String(value));
     else if (key === 'dateTime') node.setAttribute('datetime', value);
     else if (key === 'dataImportMbox') node.setAttribute('data-import-mbox', 'true');

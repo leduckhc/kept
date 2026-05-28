@@ -538,6 +538,15 @@ kbd {
   white-space: nowrap;
 }
 
+.triage-status-inline {
+  flex: none;
+  margin-left: auto;
+  padding: 4px 9px;
+  border: 1px solid rgba(232, 227, 244, 0.94);
+  border-radius: 999px;
+  background: rgba(247, 244, 255, 0.72);
+}
+
 .triage-actions {
   display: inline-flex;
   align-items: center;
@@ -577,6 +586,10 @@ kbd {
   color: var(--ink);
   border-color: rgba(124, 92, 255, 0.28);
   background: rgba(247, 244, 255, 0.96);
+}
+
+.triage-action.archive {
+  color: #8a839b;
 }
 
 .reader-triage-bar {
@@ -881,6 +894,10 @@ kbd {
     font-size: 11px;
   }
 
+  .triage-status-inline {
+    display: none;
+  }
+
   .triage-actions {
     opacity: 1;
     transform: none;
@@ -892,8 +909,45 @@ kbd {
     padding: 0 12px;
   }
 
+  .triage-action.read-toggle {
+    order: 1;
+  }
+
+  .triage-action.star-toggle {
+    order: 2;
+  }
+
+  .triage-action.archive {
+    order: 3;
+  }
+
   .thread-row:hover .time,
   .thread-row:focus-within .time {
     opacity: 1;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .triage-actions {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .triage-action {
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  .triage-action.read-toggle {
+    order: 1;
+  }
+
+  .triage-action.star-toggle {
+    order: 2;
+  }
+
+  .triage-action.archive {
+    order: 3;
   }
 }
