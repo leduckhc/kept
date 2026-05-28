@@ -302,3 +302,128 @@ function formatBytes(byteSize) {
   const mb = kb / 1024;
   return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`;
 }
+
+// ---- Sender trust store ----
+
+const TRUST_STORE_VERSION = 1;
+
+/**
+ * createSenderTrustStore — localStorage-backed trust/ban store.
+ *
+ * trusted and banned are Sets of normalised (lowercase-trimmed) email addresses.
+ *
+ * Initialise with initFromExistingSenders(emails) on first app load so that
+ * all already-seen senders are auto-trusted (no flood of trust cards for existing mail).
+ */
+export function createSenderTrustStore(storage, key = 'kept.senderTrust.v1') {
+  function _normalise(email) {
+    return String(email || '').toLowerCase().trim();
+  }
+
+  function _load() {
+    try {
+      const raw = JSON.parse(storage.getItem(key) || 'null');
+      if (!raw || raw.version !== TRUST_STORE_VERSION) return { trusted: new Set(), banned: new Set() };
+      return {
+        trusted: new Set(Array.isArray(raw.trusted) ? raw.trusted : []),
+        banned: new Set(Array.isArray(raw.banned) ? raw.banned : []),
+      };
+    } catch (_err) {
+      return { trusted: new Set(), banned: new Set() };
+    }
+  }
+
+  function _save({ trusted, banned }) {
+    storage.setItem(key, JSON.stringify({
+      version: TRUST_STORE_VERSION,
+      trusted: Array.from(trusted),
+      banned: Array.from(banned),
+    }));
+  }
+
+  return {
+    /**
+     * Silently trust all provided email addresses that are not already
+     * in the store. Call once on first app load with existing sender emails.
+     */
+    initFromExistingSenders(emails = []) {
+      const { trusted, banned } = _load();
+      let changed = false;
+      for (const email of emails) {
+        const norm = _normalise(email);
+        if (!norm) continue;
+        if (!trusted.has(norm) && !banned.has(norm)) {
+          trusted.add(norm);
+          changed = true;
+        }
+      }
+      if (changed) _save({ trusted, banned });
+    },
+
+    trust(email) {
+      const norm = _normalise(email);
+      if (!norm) return;
+      const { trusted, banned } = _load();
+      banned.delete(norm);
+      trusted.add(norm);
+      _save({ trusted, banned });
+    },
+
+    ban(email) {
+      const norm = _normalise(email);
+      if (!norm) return;
+      const { trusted, banned } = _load();
+      trusted.delete(norm);
+      banned.add(norm);
+      _save({ trusted, banned });
+    },
+
+    isTrusted(email) {
+      const norm = _normalise(email);
+      return norm ? _load().trusted.has(norm) : false;
+    },
+
+    isBanned(email) {
+      const norm = _normalise(email);
+      return norm ? _load().banned.has(norm) : false;
+    },
+
+    /** A sender is "new" if not trusted and not banned. */
+    isNew(email) {
+      const norm = _normalise(email);
+      if (!norm) return false;
+      const { trusted, banned } = _load();
+      return !trusted.has(norm) && !banned.has(norm);
+    },
+  };
+}
+
+export function createMemorySenderTrustStore(initialState = { trusted: [], banned: [] }) {
+  const fakeStorage = createMemoryStorageForTrust(initialState);
+  return createSenderTrustStore(fakeStorage);
+}
+
+function createMemoryStorageForTrust(initialState) {
+  const stored = {
+    'kept.senderTrust.v1': JSON.stringify({
+      version: 1,
+      trusted: initialState.trusted || [],
+      banned: initialState.banned || [],
+    }),
+  };
+  return {
+    getItem(k) { return stored[k] ?? null; },
+    setItem(k, v) { stored[k] = v; },
+  };
+}
+
+/**
+ * Filter threads from banned senders out of any inbox view.
+ */
+export function filterBannedSenderThreads(threads = [], trustStore) {
+  if (!trustStore) return threads;
+  return threads.filter((thread) => {
+    const email = String(thread.senderEmail || thread.sender || '').toLowerCase().trim();
+    return !trustStore.isBanned(email);
+  });
+}

@@ -1240,3 +1240,107 @@ kbd {
   .triage-action.star-toggle  { order: 2; }
   .triage-action.archive      { order: 3; }
 }
+
+/* ---- Sender trust card (thread reader) ---- */
+.sender-trust-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  background: #ffffff;
+  border: 1px solid var(--border-shadow, rgba(0,0,0,0.08));
+  box-shadow: var(--border-shadow);
+  border-radius: 10px;
+  transition: opacity 0.2s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sender-trust-card {
+    background: var(--bg-surface);
+    border-color: var(--border-subtle, rgba(255,255,255,0.05));
+    box-shadow: none;
+  }
+}
+
+.sender-trust-card--dismissed {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sender-trust-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sender-trust-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.sender-trust-identity strong {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sender-trust-email {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sender-trust-subtext {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.sender-trust-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sender-trust-accept {
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sender-trust-accept {
+    color: var(--bg, #08090a);
+  }
+}
+
+.sender-trust-accept:hover {
+  opacity: 0.88;
+}
+
+.sender-trust-ban {
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-line, #ebebeb);
+}
+
+.sender-trust-ban:hover {
+  background: var(--accent-soft);
+}

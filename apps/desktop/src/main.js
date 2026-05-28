@@ -4,7 +4,9 @@ import { createProviderAdapter, disabledProvider } from '/packages/ai-core/src/i
 import {
   applyLocalReadState,
   createLocalReadStateStore,
+  createSenderTrustStore,
   createThreadSummaryActionController,
+  filterBannedSenderThreads,
   formatAttachmentMeta,
   hasRemoteImages,
   isThreadOpenKey,
@@ -35,6 +37,7 @@ import {
 const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
 const READ_STATE_KEY = 'kept.localThreadReadState.v1';
+const TRUST_STORE_KEY = 'kept.senderTrust.v1';
 const root = document.querySelector('#root');
 const gmailAdapter = window.__KEPT_GMAIL_CONNECT__ || null;
 const aiRuntime = window.__KEPT_AI__ || {};
@@ -45,6 +48,7 @@ const mailRepositoryPromise = createBrowserLocalMailRepository({
   key: 'kept.localMailRepository.v1',
 });
 const readStateStore = createLocalReadStateStore(localStorage, READ_STATE_KEY);
+const senderTrustStore = createSenderTrustStore(localStorage, TRUST_STORE_KEY);
 const aiAuditStore = {
   async recordAiAudit(entry) {
     const repository = await mailRepositoryPromise;
@@ -89,6 +93,18 @@ const state = {
 // CSS custom properties are now owned by styles.css (dual-theme token system).
 // brandTokens.color.accent is no longer injected inline so that the
 // prefers-color-scheme media query can control --accent per theme.
+
+// Auto-trust all senders that already existed before the trust store was
+// introduced — but only on the very first run (flag ensures one-time only).
+const _TRUST_INIT_FLAG = 'kept.senderTrust.initialized.v1';
+if (!localStorage.getItem(_TRUST_INIT_FLAG)) {
+  const _existingSenderEmails = state.threads
+    .map((t) => t.senderEmail || t.sender)
+    .filter(Boolean);
+  senderTrustStore.initFromExistingSenders(_existingSenderEmails);
+  localStorage.setItem(_TRUST_INIT_FLAG, '1');
+}
+
 renderApp();
 initializeGmailState();
 
@@ -133,6 +149,13 @@ async function initializeGmailState() {
     state.gmail.threads = getSyncedGmailThreads(syncState, { accountId: state.gmail.accountId });
     state.gmail.status = getGmailSyncStatus(syncState, { accountId: state.gmail.accountId });
   }
+  // Auto-trust gmail senders that existed before the trust store was introduced
+  // — same one-time-only guard as the local threads init above.
+  if (!localStorage.getItem(_TRUST_INIT_FLAG)) {
+    const gmailSenderEmails = state.gmail.threads.map((t) => t.senderEmail || t.sender).filter(Boolean);
+    senderTrustStore.initFromExistingSenders(gmailSenderEmails);
+    localStorage.setItem(_TRUST_INIT_FLAG, '1');
+  }
   renderApp();
 }
 
@@ -145,11 +168,16 @@ function hasActiveGmailMutation(initialEpoch) {
 }
 
 function renderApp() {
-  const allThreads = applyLocalReadState(combineInboxThreads(state.gmail.threads, state.threads), readStateStore.load()).map(applyTriageStatus);
+  const allThreads = filterBannedSenderThreads(
+    applyLocalReadState(combineInboxThreads(state.gmail.threads, state.threads), readStateStore.load()).map(applyTriageStatus),
+    senderTrustStore,
+  );
   const activeThread = state.activeThreadId ? allThreads.find((thread) => thread.id === state.activeThreadId) : null;
   if (state.activeThreadId && !activeThread) state.activeThreadId = null;
   if (activeThread) {
-    root.replaceChildren(renderThreadReader(normalizeReaderThread(activeThread), activeThread, { wasUnread: state.lastOpenedWasUnread }));
+    const senderEmail = String(activeThread.senderEmail || activeThread.sender || '').toLowerCase().trim();
+    const isSenderNew = senderTrustStore.isNew(senderEmail);
+    root.replaceChildren(renderThreadReader(normalizeReaderThread(activeThread), activeThread, { wasUnread: state.lastOpenedWasUnread, isSenderNew, senderEmail }));
     wireThreadReaderControls();
     return;
   }
@@ -512,7 +540,7 @@ function triageButton(intent, label, ariaLabel, pressed = false) {
   return button;
 }
 
-function renderThreadReader(reader, sourceThread = null, { wasUnread = false } = {}) {
+function renderThreadReader(reader, sourceThread = null, { wasUnread = false, isSenderNew = false, senderEmail = '' } = {}) {
   const shell = el('main', { className: 'shell reader-shell', ariaLabel: 'Kept thread reader' });
   const surface = el('article', { className: 'reader-surface' });
   const header = el('header', { className: 'reader-header' });
@@ -528,10 +556,35 @@ function renderThreadReader(reader, sourceThread = null, { wasUnread = false } =
     const chip = el('div', { className: 'reader-marked-read-chip', role: 'status', ariaLive: 'polite', text: 'Marked read' });
     surface.append(chip);
   }
+  if (isSenderNew && senderEmail) {
+    surface.append(renderSenderTrustCard(reader, senderEmail));
+  }
   surface.append(header, renderReaderTriageBar(sourceThread || reader), renderReaderMeta(reader), renderReaderSummaryPanel(reader));
   reader.messages.forEach((message) => surface.append(renderReaderMessage(message)));
   shell.append(surface);
   return shell;
+}
+
+function renderSenderTrustCard(reader, senderEmail) {
+  const card = el('div', { className: 'sender-trust-card', role: 'region', ariaLabel: 'New sender' });
+  const info = el('div', { className: 'sender-trust-info' });
+  const identity = el('div', { className: 'sender-trust-identity' });
+  identity.append(
+    el('strong', { text: reader.sender.name || reader.sender.label || senderEmail }),
+    el('span', { className: 'sender-trust-email', text: senderEmail }),
+  );
+  info.append(renderAvatar(reader.sender), identity);
+  const subtext = el('p', { className: 'sender-trust-subtext', text: 'First message from this sender' });
+  const actions = el('div', { className: 'sender-trust-actions' });
+  const acceptBtn = el('button', { type: 'button', className: 'sender-trust-accept', text: 'Accept', ariaLabel: `Accept ${senderEmail}` });
+  const banBtn = el('button', { type: 'button', className: 'sender-trust-ban', text: 'Ban', ariaLabel: `Ban ${senderEmail}` });
+  acceptBtn.setAttribute('data-trust-action', 'accept');
+  acceptBtn.setAttribute('data-trust-email', senderEmail);
+  banBtn.setAttribute('data-trust-action', 'ban');
+  banBtn.setAttribute('data-trust-email', senderEmail);
+  actions.append(acceptBtn, banBtn);
+  card.append(info, subtext, actions);
+  return card;
 }
 
 function renderReaderTitle(reader) {
@@ -732,6 +785,27 @@ function wireThreadReaderControls() {
       if (messageId) {
         state.imagePermissionByMessageId[messageId] = true;
         renderApp();
+      }
+    });
+  });
+  document.querySelectorAll('[data-trust-action]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const action = btn.getAttribute('data-trust-action');
+      const email = btn.getAttribute('data-trust-email');
+      if (!email) return;
+      const card = btn.closest('.sender-trust-card');
+      if (card) {
+        card.classList.add('sender-trust-card--dismissed');
+      }
+      if (action === 'accept') {
+        senderTrustStore.trust(email);
+        setTimeout(() => renderApp(), 220);
+      } else if (action === 'ban') {
+        senderTrustStore.ban(email);
+        setTimeout(() => {
+          state.activeThreadId = null;
+          renderApp();
+        }, 220);
       }
     });
   });
