@@ -534,7 +534,7 @@ function renderThreadRow(thread, sectionId) {
     el('strong', { className: 'sender-name', text: thread.sender }),
     el('span', { className: 'subject', text: thread.subject }),
     el('span', { className: 'snippet', text: thread.snippet || '' }),
-    status ? renderTriageStatus(status, { inline: true }) : null,
+    ...(status ? [renderTriageStatus(status, { inline: true })] : []),
     el('time', { className: 'time', text: formatTime(thread.receivedAt), dateTime: thread.receivedAt }),
   );
 
