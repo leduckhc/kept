@@ -213,7 +213,36 @@ export function getInboxSections(threads, { now = new Date() } = {}) {
 }
 
 export const gmailMinimalScopes = ['https://www.googleapis.com/auth/gmail.readonly'];
+export const gmailModifyScopes = ['https://www.googleapis.com/auth/gmail.modify'];
+export const gmailTriageActionTypes = Object.freeze(['archive', 'mark-read', 'mark-unread', 'star', 'unstar']);
+export const gmailTriageActionStatuses = Object.freeze(['queued', 'syncing', 'synced', 'error', 'needs-reconnect']);
 export const gmailOAuthTokenKeyPrefix = 'kept.gmail.oauth';
+
+export function buildGmailScopes({ enableModify = false } = {}) {
+  return enableModify ? [...gmailMinimalScopes, ...gmailModifyScopes] : [...gmailMinimalScopes];
+}
+
+export function gmailTriageActionToModifyPayload(action) {
+  switch (action) {
+    case 'archive': return { addLabelIds: [], removeLabelIds: ['INBOX'] };
+    case 'mark-read': return { addLabelIds: [], removeLabelIds: ['UNREAD'] };
+    case 'mark-unread': return { addLabelIds: ['UNREAD'], removeLabelIds: [] };
+    case 'star': return { addLabelIds: ['STARRED'], removeLabelIds: [] };
+    case 'unstar': return { addLabelIds: [], removeLabelIds: ['STARRED'] };
+    default: throw new Error(`Unsupported Gmail triage action: ${action}`);
+  }
+}
+
+export function flagsForTriageAction(action) {
+  switch (action) {
+    case 'archive': return { archived: true };
+    case 'mark-read': return { read: true };
+    case 'mark-unread': return { read: false };
+    case 'star': return { starred: true };
+    case 'unstar': return { starred: false };
+    default: throw new Error(`Unsupported Gmail triage action: ${action}`);
+  }
+}
 
 export async function createPkcePair({ cryptoImpl = globalThis.crypto } = {}) {
   const verifier = createPkceVerifier({ cryptoImpl });
@@ -320,6 +349,17 @@ export function createGmailApiConnector({
         throw error;
       }
     },
+    async modifyMessageLabels(messageId, payload) {
+      return modifyGmailMessageLabels({ tokenStore, accountId, fetchImpl, tokenUrl, clientId, clientSecret, now, messageId, payload });
+    },
+    async applyTriageAction(messageId, action) {
+      return modifyGmailMessageLabels({ tokenStore, accountId, fetchImpl, tokenUrl, clientId, clientSecret, now, messageId, payload: gmailTriageActionToModifyPayload(action) });
+    },
+    async archiveMessage(messageId) { return this.applyTriageAction(messageId, 'archive'); },
+    async markMessageRead(messageId) { return this.applyTriageAction(messageId, 'mark-read'); },
+    async markMessageUnread(messageId) { return this.applyTriageAction(messageId, 'mark-unread'); },
+    async starMessage(messageId) { return this.applyTriageAction(messageId, 'star'); },
+    async unstarMessage(messageId) { return this.applyTriageAction(messageId, 'unstar'); },
   };
 }
 
@@ -327,16 +367,19 @@ export function normalizeGmailApiMessage(message) {
   const headers = Object.fromEntries((message.payload?.headers || []).map((header) => [String(header.name || '').toLowerCase(), header.value || '']));
   const textBody = extractGmailTextBody(message.payload);
   const receivedAt = gmailInternalDateToIso(message.internalDate) || parseHeaderDate(headers.date);
+  const labelIds = normalizeGmailLabelIds(message.labelIds);
   return {
     id: message.id,
     threadId: message.threadId || message.id,
     historyId: message.historyId || null,
-    subject: headers.subject || '(no subject)',
-    from: headers.from || 'unknown sender',
-    to: headers.to || '',
+    labelIds,
+    flags: gmailFlagsFromLabelIds(labelIds),
+    subject: headers.subject || message.subject || '(no subject)',
+    from: headers.from || message.from || 'unknown sender',
+    to: headers.to || message.to || '',
     snippet: summarizeBody(textBody) || message.snippet || '',
     textBody,
-    receivedAt,
+    receivedAt: receivedAt || message.receivedAt || new Date(0).toISOString(),
   };
 }
 
@@ -408,7 +451,7 @@ export const gmailSyncCursorPlan = {
   localOnly: 'Persist cursors and message content in the encrypted local database; never send message bodies through a Kept app server.',
 };
 
-export function createGmailOAuthUrl({ clientId, redirectUri, state, codeChallenge }) {
+export function createGmailOAuthUrl({ clientId, redirectUri, state, codeChallenge, enableModify = false } = {}) {
   requireField('clientId', clientId);
   requireField('redirectUri', redirectUri);
   requireField('state', state);
@@ -418,7 +461,7 @@ export function createGmailOAuthUrl({ clientId, redirectUri, state, codeChalleng
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('scope', gmailMinimalScopes.join(' '));
+  url.searchParams.set('scope', buildGmailScopes({ enableModify }).join(' '));
   url.searchParams.set('access_type', 'offline');
   url.searchParams.set('prompt', 'consent');
   url.searchParams.set('state', state);
@@ -491,8 +534,8 @@ function gmailThreadToLocalMessage(thread) {
     body: thread.body || thread.snippet || '',
     snippet: thread.snippet || summarizeBody(thread.body || ''),
     receivedAt: thread.receivedAt || new Date(0).toISOString(),
-    flags: { read: !thread.isUnread, starred: false, archived: false },
-    metadata: { provider: 'gmail', historyId: thread.historyId || null },
+    flags: thread.flags || { read: !thread.isUnread, starred: Boolean(thread.isStarred), archived: Boolean(thread.isArchived) },
+    metadata: { provider: 'gmail', historyId: thread.historyId || null, gmailLabelIds: normalizeGmailLabelIds(thread.labelIds) },
   };
 }
 
@@ -511,8 +554,12 @@ export function gmailMessageToThread(message, accountId) {
     receivedAt: message.receivedAt || new Date(0).toISOString(),
     providerMessageId: message.id,
     historyId: message.historyId,
-    isPriority: false,
-    isUnread: true,
+    labelIds: normalizeGmailLabelIds(message.labelIds),
+    flags: message.flags || gmailFlagsFromLabelIds(message.labelIds),
+    isPriority: Boolean(message.flags?.starred || gmailFlagsFromLabelIds(message.labelIds).starred),
+    isUnread: message.flags ? !message.flags.read : !gmailFlagsFromLabelIds(message.labelIds).read,
+    isStarred: Boolean(message.flags?.starred || gmailFlagsFromLabelIds(message.labelIds).starred),
+    isArchived: Boolean(message.flags?.archived ?? gmailFlagsFromLabelIds(message.labelIds).archived),
     isNewSender: false,
     isSynthetic: false,
     avatarInitials: initialsFor(parsedSender.name),
@@ -538,8 +585,9 @@ export function redactForLogs(value) {
     .replace(/RAW_[A-Z0-9_]*KEY/g, '[secret-redacted]')
     .replace(/sk-[A-Za-z0-9._-]+/g, '[secret-redacted]')
     .replace(/(access_token|refresh_token|id_token|client_secret|authorization_code|code_verifier)":"[^"]+"/gi, '$1":"[secret-redacted]"')
-    .replace(/("?(?:body|raw|payload|prompt|messages|snippet)"?\s*[:=]\s*)"[^"]*"/gi, '$1"[body-redacted]"')
-    .replace(/\b(body|raw|payload|prompt|messages|snippet)\b\s+([^.;\n]+)/gi, '$1 [body-redacted]');
+    .replace(/("?(?:body|raw|payload|prompt|messages|snippet|responseBody|response_body|response)"?\s*[:=]\s*)"[^"]*"/gi, '$1"[body-redacted]"')
+    .replace(/\b(body|raw|payload|prompt|messages|snippet|responseBody|response_body|response)\b\s+([^.;\n]+)/gi, '$1 [body-redacted]')
+    .replace(/responseBody|response_body/gi, 'response [body-redacted]');
 }
 
 const fakeGmailMessages = [
@@ -573,7 +621,7 @@ function redactStructuredValue(value) {
 
   return Object.fromEntries(
     Object.entries(value).map(([key, nested]) => {
-      if (/body|raw|payload|snippet/i.test(key)) return [key, '[body-redacted]'];
+      if (/body|raw|payload|snippet|prompt|messages|responseBody|response_body|response/i.test(key)) return [key, '[body-redacted]'];
       if (/token|secret|codeVerifier|code_verifier|authorization_code|code$/i.test(key)) return [key, '[secret-redacted]'];
       return [key, redactStructuredValue(nested)];
     }),
@@ -658,6 +706,44 @@ async function fetchGmailJson(fetchImpl, url, accessToken) {
   if (response?.status === 401 || response?.status === 403) throw createGmailAuthRevokedError(`Gmail credentials were revoked or expired with ${response.status} status`);
   if (!response?.ok) throw new Error(`Gmail API request failed with ${response?.status || 'unknown'} status`);
   return response.json();
+}
+
+async function modifyGmailMessageLabels({ tokenStore, accountId, fetchImpl, tokenUrl, clientId, clientSecret, now, messageId, payload }) {
+  requireField('messageId', messageId);
+  const accessToken = await readAccessToken(tokenStore, accountId, { fetchImpl, tokenUrl, clientId, clientSecret, now });
+  const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/modify`);
+  const response = await fetchImpl(String(url), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(normalizeGmailModifyPayload(payload)),
+  });
+  if (response?.status === 401 || response?.status === 403) {
+    if (typeof tokenStore.clearTokens === 'function') await tokenStore.clearTokens(accountId);
+    throw createGmailAuthRevokedError(`Gmail credentials were revoked or expired with ${response.status} status`);
+  }
+  if (!response?.ok) throw new Error(`Gmail API modify failed with ${response?.status || 'unknown'} status`);
+  return response.json();
+}
+
+function normalizeGmailModifyPayload(payload = {}) {
+  return {
+    addLabelIds: Array.isArray(payload.addLabelIds) ? payload.addLabelIds.map(String) : [],
+    removeLabelIds: Array.isArray(payload.removeLabelIds) ? payload.removeLabelIds.map(String) : [],
+  };
+}
+
+function normalizeGmailLabelIds(labelIds) {
+  if (!Array.isArray(labelIds)) return ['INBOX', 'UNREAD'];
+  return [...new Set(labelIds.map(String))];
+}
+
+function gmailFlagsFromLabelIds(labelIds) {
+  const labels = new Set(normalizeGmailLabelIds(labelIds));
+  return {
+    read: !labels.has('UNREAD'),
+    starred: labels.has('STARRED'),
+    archived: !labels.has('INBOX'),
+  };
 }
 
 function createGmailAuthRevokedError(message) {
@@ -1089,16 +1175,19 @@ export async function createLocalMailRepository({ path: storePath, initialData, 
       if (previousMessage?.threadId && previousMessage.threadId !== normalized.threadId && state.threads[previousMessage.threadId]) {
         state.threads[previousMessage.threadId].messageIds = (state.threads[previousMessage.threadId].messageIds || []).filter((messageId) => messageId !== id);
       }
-      state.messages[id] = normalized;
+      const reconciled = hasUnresolvedTriageActionForMessage(state, normalized.accountId, id, normalized.providerMessageId)
+        ? { ...normalized, flags: previousMessage?.flags || normalized.flags }
+        : normalized;
+      state.messages[id] = reconciled;
       state.attachments = Object.fromEntries(Object.entries(state.attachments).filter(([, attachment]) => attachment.messageId !== id));
-      normalized.attachments.forEach((attachment) => { state.attachments[scopedAttachmentKey(id, attachment.id)] = attachment; });
-      const thread = state.threads[normalized.threadId] || normalizeLocalThread({ id: normalized.threadId, accountId: normalized.accountId, subject: normalized.subject, updatedAt: normalized.receivedAt });
+      reconciled.attachments.forEach((attachment) => { state.attachments[scopedAttachmentKey(id, attachment.id)] = attachment; });
+      const thread = state.threads[reconciled.threadId] || normalizeLocalThread({ id: reconciled.threadId, accountId: reconciled.accountId, subject: reconciled.subject, updatedAt: reconciled.receivedAt });
       const messageIds = new Set(thread.messageIds || []);
       messageIds.add(id);
-      state.threads[normalized.threadId] = {
+      state.threads[reconciled.threadId] = {
         ...thread,
-        subject: normalized.subject || thread.subject,
-        updatedAt: maxIsoTimestamp(thread.updatedAt, normalized.receivedAt),
+        subject: reconciled.subject || thread.subject,
+        updatedAt: maxIsoTimestamp(thread.updatedAt, reconciled.receivedAt),
         messageIds: [...messageIds],
       };
       await persist();
@@ -1126,6 +1215,29 @@ export async function createLocalMailRepository({ path: storePath, initialData, 
       state.messages[messageId].flags = normalizeLocalFlags({ ...state.messages[messageId].flags, ...flags });
       await persist();
       return clone(state.messages[messageId].flags);
+    },
+    async queueTriageAction(action) {
+      const normalized = normalizeTriageActionEntry(action);
+      state.triageActions[normalized.id] = normalized;
+      if (normalized.messageId && state.messages[normalized.messageId] && Object.keys(normalized.desiredFlags).length > 0) {
+        state.messages[normalized.messageId].flags = normalizeLocalFlags({ ...state.messages[normalized.messageId].flags, ...normalized.desiredFlags });
+      }
+      await persist();
+      return clone(state.triageActions[normalized.id]);
+    },
+    async updateTriageActionStatus(actionId, patch = {}) {
+      requireField('actionId', actionId);
+      if (!state.triageActions[actionId]) throw new Error(`Triage action not found: ${actionId}`);
+      const next = normalizeTriageActionEntry({ ...state.triageActions[actionId], ...patch, id: actionId });
+      state.triageActions[actionId] = next;
+      await persist();
+      return clone(next);
+    },
+    async listTriageActions({ status, accountId, messageId } = {}) {
+      return Object.values(state.triageActions)
+        .filter((entry) => (!status || entry.status === status) && (!accountId || entry.accountId === accountId) && (!messageId || entry.messageId === messageId))
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+        .map(clone);
     },
     async saveSyncState(accountId, syncState) {
       requireField('accountId', accountId);
@@ -1214,16 +1326,19 @@ export async function createBrowserLocalMailRepository({ storage, key = 'kept.lo
       if (previousMessage?.threadId && previousMessage.threadId !== normalized.threadId && state.threads[previousMessage.threadId]) {
         state.threads[previousMessage.threadId].messageIds = (state.threads[previousMessage.threadId].messageIds || []).filter((messageId) => messageId !== id);
       }
-      state.messages[id] = normalized;
+      const reconciled = hasUnresolvedTriageActionForMessage(state, normalized.accountId, id, normalized.providerMessageId)
+        ? { ...normalized, flags: previousMessage?.flags || normalized.flags }
+        : normalized;
+      state.messages[id] = reconciled;
       state.attachments = Object.fromEntries(Object.entries(state.attachments).filter(([, attachment]) => attachment.messageId !== id));
-      normalized.attachments.forEach((attachment) => { state.attachments[scopedAttachmentKey(id, attachment.id)] = attachment; });
-      const thread = state.threads[normalized.threadId] || normalizeLocalThread({ id: normalized.threadId, accountId: normalized.accountId, subject: normalized.subject, updatedAt: normalized.receivedAt });
+      reconciled.attachments.forEach((attachment) => { state.attachments[scopedAttachmentKey(id, attachment.id)] = attachment; });
+      const thread = state.threads[reconciled.threadId] || normalizeLocalThread({ id: reconciled.threadId, accountId: reconciled.accountId, subject: reconciled.subject, updatedAt: reconciled.receivedAt });
       const messageIds = new Set(thread.messageIds || []);
       messageIds.add(id);
-      state.threads[normalized.threadId] = {
+      state.threads[reconciled.threadId] = {
         ...thread,
-        subject: normalized.subject || thread.subject,
-        updatedAt: maxIsoTimestamp(thread.updatedAt, normalized.receivedAt),
+        subject: reconciled.subject || thread.subject,
+        updatedAt: maxIsoTimestamp(thread.updatedAt, reconciled.receivedAt),
         messageIds: [...messageIds],
       };
       await persist();
@@ -1242,6 +1357,29 @@ export async function createBrowserLocalMailRepository({ storage, key = 'kept.lo
       state.messages[messageId].flags = normalizeLocalFlags({ ...state.messages[messageId].flags, ...flags });
       await persist();
       return clone(state.messages[messageId].flags);
+    },
+    async queueTriageAction(action) {
+      const normalized = normalizeTriageActionEntry(action);
+      state.triageActions[normalized.id] = normalized;
+      if (normalized.messageId && state.messages[normalized.messageId] && Object.keys(normalized.desiredFlags).length > 0) {
+        state.messages[normalized.messageId].flags = normalizeLocalFlags({ ...state.messages[normalized.messageId].flags, ...normalized.desiredFlags });
+      }
+      await persist();
+      return clone(state.triageActions[normalized.id]);
+    },
+    async updateTriageActionStatus(actionId, patch = {}) {
+      requireField('actionId', actionId);
+      if (!state.triageActions[actionId]) throw new Error(`Triage action not found: ${actionId}`);
+      const next = normalizeTriageActionEntry({ ...state.triageActions[actionId], ...patch, id: actionId });
+      state.triageActions[actionId] = next;
+      await persist();
+      return clone(next);
+    },
+    async listTriageActions({ status, accountId, messageId } = {}) {
+      return Object.values(state.triageActions)
+        .filter((entry) => (!status || entry.status === status) && (!accountId || entry.accountId === accountId) && (!messageId || entry.messageId === messageId))
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+        .map(clone);
     },
     async saveSyncState(accountId, syncState) {
       requireField('accountId', accountId);
@@ -1316,6 +1454,7 @@ function migrateLocalMailState(raw, bodyEncryption) {
   });
   Object.entries(raw.syncStates || {}).forEach(([accountId, syncState]) => { next.syncStates[accountId] = sanitizeSecretFields(syncState); });
   Object.values(raw.aiAudits || {}).forEach((entry) => { next.aiAudits[entry.id] = normalizeAiAuditEntry(entry); });
+  Object.values(raw.triageActions || raw.actionQueue || {}).forEach((entry) => { next.triageActions[entry.id] = normalizeTriageActionEntry(entry); });
   return next;
 }
 
@@ -1328,6 +1467,7 @@ function emptyLocalMailState() {
     attachments: {},
     syncStates: {},
     aiAudits: {},
+    triageActions: {},
   };
 }
 
@@ -1384,6 +1524,7 @@ async function migrateBrowserLocalMailState(raw, bodyEncryption) {
   });
   Object.entries(raw.syncStates || {}).forEach(([accountId, syncState]) => { next.syncStates[accountId] = sanitizeSecretFields(syncState); });
   Object.values(raw.aiAudits || {}).forEach((entry) => { next.aiAudits[entry.id] = normalizeAiAuditEntry(entry); });
+  Object.values(raw.triageActions || raw.actionQueue || {}).forEach((entry) => { next.triageActions[entry.id] = normalizeTriageActionEntry(entry); });
   return next;
 }
 
@@ -1564,6 +1705,47 @@ function normalizeLocalFlags(flags = {}) {
   };
 }
 
+function normalizeTriageActionEntry(entry = {}) {
+  requireField('triageAction.id', entry.id);
+  requireField('triageAction.accountId', entry.accountId);
+  requireField('triageAction.action', entry.action);
+  if (!gmailTriageActionTypes.includes(entry.action)) throw new Error(`Unsupported Gmail triage action: ${entry.action}`);
+  const status = entry.status || 'queued';
+  if (!gmailTriageActionStatuses.includes(status)) throw new Error(`Unsupported triage action status: ${status}`);
+  const createdAt = entry.createdAt || new Date(0).toISOString();
+  return {
+    id: String(entry.id),
+    accountId: String(entry.accountId),
+    messageId: entry.messageId ? String(entry.messageId) : null,
+    threadId: entry.threadId ? String(entry.threadId) : null,
+    providerMessageId: entry.providerMessageId ? String(entry.providerMessageId) : null,
+    providerThreadId: entry.providerThreadId ? String(entry.providerThreadId) : null,
+    action: entry.action,
+    desiredFlags: normalizePartialLocalFlags(entry.desiredFlags || flagsForTriageAction(entry.action)),
+    status,
+    createdAt,
+    attemptedAt: entry.attemptedAt || null,
+    confirmedAt: entry.confirmedAt || (status === 'synced' ? createdAt : null),
+    error: entry.error ? redactForLogs(entry.error) : null,
+    metadata: sanitizeSecretFields(entry.metadata || {}),
+  };
+}
+
+function normalizePartialLocalFlags(flags = {}) {
+  const next = {};
+  if (Object.hasOwn(flags, 'read')) next.read = Boolean(flags.read);
+  if (Object.hasOwn(flags, 'starred')) next.starred = Boolean(flags.starred);
+  if (Object.hasOwn(flags, 'archived')) next.archived = Boolean(flags.archived);
+  return next;
+}
+
+function hasUnresolvedTriageActionForMessage(state, accountId, messageId, providerMessageId) {
+  const unresolved = new Set(['queued', 'syncing', 'error', 'needs-reconnect']);
+  return Object.values(state.triageActions || {}).some((entry) => unresolved.has(entry.status)
+    && entry.accountId === accountId
+    && ((messageId && entry.messageId === messageId) || (providerMessageId && entry.providerMessageId === providerMessageId)));
+}
+
 function redactAuditValue(value) {
   if (Array.isArray(value)) return value.map(redactAuditValue);
   if (typeof value === 'string') return redactForLogs(value);
@@ -1587,7 +1769,10 @@ function sanitizeSecretFields(value) {
   return Object.fromEntries(
     Object.entries(value)
       .filter(([key]) => !/(access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|client[_-]?secret|authorization[_-]?code|code[_-]?verifier|password|secret)$/i.test(key))
-      .map(([key, nested]) => [key, sanitizeSecretFields(nested)]),
+      .map(([key, nested]) => [
+        key,
+        /(body|raw|payload|prompt|messages|snippet|responseBody|response_body|response)/i.test(key) ? '[body-redacted]' : sanitizeSecretFields(nested),
+      ]),
   );
 }
 

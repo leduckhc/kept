@@ -11,6 +11,11 @@ import {
   createGmailApiConnector,
   createGmailOAuthUrl,
   createJsonMailStore,
+  buildGmailScopes,
+  gmailModifyScopes,
+  gmailTriageActionTypes,
+  gmailTriageActionStatuses,
+  gmailTriageActionToModifyPayload,
   createKeychainTokenStore,
   createMemoryJsonStorage,
   createMemoryKeychain,
@@ -48,6 +53,33 @@ test('gmail OAuth URL uses desktop-safe PKCE parameters and minimal readonly sco
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.equal(url.searchParams.get('scope'), gmailMinimalScopes.join(' '));
   assert.deepEqual(gmailMinimalScopes, ['https://www.googleapis.com/auth/gmail.readonly']);
+});
+
+test('gmail scope builder keeps readonly default and adds modify only for triage actions', () => {
+  assert.deepEqual(buildGmailScopes(), gmailMinimalScopes);
+  assert.deepEqual(buildGmailScopes({ enableModify: false }), gmailMinimalScopes);
+  assert.deepEqual(buildGmailScopes({ enableModify: true }), [...gmailMinimalScopes, ...gmailModifyScopes]);
+
+  const modifyUrl = createGmailOAuthUrl({
+    clientId: 'desktop-client-id.apps.googleusercontent.com',
+    redirectUri: 'http://127.0.0.1:49210/oauth/google/callback',
+    state: 'state-123',
+    codeChallenge: 'challenge-abc',
+    enableModify: true,
+  });
+  assert.match(modifyUrl.searchParams.get('scope'), /gmail\.readonly/);
+  assert.match(modifyUrl.searchParams.get('scope'), /gmail\.modify/);
+});
+
+test('triage action contract is explicit and maps to Gmail label modify payloads', () => {
+  assert.deepEqual(gmailTriageActionTypes, ['archive', 'mark-read', 'mark-unread', 'star', 'unstar']);
+  assert.deepEqual(gmailTriageActionStatuses, ['queued', 'syncing', 'synced', 'error', 'needs-reconnect']);
+  assert.deepEqual(gmailTriageActionToModifyPayload('archive'), { addLabelIds: [], removeLabelIds: ['INBOX'] });
+  assert.deepEqual(gmailTriageActionToModifyPayload('mark-read'), { addLabelIds: [], removeLabelIds: ['UNREAD'] });
+  assert.deepEqual(gmailTriageActionToModifyPayload('mark-unread'), { addLabelIds: ['UNREAD'], removeLabelIds: [] });
+  assert.deepEqual(gmailTriageActionToModifyPayload('star'), { addLabelIds: ['STARRED'], removeLabelIds: [] });
+  assert.deepEqual(gmailTriageActionToModifyPayload('unstar'), { addLabelIds: [], removeLabelIds: ['STARRED'] });
+  assert.throws(() => gmailTriageActionToModifyPayload('trash'), /Unsupported Gmail triage action/);
 });
 
 test('PKCE helper creates verifier and S256 challenge without reserved URL characters', async () => {
@@ -164,6 +196,33 @@ test('Gmail API connector fetches inbox list, loads full messages, and normalize
   assert.equal(page.messages[0].textBody, 'Private Gmail body for local sync only.');
 });
 
+test('Gmail API connector modifies message labels for every supported triage action', async () => {
+  const tokenStore = { async loadTokens() { return { accessToken: 'ya29.access-token' }; } };
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    return jsonResponse({ id: 'msg-1', labelIds: options.body ? JSON.parse(options.body).addLabelIds || [] : [] });
+  };
+  const connector = createGmailApiConnector({ tokenStore, fetchImpl, accountId: 'acct_local_gmail' });
+
+  await connector.archiveMessage('msg-1');
+  await connector.markMessageRead('msg-1');
+  await connector.markMessageUnread('msg-1');
+  await connector.starMessage('msg-1');
+  await connector.unstarMessage('msg-1');
+
+  assert.deepEqual(calls.map((call) => JSON.parse(call.options.body)), [
+    { addLabelIds: [], removeLabelIds: ['INBOX'] },
+    { addLabelIds: [], removeLabelIds: ['UNREAD'] },
+    { addLabelIds: ['UNREAD'], removeLabelIds: [] },
+    { addLabelIds: ['STARRED'], removeLabelIds: [] },
+    { addLabelIds: [], removeLabelIds: ['STARRED'] },
+  ]);
+  assert.ok(calls.every((call) => call.options.method === 'POST'));
+  assert.ok(calls.every((call) => call.url.endsWith('/gmail/v1/users/me/messages/msg-1/modify')));
+  assert.ok(calls.every((call) => call.options.headers.Authorization === 'Bearer ya29.access-token'));
+});
+
 test('Gmail API payload normalization maps headers, date, and nested text body', () => {
   const normalized = normalizeGmailApiMessage(gmailApiMessageFixture());
 
@@ -174,6 +233,28 @@ test('Gmail API payload normalization maps headers, date, and nested text body',
   assert.equal(normalized.receivedAt, '2026-05-27T09:30:00.000Z');
   assert.equal(normalized.textBody, 'Private Gmail body for local sync only.');
   assert.equal(normalized.snippet, 'Private Gmail body for local sync only.');
+});
+
+test('Gmail label ids are preserved and normalized into local read/star/archive flags', async () => {
+  const unreadStarredArchived = normalizeGmailApiMessage({
+    ...gmailApiMessageFixture(),
+    labelIds: ['UNREAD', 'STARRED'],
+  });
+  assert.deepEqual(unreadStarredArchived.labelIds, ['UNREAD', 'STARRED']);
+  assert.deepEqual(unreadStarredArchived.flags, { read: false, starred: true, archived: true });
+
+  await withTempRepo(async (storePath) => {
+    const repo = await createLocalMailRepository({ path: storePath });
+    await syncGmailInbox({
+      connector: createFakeGmailConnector([unreadStarredArchived]),
+      accountId: 'acct_local_gmail',
+      repository: repo,
+      maxResults: 1,
+    });
+    const saved = await repo.getMessage('msg-1');
+    assert.deepEqual(saved.flags, { read: false, starred: true, archived: true });
+    assert.deepEqual(saved.metadata.gmailLabelIds, ['UNREAD', 'STARRED']);
+  });
 });
 
 test('local JSON mail store persists synced Gmail state and reloads without plaintext bodies or tokens', async () => {
@@ -315,6 +396,61 @@ test('gmail sync records connected-empty and preserves existing repository mail 
 
     assert.equal((await repo.getMessage('existing')).body, 'keep me');
     assert.equal((await repo.getSyncState('acct_local_gmail')).status, 'sync-error');
+  });
+});
+
+test('local action queue records status transitions and redacts durable action errors', async () => {
+  await withTempRepo(async (storePath) => {
+    const repo = await createLocalMailRepository({ path: storePath });
+    await repo.upsertMessage({ id: 'msg-1', accountId: 'acct_local_gmail', threadId: 'thr-1', providerMessageId: 'gmail-msg-1', sender: 'Mara <mara@example.com>', recipients: ['you@example.com'], subject: 'Private action', body: 'secret body text', snippet: 'secret snippet preview', receivedAt: '2026-05-27T09:00:00Z', flags: { read: false, starred: false, archived: false } });
+
+    const queued = await repo.queueTriageAction({ id: 'act-1', accountId: 'acct_local_gmail', messageId: 'msg-1', providerMessageId: 'gmail-msg-1', action: 'archive', desiredFlags: { archived: true }, error: { access_token: 'ya29.secret-token', body: 'secret body text', snippet: 'secret snippet preview', responseBody: 'raw private response' } });
+    assert.equal(queued.status, 'queued');
+    assert.deepEqual((await repo.getMessage('msg-1')).flags, { read: false, starred: false, archived: true });
+    assert.doesNotMatch(JSON.stringify(queued), /secret-token|secret body text|secret snippet preview|raw private response/);
+
+    const syncing = await repo.updateTriageActionStatus('act-1', { status: 'syncing', attemptedAt: '2026-05-27T10:00:00Z' });
+    assert.equal(syncing.status, 'syncing');
+    const failed = await repo.updateTriageActionStatus('act-1', { status: 'needs-reconnect', error: 'refresh_token 1//secret failed with responseBody private payload' });
+    assert.equal(failed.status, 'needs-reconnect');
+    assert.doesNotMatch(failed.error, /1\/\/secret|private payload|responseBody/);
+
+    const reopened = await createLocalMailRepository({ path: storePath });
+    assert.equal((await reopened.listTriageActions({ status: 'needs-reconnect' })).length, 1);
+  });
+});
+
+test('browser local action queue persists optimistic triage actions and safe errors', async () => {
+  const storage = createMemoryJsonStorage();
+  const repo = await createBrowserLocalMailRepository({ storage, key: 'kept.browser.actions.test', cryptoImpl: webcrypto });
+  await repo.upsertMessage({ id: 'msg-browser', accountId: 'acct_local_gmail', threadId: 'thr-browser', providerMessageId: 'gmail-browser', sender: 'Mara <mara@example.com>', recipients: ['you@example.com'], subject: 'Browser action', body: 'private browser body', snippet: 'private browser snippet', receivedAt: '2026-05-27T09:00:00Z', flags: { read: true, starred: false, archived: false } });
+
+  await repo.queueTriageAction({ id: 'act-browser', accountId: 'acct_local_gmail', messageId: 'msg-browser', providerMessageId: 'gmail-browser', action: 'star', error: { refresh_token: '1//secret', responseBody: 'private response body' } });
+  assert.deepEqual((await repo.getMessage('msg-browser')).flags, { read: true, starred: true, archived: false });
+
+  const raw = storage.entries.get('kept.browser.actions.test');
+  assert.doesNotMatch(raw, /1\/\/secret|private response body|private browser body|private browser snippet/);
+  const reopened = await createBrowserLocalMailRepository({ storage, key: 'kept.browser.actions.test', cryptoImpl: webcrypto });
+  const [action] = await reopened.listTriageActions({ status: 'queued' });
+  assert.equal(action.id, 'act-browser');
+  assert.doesNotMatch(JSON.stringify(action), /1\/\/secret|private response body/);
+});
+
+test('gmail sync reconciliation does not overwrite optimistic flags for unresolved queued actions', async () => {
+  await withTempRepo(async (storePath) => {
+    const repo = await createLocalMailRepository({ path: storePath });
+    await repo.upsertMessage({ id: 'msg-1', accountId: 'acct_local_gmail', threadId: 'thr-1', providerMessageId: 'gmail-msg-1', sender: 'Mara <mara@example.com>', recipients: ['you@example.com'], subject: 'Queued archive', body: 'body', receivedAt: '2026-05-27T09:00:00Z', flags: { read: true, starred: false, archived: false } });
+    await repo.queueTriageAction({ id: 'act-queued', accountId: 'acct_local_gmail', messageId: 'msg-1', providerMessageId: 'gmail-msg-1', action: 'archive', desiredFlags: { archived: true } });
+
+    await syncGmailInbox({
+      connector: createFakeGmailConnector([{ id: 'gmail-msg-1', threadId: 'thr-1', historyId: 'h2', subject: 'Queued archive', from: 'Mara <mara@example.com>', to: 'you@example.com', textBody: 'body from provider', labelIds: ['INBOX'], receivedAt: '2026-05-27T09:30:00Z' }]),
+      accountId: 'acct_local_gmail',
+      repository: repo,
+      maxResults: 1,
+    });
+
+    assert.equal((await repo.getMessage('msg-1')).flags.archived, true);
+    assert.equal((await repo.getMessage('msg-1')).metadata.historyId, 'h2');
   });
 });
 
