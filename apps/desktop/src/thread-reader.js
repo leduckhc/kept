@@ -199,6 +199,7 @@ function normalizeReaderMessages(thread) {
         sender: normalizeContact(message.sender || thread.sender || thread.senderEmail || 'Unknown sender', message.senderEmail || thread.senderEmail),
         recipients: normalizeRecipients(message.recipients || thread.recipients || []),
         body: normalizeBody(rawBody),
+        htmlBody: looksLikeHtml(rawBody) ? String(rawBody) : null,
         remoteImagesBlocked: hasRemoteImages(rawBody),
         receivedAt,
         dateTime: receivedAt,
@@ -210,9 +211,32 @@ function normalizeReaderMessages(thread) {
 }
 
 const REMOTE_IMAGE_RE = /<img[^>]+src\s*=\s*["']https?:\/\//i;
+const LOOKS_LIKE_HTML_RE = /<[a-zA-Z]/;
 
 export function hasRemoteImages(rawBody) {
   return REMOTE_IMAGE_RE.test(String(rawBody || ''));
+}
+
+function looksLikeHtml(value) {
+  return LOOKS_LIKE_HTML_RE.test(String(value || ''));
+}
+
+// Sanitize raw HTML for safe display (no DOM, no external libs — regex only).
+// Removes script/style blocks and all event-handler / javascript: attributes.
+// Allows structural and visual tags; allows <img src> after explicit user consent.
+export function sanitizeHtmlForDisplay(rawHtml) {
+  let html = String(rawHtml || '');
+  // Strip script blocks
+  html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+  // Strip style blocks
+  html = html.replace(/<style[\s\S]*?<\/style>/gi, '');
+  // Strip on* event handler attributes (e.g. onclick, onerror, onload)
+  html = html.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '');
+  // Strip javascript: hrefs/srcs
+  html = html.replace(/(href|src)\s*=\s*["']\s*javascript:[^"']*/gi, '$1=""');
+  // Strip data: URI srcs (possible xss vector)
+  html = html.replace(/src\s*=\s*["']\s*data:[^"']*/gi, 'src=""');
+  return html;
 }
 
 function normalizeBody(value) {

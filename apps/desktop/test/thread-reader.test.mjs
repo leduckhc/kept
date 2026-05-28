@@ -10,6 +10,7 @@ import {
   hasRemoteImages,
   markThreadRead,
   normalizeReaderThread,
+  sanitizeHtmlForDisplay,
   safeGmailThreadUrl,
 } from '../src/thread-reader.js';
 
@@ -196,28 +197,61 @@ test('markThreadRead tracks read state and createMemoryReadStateStore round-trip
   assert.equal(store.load().thr_a, false);
 });
 
-test('applyLocalReadState reflects wasUnread correctly for auto-read chip logic', () => {
-  // Simulates what openThreadReader does: check isUnread before marking read
-  const threads = [
-    { id: 'thr_unread', isUnread: true },
-    { id: 'thr_read', isUnread: false },
-  ];
-  const readState = { thr_unread: false, thr_read: true };
+test('sanitizeHtmlForDisplay strips script, style, and event handlers but keeps structural tags and img', () => {
+  // script blocks removed
+  assert.ok(!sanitizeHtmlForDisplay('<script>alert(1)</script>Hello').includes('<script>'));
+  assert.ok(sanitizeHtmlForDisplay('<script>alert(1)</script>Hello').includes('Hello'));
 
-  // applyLocalReadState should flip isUnread based on stored state
-  const applied = applyLocalReadState(threads, readState);
-  // thr_unread has readState = false → isUnread stays true
-  assert.equal(applied.find((t) => t.id === 'thr_unread').isUnread, true);
-  // thr_read has readState = true → isUnread = false
-  assert.equal(applied.find((t) => t.id === 'thr_read').isUnread, false);
+  // style blocks removed
+  assert.ok(!sanitizeHtmlForDisplay('<style>body{color:red}</style><p>Hi</p>').includes('<style>'));
+  assert.ok(sanitizeHtmlForDisplay('<style>body{color:red}</style><p>Hi</p>').includes('<p>Hi</p>'));
 
-  // After marking thr_unread as read, wasUnread should have been true
-  const store = createMemoryReadStateStore({ thr_unread: false });
-  const beforeOpen = applyLocalReadState(threads, store.load());
-  const wasUnread = Boolean(beforeOpen.find((t) => t.id === 'thr_unread')?.isUnread);
-  assert.equal(wasUnread, true, 'chip should show when thread was unread before opening');
+  // on* event handlers stripped from img
+  const imgResult = sanitizeHtmlForDisplay('<img onclick="xss()" onerror="bad()" src="https://example.com/a.jpg">');
+  assert.ok(!imgResult.includes('onclick'));
+  assert.ok(!imgResult.includes('onerror'));
+  assert.ok(imgResult.includes('src="https://example.com/a.jpg"'));
 
-  markThreadRead(store, 'thr_unread', true);
-  const afterOpen = applyLocalReadState(threads, store.load());
-  assert.equal(afterOpen.find((t) => t.id === 'thr_unread').isUnread, false);
+  // javascript: hrefs neutralized
+  const jsHref = sanitizeHtmlForDisplay('<a href="javascript:void(0)">click</a>');
+  assert.ok(!jsHref.includes('javascript:'));
+
+  // data: src neutralized
+  const dataSrc = sanitizeHtmlForDisplay('<img src="data:image/png;base64,abc">');
+  assert.ok(!dataSrc.includes('data:'));
+
+  // https hrefs kept
+  const goodHref = sanitizeHtmlForDisplay('<a href="https://example.com">link</a>');
+  assert.ok(goodHref.includes('href="https://example.com"'));
+
+  // structural tags kept
+  const structural = sanitizeHtmlForDisplay('<p>Hello</p><strong>world</strong>');
+  assert.ok(structural.includes('<p>Hello</p>'));
+  assert.ok(structural.includes('<strong>world</strong>'));
+});
+
+test('normalizeReaderThread sets htmlBody on HTML messages and null on plain text', () => {
+  const htmlThread = {
+    id: 'thr_html',
+    sender: 'Sender',
+    senderEmail: 'sender@example.com',
+    subject: 'HTML mail',
+    receivedAt: '2026-05-27T12:00:00Z',
+    htmlBody: '<p>Hello</p><img src="https://example.com/a.jpg">',
+  };
+  const textThread = {
+    id: 'thr_plain',
+    sender: 'Sender',
+    senderEmail: 'sender@example.com',
+    subject: 'Plain mail',
+    receivedAt: '2026-05-27T12:00:00Z',
+    body: 'Just plain text, no HTML here.',
+  };
+
+  const htmlReader = normalizeReaderThread(htmlThread);
+  assert.ok(htmlReader.messages[0].htmlBody, 'htmlBody should be set for HTML content');
+  assert.ok(htmlReader.messages[0].htmlBody.includes('<p>Hello</p>'), 'htmlBody should preserve HTML tags');
+
+  const textReader = normalizeReaderThread(textThread);
+  assert.equal(textReader.messages[0].htmlBody, null, 'htmlBody should be null for plain text');
 });

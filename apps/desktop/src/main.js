@@ -10,6 +10,7 @@ import {
   isThreadOpenKey,
   markThreadRead,
   normalizeReaderThread,
+  sanitizeHtmlForDisplay,
 } from './thread-reader.js';
 import {
   GMAIL_ACCOUNT_ID,
@@ -82,6 +83,7 @@ const state = {
   triage: {
     statusByThreadId: {},
   },
+  imagePermissionByMessageId: {},
 };
 
 document.documentElement.style.setProperty('--accent', brandTokens.color.accent);
@@ -602,13 +604,24 @@ function renderReaderMessage(message) {
   const article = el('section', { className: 'reader-message', ariaLabel: `Message from ${message.sender.label}` });
   article.append(renderMessageHeader(message));
   if (message.remoteImagesBlocked) {
-    const bar = el('div', { className: 'reader-safe-html-bar' });
-    const label = el('span', { text: 'Safe HTML — remote images blocked, scripts stripped' });
-    const toggle = el('button', { type: 'button', className: 'reader-safe-html-toggle', text: 'Show anyway', 'data-message-id': message.id });
-    bar.append(label, toggle);
-    article.append(bar);
+    if (state.imagePermissionByMessageId[message.id]) {
+      const badge = el('p', { className: 'reader-remote-images-loaded', text: '🔓 Remote images loaded.' });
+      article.append(badge);
+      const bodyDiv = el('div', { className: 'reader-body reader-body-html' });
+      bodyDiv.innerHTML = sanitizeHtmlForDisplay(message.htmlBody || message.body);
+      article.append(bodyDiv);
+    } else {
+      const badge = el('p', { className: 'reader-remote-images-blocked' });
+      badge.append(el('span', { text: '🔒 Remote images blocked — message text only.' }));
+      const loadBtn = el('button', { type: 'button', className: 'load-images-btn', text: 'Load images' });
+      loadBtn.setAttribute('data-message-id', message.id);
+      badge.append(loadBtn);
+      article.append(badge);
+      article.append(el('pre', { className: 'reader-body', text: message.body }));
+    }
+  } else {
+    article.append(el('pre', { className: 'reader-body', text: message.body }));
   }
-  article.append(el('pre', { className: 'reader-body', text: message.body }));
   if (message.attachments.length > 0) article.append(renderAttachments(message.attachments));
   return article;
 }
@@ -713,14 +726,12 @@ function wireThreadReaderControls() {
   document.querySelector('#summarize-thread')?.addEventListener('click', requestThreadSummary);
   document.querySelector('#approve-summary')?.addEventListener('click', approveThreadSummary);
   document.querySelector('#cancel-summary')?.addEventListener('click', cancelThreadSummary);
-  // "Show anyway" toggle: dismiss the safe-html bar and note user consent
-  document.querySelectorAll('.reader-safe-html-toggle').forEach((button) => {
-    button.addEventListener('click', () => {
-      const bar = button.closest('.reader-safe-html-bar');
-      if (bar) {
-        bar.classList.add('reader-safe-html-bar--dismissed');
-        // After the fade-out transition, remove from DOM
-        bar.addEventListener('transitionend', () => bar.remove(), { once: true });
+  document.querySelectorAll('.load-images-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const messageId = btn.getAttribute('data-message-id');
+      if (messageId) {
+        state.imagePermissionByMessageId[messageId] = true;
+        renderApp();
       }
     });
   });
@@ -881,6 +892,7 @@ function openThreadReader(threadId, rowId) {
 function closeThreadReader() {
   const rowId = state.lastFocusedRowId;
   state.activeThreadId = null;
+  state.imagePermissionByMessageId = {};
   renderApp();
   if (rowId) document.getElementById(rowId)?.focus();
 }
