@@ -57,6 +57,7 @@ const aiAdapter = aiRuntime.adapter || createProviderAdapter(aiSettings, {
   auditStore: aiRuntime.auditStore || aiAuditStore,
 });
 let pendingSummaryController = null;
+let gmailStateEpoch = 0;
 
 const state = {
   threads: loadThreads(),
@@ -108,19 +109,35 @@ window.addEventListener('keydown', (event) => {
 });
 
 async function initializeGmailState() {
+  const initialEpoch = gmailStateEpoch;
   const repository = await mailRepositoryPromise;
+  if (hasActiveGmailMutation(initialEpoch)) return;
+
   const repositoryMessages = await repository.listMessages({ accountId: state.gmail.accountId });
+  if (hasActiveGmailMutation(initialEpoch)) return;
+
   if (repositoryMessages.length > 0) {
     const connector = await getOptionalGmailConnector();
+    if (hasActiveGmailMutation(initialEpoch)) return;
     if (connector) await retryQueuedTriageActions(repository, connector);
+    if (hasActiveGmailMutation(initialEpoch)) return;
     state.gmail.threads = repositoryMessagesToInboxThreads(await repository.listMessages({ accountId: state.gmail.accountId }));
     state.gmail.status = (await repository.getSyncState(state.gmail.accountId))?.status || 'connected';
   } else {
     const syncState = await mailStore.loadSyncState();
+    if (hasActiveGmailMutation(initialEpoch)) return;
     state.gmail.threads = getSyncedGmailThreads(syncState, { accountId: state.gmail.accountId });
     state.gmail.status = getGmailSyncStatus(syncState, { accountId: state.gmail.accountId });
   }
   renderApp();
+}
+
+function markGmailMutation() {
+  gmailStateEpoch += 1;
+}
+
+function hasActiveGmailMutation(initialEpoch) {
+  return initialEpoch !== gmailStateEpoch;
 }
 
 function renderApp() {
@@ -605,6 +622,7 @@ function wireGmailControls() {
   document.querySelector('#connect-gmail-empty')?.addEventListener('click', startGmailConnect);
   document.querySelector('#sync-gmail')?.addEventListener('click', syncGmail);
   document.querySelector('#clear-gmail-cache')?.addEventListener('click', async () => {
+    markGmailMutation();
     await mailStore.clear();
     state.gmail.threads = [];
     state.gmail.status = 'never-connected';
@@ -839,6 +857,7 @@ function closeThreadReader() {
 }
 
 async function startGmailConnect() {
+  markGmailMutation();
   state.gmail.status = 'oauth-pending';
   state.gmail.errorMessage = '';
   renderApp();
@@ -855,6 +874,7 @@ async function startGmailConnect() {
 }
 
 async function syncGmail() {
+  markGmailMutation();
   state.gmail.status = 'syncing';
   state.gmail.errorMessage = '';
   renderApp();

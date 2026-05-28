@@ -189,4 +189,7 @@ test('desktop Gmail sync passes the durable repository into syncGmailInbox', asy
   assert.match(source, /statusCopyForTriage\(/);
   assert.match(source, /retryQueuedTriageActions\(repository, connector\)/);
   assert.match(source, /retryQueuedActions\(\)/);
+  assert.match(source, /let gmailStateEpoch = 0/);
+  assert.match(source, /hasActiveGmailMutation\(initialEpoch\)/);
+  assert.match(source, /markGmailMutation\(\)/);
 });
