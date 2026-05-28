@@ -444,28 +444,31 @@ function renderNewSenders(newSenders) {
   const section = el('section', { className: 'new-senders', ariaLabel: 'New senders' });
   section.append(renderSectionHeader('New senders', `${newSenders.length} local`));
 
-  const railWrap = el('div', { className: 'carousel-wrap' });
-  railWrap.append(el('button', { className: 'carousel-control', type: 'button', text: '‹', ariaLabel: 'Previous new senders' }));
-
   const rail = el('div', { className: 'sender-rail', role: 'list' });
   if (newSenders.length === 0) {
     rail.append(el('p', { className: 'empty-row', text: 'No new senders detected in local mail.' }));
   } else {
     newSenders.forEach((sender) => rail.append(renderSenderCard(sender)));
   }
-  railWrap.append(rail, el('button', { className: 'carousel-control', type: 'button', text: '›', ariaLabel: 'Next new senders' }));
 
-  section.append(railWrap);
+  section.append(rail);
   return section;
 }
 
 function renderSenderCard(sender) {
   const card = el('article', { className: 'sender-card', role: 'listitem' });
-  card.append(
-    renderAvatar(sender),
+
+  const top = el('div', { className: 'sender-card-top' });
+  const identity = el('div', { className: 'sender-card-identity' });
+  identity.append(
     el('strong', { text: sender.sender }),
     el('span', { className: 'sender-email', text: sender.senderEmail || 'local mail' }),
-    el('p', { text: sender.subject }),
+  );
+  top.append(renderAvatar(sender), identity);
+
+  const bottom = el('div', { className: 'sender-card-bottom' });
+  bottom.append(
+    el('p', { className: 'sender-card-subject', text: sender.subject }),
   );
 
   const actions = el('div', { className: 'sender-actions' });
@@ -473,7 +476,9 @@ function renderSenderCard(sender) {
     el('button', { type: 'button', className: 'accept', text: 'Keep', ariaLabel: `Keep ${sender.sender}` }),
     el('button', { type: 'button', className: 'block', text: 'Mute', ariaLabel: `Mute ${sender.sender}` }),
   );
-  card.append(actions);
+  bottom.append(actions);
+
+  card.append(top, bottom);
   return card;
 }
 
