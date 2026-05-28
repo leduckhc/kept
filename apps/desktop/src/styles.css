@@ -772,6 +772,66 @@ kbd {
   color: var(--muted, #6b7280);
 }
 
+/* Direction A — Subtle Signal: safe-html 1-line green bar */
+.reader-safe-html-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 5px 10px;
+  border-radius: 5px;
+  background: color-mix(in srgb, #22c55e 8%, transparent);
+  border: 1px solid color-mix(in srgb, #22c55e 22%, transparent);
+  font-size: 0.8125rem;
+  color: #166534;
+  transition: opacity 0.25s ease;
+}
+
+.reader-safe-html-bar--dismissed {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reader-safe-html-toggle {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: #15803d;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reader-safe-html-toggle:hover {
+  color: #166534;
+}
+
+/* Direction A — Subtle Signal: "Marked read" fade chip */
+@keyframes reader-marked-read-fade {
+  0% { opacity: 0; transform: translateY(-4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.reader-marked-read-chip {
+  position: fixed;
+  top: 18px;
+  right: 20px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  font-size: 0.75rem;
+  color: var(--accent, #7c3aed);
+  pointer-events: none;
+  animation: reader-marked-read-fade 2s ease forwards;
+  z-index: 100;
+}
+
 .reader-attachments ul {
   margin: 10px 0 0;
   padding-left: 20px;
