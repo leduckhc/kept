@@ -8,6 +8,7 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
 function resolveRequest(url) {
   const requested = url === '/' ? '/apps/desktop/index.html' : url.split('?')[0];
+  if (requested === '/favicon.svg') return normalize(join(desktopRoot, 'favicon.svg'));
   if (requested.startsWith('/src/')) return normalize(join(desktopRoot, requested));
   return normalize(join(repoRoot, requested));
 }
