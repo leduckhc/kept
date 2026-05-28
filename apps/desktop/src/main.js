@@ -86,9 +86,9 @@ const state = {
   imagePermissionByMessageId: {},
 };
 
-document.documentElement.style.setProperty('--accent', brandTokens.color.accent);
-document.documentElement.style.setProperty('--paper', brandTokens.color.paper);
-document.documentElement.style.setProperty('--ink', brandTokens.color.ink);
+// CSS custom properties are now owned by styles.css (dual-theme token system).
+// brandTokens.color.accent is no longer injected inline so that the
+// prefers-color-scheme media query can control --accent per theme.
 renderApp();
 initializeGmailState();
 
