@@ -4,8 +4,11 @@ import {
   applyLocalReadState,
   createLocalReadStateStore,
   createMemoryReadStateStore,
+  createMemorySenderTrustStore,
+  createSenderTrustStore,
   createThreadReaderController,
   createThreadSummaryActionController,
+  filterBannedSenderThreads,
   formatAttachmentMeta,
   hasRemoteImages,
   markThreadRead,
@@ -254,4 +257,120 @@ test('normalizeReaderThread sets htmlBody on HTML messages and null on plain tex
 
   const textReader = normalizeReaderThread(textThread);
   assert.equal(textReader.messages[0].htmlBody, null, 'htmlBody should be null for plain text');
+});
+
+// ---- senderTrustStore tests ----
+
+test('senderTrustStore: new sender is not trusted and not banned and isNew returns true', () => {
+  const store = createMemorySenderTrustStore();
+  assert.equal(store.isTrusted('alice@example.com'), false);
+  assert.equal(store.isBanned('alice@example.com'), false);
+  assert.equal(store.isNew('alice@example.com'), true);
+});
+
+test('senderTrustStore: trust(email) marks sender as trusted and not new', () => {
+  const store = createMemorySenderTrustStore();
+  store.trust('alice@example.com');
+  assert.equal(store.isTrusted('alice@example.com'), true);
+  assert.equal(store.isBanned('alice@example.com'), false);
+  assert.equal(store.isNew('alice@example.com'), false);
+});
+
+test('senderTrustStore: ban(email) marks sender as banned and not new', () => {
+  const store = createMemorySenderTrustStore();
+  store.ban('spammer@evil.com');
+  assert.equal(store.isBanned('spammer@evil.com'), true);
+  assert.equal(store.isTrusted('spammer@evil.com'), false);
+  assert.equal(store.isNew('spammer@evil.com'), false);
+});
+
+test('senderTrustStore: trust() removes from banned set', () => {
+  const store = createMemorySenderTrustStore({ trusted: [], banned: ['ex@example.com'] });
+  assert.equal(store.isBanned('ex@example.com'), true);
+  store.trust('ex@example.com');
+  assert.equal(store.isBanned('ex@example.com'), false);
+  assert.equal(store.isTrusted('ex@example.com'), true);
+});
+
+test('senderTrustStore: ban() removes from trusted set', () => {
+  const store = createMemorySenderTrustStore({ trusted: ['friend@example.com'], banned: [] });
+  assert.equal(store.isTrusted('friend@example.com'), true);
+  store.ban('friend@example.com');
+  assert.equal(store.isTrusted('friend@example.com'), false);
+  assert.equal(store.isBanned('friend@example.com'), true);
+});
+
+test('senderTrustStore: email comparison is case-insensitive', () => {
+  const store = createMemorySenderTrustStore();
+  store.trust('Alice@EXAMPLE.COM');
+  assert.equal(store.isTrusted('alice@example.com'), true);
+  assert.equal(store.isNew('ALICE@example.com'), false);
+});
+
+test('senderTrustStore: initFromExistingSenders auto-trusts all provided emails', () => {
+  const store = createMemorySenderTrustStore();
+  store.initFromExistingSenders(['a@example.com', 'b@example.com', 'c@example.com']);
+  assert.equal(store.isTrusted('a@example.com'), true);
+  assert.equal(store.isTrusted('b@example.com'), true);
+  assert.equal(store.isTrusted('c@example.com'), true);
+  assert.equal(store.isNew('a@example.com'), false);
+});
+
+test('senderTrustStore: initFromExistingSenders does not override existing banned entry', () => {
+  const store = createMemorySenderTrustStore({ trusted: [], banned: ['spammer@evil.com'] });
+  store.initFromExistingSenders(['spammer@evil.com', 'friend@example.com']);
+  // banned stays banned
+  assert.equal(store.isBanned('spammer@evil.com'), true);
+  assert.equal(store.isTrusted('spammer@evil.com'), false);
+  // new address gets auto-trusted
+  assert.equal(store.isTrusted('friend@example.com'), true);
+});
+
+test('senderTrustStore: persists across store re-reads (via shared storage)', () => {
+  const fakeStorage = { data: {}, getItem(k) { return this.data[k] ?? null; }, setItem(k, v) { this.data[k] = v; } };
+  const store = createSenderTrustStore(fakeStorage, 'kept.senderTrust.v1');
+  store.trust('persist@example.com');
+  // Re-create store from same storage
+  const store2 = createSenderTrustStore(fakeStorage, 'kept.senderTrust.v1');
+  assert.equal(store2.isTrusted('persist@example.com'), true);
+});
+
+// ---- filterBannedSenderThreads tests ----
+
+test('filterBannedSenderThreads removes threads from banned senders', () => {
+  const store = createMemorySenderTrustStore({ trusted: [], banned: ['spammer@evil.com'] });
+  const threads = [
+    { id: 't1', senderEmail: 'friend@example.com', sender: 'Friend' },
+    { id: 't2', senderEmail: 'spammer@evil.com', sender: 'Spammer' },
+    { id: 't3', senderEmail: 'other@example.com', sender: 'Other' },
+  ];
+  const result = filterBannedSenderThreads(threads, store);
+  assert.deepEqual(result.map((t) => t.id), ['t1', 't3']);
+});
+
+test('filterBannedSenderThreads keeps all threads when no senders are banned', () => {
+  const store = createMemorySenderTrustStore();
+  const threads = [
+    { id: 't1', senderEmail: 'a@example.com' },
+    { id: 't2', senderEmail: 'b@example.com' },
+  ];
+  const result = filterBannedSenderThreads(threads, store);
+  assert.equal(result.length, 2);
+});
+
+test('filterBannedSenderThreads falls back to sender field when senderEmail is missing', () => {
+  const store = createMemorySenderTrustStore();
+  store.ban('noemail@example.com');
+  const threads = [
+    { id: 't1', sender: 'noemail@example.com' },
+    { id: 't2', sender: 'ok@example.com' },
+  ];
+  const result = filterBannedSenderThreads(threads, store);
+  assert.deepEqual(result.map((t) => t.id), ['t2']);
+});
+
+test('filterBannedSenderThreads returns all threads unchanged when trustStore is null', () => {
+  const threads = [{ id: 't1' }, { id: 't2' }];
+  const result = filterBannedSenderThreads(threads, null);
+  assert.equal(result.length, 2);
 });
