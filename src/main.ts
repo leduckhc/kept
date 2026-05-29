@@ -7,6 +7,9 @@ let account: Account | null = null;
 let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+function setAccount(a: Account) { account = a; }
 
 
 // ── Boot ──────────────────────────────────────────────────
@@ -55,6 +58,7 @@ function showAuth() {
   document.getElementById('btn-login')!.addEventListener('click', async () => {
     const btn = document.getElementById('btn-login') as HTMLButtonElement;
     btn.disabled = true;
+    const originalHTML = btn.innerHTML;
     btn.textContent = 'Opening browser…';
     try {
       account = await startOAuth();
@@ -62,7 +66,7 @@ function showAuth() {
       await refresh();
     } catch (e) {
       btn.disabled = false;
-      btn.innerHTML = 'Sign in with Google';
+      btn.innerHTML = originalHTML;
       alert(`Login failed: ${e}`);
     }
   });
@@ -95,7 +99,14 @@ function showShell() {
   document.getElementById('btn-signout')!.addEventListener('click', async () => {
     try {
       const db = await import('./db').then(m => m.getDb());
+      const acctId = account?.id;
       await db.execute('DELETE FROM accounts WHERE 1=1');
+      if (acctId != null) {
+        await db.execute('DELETE FROM threads WHERE account_id = ?', [acctId]);
+        await db.execute('DELETE FROM messages WHERE account_id = ?', [acctId]);
+        await db.execute('DELETE FROM blocked_senders WHERE account_id = ?', [acctId]);
+        await db.execute('DELETE FROM settings WHERE account_id = ?', [acctId]);
+      }
       account = null;
       threads = [];
       syncing = false;
@@ -108,7 +119,12 @@ function showShell() {
   const searchEl = document.getElementById('search') as HTMLInputElement;
   searchEl.addEventListener('input', () => {
     searchQuery = searchEl.value;
-    renderInbox();
+    if (searchDebounce !== null) clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(async () => {
+      if (!account) return;
+      threads = await loadThreads(account.id, searchQuery);
+      renderInbox();
+    }, 200);
   });
   searchEl.addEventListener('focus', () => searchEl.classList.add('expanded'));
   searchEl.addEventListener('blur', () => { if (!searchEl.value) searchEl.classList.remove('expanded'); });
@@ -160,15 +176,12 @@ function renderInbox() {
   const container = document.getElementById('inbox');
   if (!container) return;
 
-  const filtered = searchQuery
-    ? threads.filter(t =>
-        t.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.senderEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.snippet.toLowerCase().includes(searchQuery.toLowerCase()))
-    : threads;
+  if (threads.length === 0 && syncing) {
+    container.innerHTML = `<p class="sync-loading">Syncing inbox…</p>`;
+    return;
+  }
 
-  if (filtered.length === 0) {
+  if (threads.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="icon" style="color:var(--text-muted)">✉</div>
@@ -177,7 +190,7 @@ function renderInbox() {
     return;
   }
 
-  const sections = groupBySection(filtered);
+  const sections = groupBySection(threads);
   const html = sections.map(s => {
     const unread = s.threads.filter(t => t.isUnread).length;
     const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
@@ -259,23 +272,42 @@ function threadRow(t: Thread): string {
 // ── Row actions ───────────────────────────────────────────
 async function doMarkRead(t: Thread, row: HTMLElement) {
   if (!account) return;
-  await markRead(account, t);
-  t.isUnread = false;
-  row.classList.remove('unread');
-  row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
+  try {
+    await markRead(account, t);
+    const fresh = await getAccount();
+    if (fresh) setAccount(fresh);
+    t.isUnread = false;
+    row.classList.remove('unread');
+    row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
+  } catch (e) {
+    console.error('Mark read failed:', e);
+    setStatus('Mark read failed');
+    t.isUnread = true;
+    renderInbox();
+  }
 }
 
 async function doArchive(t: Thread, row: HTMLElement) {
   if (!account) return;
-  await archiveThread(account, t);
-  row.remove();
-  threads = threads.filter(x => x.id !== t.id);
+  try {
+    await archiveThread(account, t);
+    const fresh = await getAccount();
+    if (fresh) setAccount(fresh);
+    row.remove();
+    threads = threads.filter(x => x.id !== t.id);
+  } catch (e) {
+    console.error('Archive failed:', e);
+    setStatus('Archive failed');
+    renderInbox();
+  }
 }
 
 async function doBlock(t: Thread, _row: HTMLElement) {
   if (!account) return;
   if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
   await blockSender(account, t);
+  const fresh = await getAccount();
+  if (fresh) setAccount(fresh);
   // Remove all rows from this sender
   threads = threads.filter(x => x.senderEmail !== t.senderEmail);
   renderInbox();
@@ -296,6 +328,10 @@ async function openThread(t: Thread) {
     });
   }
 
+  // Draft persistence
+  const draftKey = 'draft-' + t.gmailThreadId;
+  const savedDraft = localStorage.getItem(draftKey);
+
   const overlay = document.createElement('div');
   overlay.className = 'reader-overlay';
   overlay.innerHTML = `
@@ -306,11 +342,11 @@ async function openThread(t: Thread) {
       </div>
       <div class="reader-body"><div class="spinner"></div></div>
       <div class="reader-footer">
-        <button class="btn-primary" id="btn-reply">Reply</button>
+        <button class="btn-primary" id="btn-reply"${savedDraft ? ' style="display:none"' : ''}>Reply</button>
         <button class="btn-secondary" id="btn-archive-reader">Archive</button>
         <button class="btn-secondary danger" id="btn-block-reader">Block sender</button>
-        <div class="compose-area" id="compose" style="display:none; flex:1; flex-direction:column; gap:8px;">
-          <textarea class="compose-textarea" id="compose-body" placeholder="Write your reply…"></textarea>
+        <div class="compose-area" id="compose" style="display:${savedDraft ? 'flex' : 'none'}; flex:1; flex-direction:column; gap:8px;">
+          <textarea class="compose-textarea" id="compose-body" placeholder="Write your reply…">${savedDraft ? esc(savedDraft) : ''}</textarea>
           <div style="display:flex; gap:8px;">
             <button class="btn-primary" id="btn-send">Send</button>
             <button class="btn-secondary" id="btn-cancel-compose">Cancel</button>
@@ -323,11 +359,16 @@ async function openThread(t: Thread) {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.getElementById('reader-close')!.addEventListener('click', () => overlay.remove());
 
+  // lastMessageId for In-Reply-To header
+  let lastMessageId: string | null = null;
+
   // Load messages
   try {
-    const { messages } = await fetchMessageBody(account, t.gmailThreadId);
+    const result = await fetchMessageBody(account, t.gmailThreadId);
+    const bodies = (result as any).bodies ?? (result as any).messages ?? result;
+    lastMessageId = (result as any).lastMessageId ?? null;
     const bodyEl = overlay.querySelector('.reader-body')!;
-    bodyEl.innerHTML = messages.map(m => `
+    bodyEl.innerHTML = (bodies as any[]).map((m: any) => `
       <div style="margin-bottom:20px;">
         <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">${esc(m.from)} · ${formatDate(m.receivedAt)}</div>
         <div style="white-space:pre-wrap; font-size:14px;">${esc(m.body.slice(0, 4000))}</div>
@@ -337,20 +378,27 @@ async function openThread(t: Thread) {
     overlay.querySelector('.reader-body')!.innerHTML = '<p style="color:var(--text-muted)">Could not load messages.</p>';
   }
 
+  // Wire compose textarea draft auto-save
+  const textarea = overlay.querySelector<HTMLTextAreaElement>('#compose-body')!;
+  textarea.addEventListener('input', () => {
+    localStorage.setItem(draftKey, textarea.value);
+  });
+
   // Reply
-  
   document.getElementById('btn-reply')!.addEventListener('click', () => {
     const compose = document.getElementById('compose')!;
     compose.style.display = 'flex';
     document.getElementById('btn-reply')!.style.display = 'none';
-    document.getElementById('compose-body')!.focus();
+    textarea.focus();
   });
   document.getElementById('btn-cancel-compose')!.addEventListener('click', () => {
+    localStorage.removeItem(draftKey);
+    textarea.value = '';
     document.getElementById('compose')!.style.display = 'none';
     document.getElementById('btn-reply')!.style.display = '';
   });
   document.getElementById('btn-send')!.addEventListener('click', async () => {
-    const body = (document.getElementById('compose-body') as HTMLTextAreaElement).value.trim();
+    const body = textarea.value.trim();
     if (!body || !account) return;
     const btn = document.getElementById('btn-send') as HTMLButtonElement;
     btn.disabled = true;
@@ -361,7 +409,9 @@ async function openThread(t: Thread) {
         subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
         body,
         threadId: t.gmailThreadId,
+        inReplyTo: lastMessageId ?? undefined,
       });
+      localStorage.removeItem(draftKey);
       overlay.remove();
     } catch (e) {
       alert(`Send failed: ${e}`);
@@ -373,6 +423,8 @@ async function openThread(t: Thread) {
   document.getElementById('btn-archive-reader')!.addEventListener('click', async () => {
     if (!account) return;
     await archiveThread(account, t);
+    const fresh = await getAccount();
+    if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.id !== t.id);
     renderInbox();
     overlay.remove();
@@ -381,6 +433,8 @@ async function openThread(t: Thread) {
     if (!account) return;
     if (!confirm(`Block all email from ${t.senderEmail}?`)) return;
     await blockSender(account, t);
+    const fresh = await getAccount();
+    if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.senderEmail !== t.senderEmail);
     renderInbox();
     overlay.remove();
