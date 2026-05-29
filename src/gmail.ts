@@ -74,9 +74,11 @@ async function syncFull(account: Account, accountId: string, onProgress?: (n: nu
     const data = res as { threads?: Array<{ id: string }>; nextPageToken?: string };
     if (!data.threads) break;
 
-    for (const t of data.threads) {
-      await syncThread(account, t.id, accountId);
-      total++;
+    const threadIds = data.threads.map((t: { id: string }) => t.id);
+    const BATCH = 10;
+    for (let i = 0; i < threadIds.length; i += BATCH) {
+      await Promise.all(threadIds.slice(i, i + BATCH).map((id: string) => syncThread(account, id, accountId)));
+      total += Math.min(BATCH, threadIds.length - i);
       onProgress?.(total);
     }
     pageToken = data.nextPageToken;
@@ -154,6 +156,28 @@ async function gmailGetRaw(account: Account, path: string): Promise<Response> {
   });
 }
 
+// ── Attachment detection helper ───────────────────────────
+function hasAttachment(message: any): boolean {
+  function checkParts(parts: any[]): boolean {
+    for (const part of parts) {
+      const mime: string = part.mimeType ?? '';
+      const filename: string = part.filename ?? '';
+      if (
+        filename.length > 0 &&
+        mime !== 'text/plain' &&
+        mime !== 'text/html' &&
+        !mime.startsWith('multipart/')
+      ) {
+        return true;
+      }
+      if (part.parts && checkParts(part.parts)) return true;
+    }
+    return false;
+  }
+  const parts = message?.payload?.parts ?? [];
+  return checkParts(parts);
+}
+
 async function syncThread(account: Account, gmailThreadId: string, accountId: string): Promise<void> {
   const db = await getDb();
   const data = await gmailGet(account, `/users/me/threads/${gmailThreadId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`) as {
@@ -162,7 +186,7 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
       id: string;
       labelIds: string[];
       internalDate: string;
-      payload: { headers: Array<{ name: string; value: string }> };
+      payload: { headers: Array<{ name: string; value: string }>; parts?: any[] };
       snippet: string;
     }>;
   };
@@ -182,9 +206,9 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 
   await db.execute(
     `INSERT OR REPLACE INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId]
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id, has_attachment)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId, hasAttachment(last) ? 1 : 0]
   );
 }
 
@@ -313,6 +337,8 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
   lastMessageId: string | null;
 }> {
   const a = await ensureFreshToken(account);
+  // schema needs gmail_thread_id + position columns on messages table for caching
+  // (cache read/write skipped until migration adds those columns)
   const data = await gmailGet(a, `/users/me/threads/${gmailThreadId}?format=full`) as {
     messages: Array<{
       id: string;
