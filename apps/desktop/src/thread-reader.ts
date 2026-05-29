@@ -2,6 +2,21 @@
 const READ_STATE_VERSION = 1;
 const UNSAFE_GMAIL_ID = /(?:token|secret|ya29|access_token|refresh_token|code_verifier)/i;
 
+export function parseListUnsubscribeHeaders(listUnsubscribe = '', listUnsubscribePost = '') {
+  const ANGLE_BRACKET_RE = /<([^>]+)>/g;
+  let unsubscribeUrl = null;
+  let unsubscribeMailto = null;
+  let match;
+  // eslint-disable-next-line no-cond-assign
+  while ((match = ANGLE_BRACKET_RE.exec(listUnsubscribe)) !== null) {
+    const value = match[1].trim();
+    if (!unsubscribeUrl && /^https?:\/\//i.test(value)) unsubscribeUrl = value;
+    if (!unsubscribeMailto && /^mailto:/i.test(value)) unsubscribeMailto = value;
+  }
+  const oneClickPost = Boolean(listUnsubscribePost && listUnsubscribePost.trim().length > 0);
+  return { unsubscribeUrl, unsubscribeMailto, oneClickPost };
+}
+
 export function normalizeReaderThread(thread = {}) {
   const messages = normalizeReaderMessages(thread);
   const firstMessage = messages[0] || null;
@@ -193,6 +208,9 @@ function normalizeReaderMessages(thread) {
     .map((message, index) => {
       const receivedAt = message.receivedAt || thread.receivedAt || new Date(0).toISOString();
       const rawBody = message.body ?? message.textBody ?? message.htmlBody ?? thread.body ?? thread.textBody ?? thread.htmlBody;
+      const listUnsub = message.listUnsubscribe || thread.listUnsubscribe || message['list-unsubscribe'] || thread['list-unsubscribe'] || '';
+      const listUnsubPost = message.listUnsubscribePost || thread.listUnsubscribePost || message['list-unsubscribe-post'] || thread['list-unsubscribe-post'] || '';
+      const unsubscribe = parseListUnsubscribeHeaders(listUnsub, listUnsubPost);
       return {
         id: String(message.id || `${thread.id || 'thread'}-${index}`),
         threadId: String(message.threadId || thread.id || ''),
@@ -203,6 +221,9 @@ function normalizeReaderMessages(thread) {
         htmlBody: looksLikeHtml(rawBody) ? String(rawBody) : null,
         rawBody: String(rawBody || ''),
         remoteImagesBlocked: hasRemoteImages(rawBody),
+        unsubscribeUrl: unsubscribe.unsubscribeUrl,
+        unsubscribeMailto: unsubscribe.unsubscribeMailto,
+        oneClickPost: unsubscribe.oneClickPost,
         receivedAt,
         dateTime: receivedAt,
         dateLabel: formatReaderDate(receivedAt),
@@ -214,6 +235,31 @@ function normalizeReaderMessages(thread) {
 
 const REMOTE_IMAGE_RE = /<img[^>]+src\s*=\s*["']https?:\/\//i;
 const LOOKS_LIKE_HTML_RE = /<[a-zA-Z]/;
+
+export function createLocalUnsubscribeStore(storage, key = 'kept.localUnsubscribeState.v1') {
+  return {
+    load() {
+      try {
+        const parsed = JSON.parse(storage.getItem(key) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch (_error) {
+        return {};
+      }
+    },
+    save(state) {
+      storage.setItem(key, JSON.stringify(state));
+    },
+    isUnsubscribed(threadId) {
+      const state = this.load();
+      return Boolean(state[threadId]);
+    },
+    markUnsubscribed(threadId) {
+      const state = this.load();
+      state[threadId] = true;
+      this.save(state);
+    },
+  };
+}
 
 export function hasRemoteImages(rawBody) {
   return REMOTE_IMAGE_RE.test(String(rawBody || ''));
