@@ -4,3 +4,6 @@ target/
 .env
 *.local
 src-tauri/gen/
+
+# OS stuffs
+.DS_Store
