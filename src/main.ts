@@ -257,10 +257,6 @@ function threadRow(t: Thread): string {
         <div class="thread-subject-line">${esc(t.subject)}</div>
         <div class="thread-preview-line">${esc(t.snippet)}</div>
       </div>
-      <div class="thread-right">
-        ${attachment}
-        <span class="thread-meta">${date}</span>
-      </div>
       <div class="thread-actions">
         <button class="btn-action btn-read" title="Mark read">✓</button>
         <button class="btn-action btn-archive" title="Archive">⬇</button>
@@ -368,12 +364,39 @@ async function openThread(t: Thread) {
     const bodies = (result as any).bodies ?? (result as any).messages ?? result;
     lastMessageId = (result as any).lastMessageId ?? null;
     const bodyEl = overlay.querySelector('.reader-body')!;
-    bodyEl.innerHTML = (bodies as any[]).map((m: any) => `
-      <div style="margin-bottom:20px;">
-        <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">${esc(m.from)} · ${formatDate(m.receivedAt)}</div>
-        <div style="white-space:pre-wrap; font-size:14px;">${esc(m.body.slice(0, 4000))}</div>
-      </div>
-    `).join('<hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">');
+    bodyEl.innerHTML = '';
+    (bodies as any[]).forEach((m: any, idx: number) => {
+      if (idx > 0) {
+        const hr = document.createElement('hr');
+        hr.style.cssText = 'border:none; border-top:1px solid var(--border); margin:12px 0;';
+        bodyEl.appendChild(hr);
+      }
+      const msgDiv = document.createElement('div');
+      msgDiv.style.marginBottom = '20px';
+
+      const metaDiv = document.createElement('div');
+      metaDiv.style.cssText = 'font-size:12px; color:var(--text-muted); margin-bottom:6px;';
+      metaDiv.textContent = `${m.from} · ${formatDate(m.receivedAt)}`;
+      msgDiv.appendChild(metaDiv);
+
+      const bodyDiv = document.createElement('div');
+      bodyDiv.style.cssText = 'white-space:pre-wrap; font-size:14px;';
+      bodyDiv.textContent = m.body.slice(0, 20000);
+      msgDiv.appendChild(bodyDiv);
+
+      if (m.body.length > 20000) {
+        const showMore = document.createElement('button');
+        showMore.className = 'btn-show-more';
+        showMore.textContent = 'Show full email';
+        showMore.addEventListener('click', () => {
+          bodyDiv.textContent = m.body;
+          showMore.remove();
+        });
+        msgDiv.appendChild(showMore);
+      }
+
+      bodyEl.appendChild(msgDiv);
+    });
   } catch {
     overlay.querySelector('.reader-body')!.innerHTML = '<p style="color:var(--text-muted)">Could not load messages.</p>';
   }

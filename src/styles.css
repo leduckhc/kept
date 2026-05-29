@@ -278,10 +278,6 @@ body {
 }
 
 /* Right column — hidden since date is now in thread-top */
-.thread-right {
-  display: none;
-}
-.thread-meta { text-align: right; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .attachment-icon { font-size: 11px; color: var(--text-muted); }
 
 /* Row actions (appear on hover) */
@@ -346,6 +342,22 @@ body {
   padding: 12px 20px;
   display: flex;
   gap: 8px;
+}
+
+/* ── Show more button ───────────────────────────────────── */
+.btn-show-more {
+  display: block;
+  margin: 8px 0;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-show-more:hover {
+  background: var(--hover-bg);
 }
 
 /* ── Reply composer ─────────────────────────────────────── */
