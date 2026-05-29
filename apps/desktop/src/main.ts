@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { brandTokens, renderPipMark } from '../../packages/ui/src/index.js';
 import { classifyThread } from './classifier.js';
 import { loadInboxSectionsState, saveInboxSectionsState } from './inbox-sections-state.js';

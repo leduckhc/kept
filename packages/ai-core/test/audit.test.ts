@@ -62,29 +62,29 @@ test('disabled adapter never calls a provider', async () => {
 
 test('missing provider and missing key block remote calls', async () => {
   let called = false;
-  const missingProvider = createProviderAdapter({ enabled: true, provider: null, model: 'gpt', keyRef: 'keychain://openai' }, { call: async () => { called = true; } });
+  const missingProvider = createProviderAdapter({ enabled: true, provider: null, model: 'gpt', keyRef: 'keychain://openai' } as any, { call: async () => { called = true; } });
   assert.equal((await missingProvider.summarizeThread(thread, { approved: true })).status, 'provider_missing');
 
-  const rawKeyRef = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'sk-plaintext' }, { call: async () => { called = true; }, keyStore: { hasProviderKey: async () => true } });
+  const rawKeyRef = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'sk-plaintext' } as any, { call: async () => { called = true; }, keyStore: { hasProviderKey: async () => true } as any });
   assert.equal((await rawKeyRef.summarizeThread(thread, { approved: true })).status, 'key_missing');
 
-  const missingKeyStore = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'keychain://openai' }, { call: async () => { called = true; } });
+  const missingKeyStore = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'keychain://openai' } as any, { call: async () => { called = true; } });
   assert.equal((await missingKeyStore.summarizeThread(thread, { approved: true })).status, 'key_missing');
 
-  const missingKey = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'keychain://openai' }, { call: async () => { called = true; }, keyStore: { hasProviderKey: async () => false } });
+  const missingKey = createProviderAdapter({ enabled: true, provider: 'openai', model: 'gpt', keyRef: 'keychain://openai' } as any, { call: async () => { called = true; }, keyStore: { hasProviderKey: async () => false } as any });
   assert.equal((await missingKey.summarizeThread(thread, { approved: true })).status, 'key_missing');
   assert.equal(called, false);
 });
 
 test('remote provider calls fail closed when audit preflight store is missing', async () => {
-  const keyStore = { hasProviderKey: async () => true };
+  const keyStore = { hasProviderKey: async () => true } as any;
   let called = false;
   const settings = createAISettings({ enabled: true, provider: 'openai', model: 'gpt-4o-mini', keyRef: 'keychain://openai' });
   const adapter = createProviderAdapter(settings, { keyStore, call: async () => { called = true; } });
   const result = await adapter.summarizeThread(thread, { approved: true });
 
   assert.equal(result.status, 'audit_preflight_failed');
-  assert.match(result.error, /audit store unavailable/);
+  assert.match((result as any).error, /audit store unavailable/);
   assert.equal(called, false);
 });
 
@@ -94,8 +94,8 @@ test('enabled adapter requires approval before exposing prompt and does not call
   const adapter = createProviderAdapter(settings, { call: async () => { called = true; } });
   const result = await adapter.summarizeThread(thread, { approved: false });
   assert.equal(result.status, 'approval_denied');
-  assert.match(result.envelope.payloadPreview, /Invoice schedule/);
-  assert.match(result.envelope.payloadHash, /^[a-f0-9]{64}$/);
+  assert.match((result as any).envelope.payloadPreview, /Invoice schedule/);
+  assert.match((result as any).envelope.payloadHash, /^[a-f0-9]{64}$/);
   assert.equal(called, false);
 });
 
@@ -134,7 +134,7 @@ test('audit preflight failure blocks remote provider call', async () => {
   const result = await adapter.summarizeThread(thread, { approved: true });
 
   assert.equal(result.status, 'audit_preflight_failed');
-  assert.match(result.error, /audit disk unavailable/);
+  assert.match((result as any).error, /audit disk unavailable/);
   assert.equal(called, false);
 });
 
@@ -148,9 +148,9 @@ test('provider error is captured in audit without leaking API keys or raw bodies
   const result = await adapter.summarizeThread(thread, { approved: true });
 
   assert.equal(result.status, 'provider_error');
-  assert.doesNotMatch(result.error, /RAW_OPENAI_KEY|Can you confirm next week/);
-  assert.doesNotMatch(auditStore.entries.at(-1).error, /RAW_OPENAI_KEY|Can you confirm next week/);
-  assert.match(auditStore.entries.at(-1).error, /upstream 500/);
+  assert.doesNotMatch((result as any).error, /RAW_OPENAI_KEY|Can you confirm next week/);
+  assert.doesNotMatch((auditStore.entries.at(-1) as any).error, /RAW_OPENAI_KEY|Can you confirm next week/);
+  assert.match((auditStore.entries.at(-1) as any).error, /upstream 500/);
 });
 
 test('prompt builder scopes content to one selected thread', () => {
@@ -164,12 +164,12 @@ test('approved provider payload exactly matches the approved preview and hash', 
   let sentPayload = null;
   const adapter = createProviderAdapter(settings, { call: async ({ prompt }) => { sentPayload = JSON.stringify(prompt, null, 2); return { text: 'summary' }; } });
 
-  const preview = await adapter.summarizeThread(thread, { approved: false });
-  const result = await adapter.summarizeThread(thread, { approved: true, expectedPayloadHash: preview.envelope.payloadHash });
+  const preview = await adapter.summarizeThread(thread, { approved: false }) as any;
+  const result = await adapter.summarizeThread(thread, { approved: true, expectedPayloadHash: preview.envelope.payloadHash }) as any;
 
   assert.equal(result.status, 'ok');
   assert.equal(sentPayload, preview.envelope.payloadPreview);
-  assert.equal(result.envelope.payloadHash, preview.envelope.payloadHash);
+  assert.equal((result as any).envelope.payloadHash, preview.envelope.payloadHash);
 });
 
 test('approved provider call fails closed when preview hash does not match', async () => {

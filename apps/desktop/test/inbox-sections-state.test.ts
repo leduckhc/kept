@@ -81,5 +81,5 @@ test('saveInboxSectionsState silently ignores storage errors', () => {
     setItem: () => { throw new Error('quota exceeded'); },
   };
   // Should not throw
-  assert.doesNotThrow(() => saveInboxSectionsState({ newsletters: true, updates: true }, brokenStorage));
+  assert.doesNotThrow(() => saveInboxSectionsState({ newsletters: true, updates: true }, brokenStorage as unknown as Storage));
 });
