@@ -479,3 +479,102 @@ export function filterBannedSenderThreads(threads = [], trustStore) {
     return !trustStore.isBanned(email);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Inline Reply Composer
+// ---------------------------------------------------------------------------
+
+/**
+ * Stub for sending a Gmail reply. Logs to console; actual API wiring is KPT-018B.
+ */
+export function invokeGmailSend(threadId, body) {
+  // eslint-disable-next-line no-console
+  console.log('[KPT-018B] invokeGmailSend stub — threadId:', threadId, 'body length:', body?.length ?? 0);
+}
+
+/**
+ * Render an inline reply composer panel (hidden by default).
+ */
+export function renderReplyComposer({ threadId, senderEmail = '', subject = '' } = {}) {
+  const reSubject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
+
+  const panel = document.createElement('section');
+  panel.className = 'reply-composer';
+  panel.setAttribute('aria-label', 'Reply composer');
+  panel.setAttribute('data-thread-id', String(threadId || ''));
+  panel.hidden = true;
+
+  const toRow = document.createElement('div');
+  toRow.className = 'reply-composer-field';
+  const toLabel = document.createElement('label');
+  toLabel.textContent = 'To';
+  toLabel.className = 'reply-composer-label';
+  const toInput = document.createElement('input');
+  toInput.type = 'text';
+  toInput.className = 'reply-composer-to';
+  toInput.value = senderEmail;
+  toInput.readOnly = true;
+  toInput.setAttribute('aria-label', 'To');
+  toRow.append(toLabel, toInput);
+
+  const subjectRow = document.createElement('div');
+  subjectRow.className = 'reply-composer-field';
+  const subjectLabel = document.createElement('label');
+  subjectLabel.textContent = 'Subject';
+  subjectLabel.className = 'reply-composer-label';
+  const subjectInput = document.createElement('input');
+  subjectInput.type = 'text';
+  subjectInput.className = 'reply-composer-subject';
+  subjectInput.value = reSubject;
+  subjectInput.readOnly = true;
+  subjectInput.setAttribute('aria-label', 'Subject');
+  subjectRow.append(subjectLabel, subjectInput);
+
+  const bodyTextarea = document.createElement('textarea');
+  bodyTextarea.className = 'reply-composer-body';
+  bodyTextarea.setAttribute('aria-label', 'Reply body');
+  bodyTextarea.placeholder = 'Write your reply…';
+  bodyTextarea.rows = 6;
+
+  const actions = document.createElement('div');
+  actions.className = 'reply-composer-actions';
+
+  const sendBtn = document.createElement('button');
+  sendBtn.type = 'button';
+  sendBtn.className = 'reply-composer-send';
+  sendBtn.textContent = 'Send';
+  sendBtn.setAttribute('data-reply-action', 'send');
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'reply-composer-cancel';
+  cancelBtn.textContent = 'Discard';
+  cancelBtn.setAttribute('data-reply-action', 'cancel');
+
+  actions.append(sendBtn, cancelBtn);
+  panel.append(toRow, subjectRow, bodyTextarea, actions);
+  return panel;
+}
+
+/**
+ * Open (expand) the reply composer inside containerEl.
+ */
+export function openReplyComposer(containerEl) {
+  if (!containerEl) return;
+  const composer = containerEl.querySelector('.reply-composer');
+  if (!composer) return;
+  const textarea = composer.querySelector('.reply-composer-body');
+  if (textarea) textarea.value = '';
+  composer.hidden = false;
+  textarea?.focus();
+}
+
+/**
+ * Close (collapse) the reply composer inside containerEl.
+ */
+export function closeReplyComposer(containerEl) {
+  if (!containerEl) return;
+  const composer = containerEl.querySelector('.reply-composer');
+  if (!composer) return;
+  composer.hidden = true;
+}
