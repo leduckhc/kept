@@ -8,6 +8,7 @@ import {
   applyLocalReadState,
   createLocalReadStateStore,
   createSenderTrustStore,
+  createLocalUnsubscribeStore,
   createThreadSummaryActionController,
   filterBannedSenderThreads,
   formatAttachmentMeta,
@@ -52,6 +53,7 @@ const TRIAGE_ICONS = {
   'star-toggle-on':     `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="8 1.5 10 6 15 6.5 11.5 10 12.5 15 8 12.5 3.5 15 4.5 10 1 6.5 6 6"/></svg>`,
 };
 const inboxSectionsCollapsed = loadInboxSectionsState(typeof localStorage !== 'undefined' ? localStorage : null);
+const UNSUB_STATE_KEY = 'kept.localUnsubscribeState.v1';
 const root = document.querySelector('#root');
 const gmailAdapter = window.__KEPT_GMAIL_CONNECT__ || null;
 const aiRuntime = window.__KEPT_AI__ || {};
@@ -63,6 +65,7 @@ const mailRepositoryPromise = createBrowserLocalMailRepository({
 });
 const readStateStore = createLocalReadStateStore(localStorage, READ_STATE_KEY);
 const senderTrustStore = createSenderTrustStore(localStorage, TRUST_STORE_KEY);
+const unsubscribeStore = createLocalUnsubscribeStore(localStorage, UNSUB_STATE_KEY);
 const aiAuditStore = {
   async recordAiAudit(entry) {
     const repository = await mailRepositoryPromise;
@@ -108,6 +111,8 @@ const state = {
     // keyed by message id: Map<originalSrc, dataUri>
     dataByMessageId: {},
     errorByMessageId: {},
+  unsub: {
+    pendingThreadId: null,  // thread id waiting for modal confirmation
   },
 };
 
@@ -685,8 +690,24 @@ function renderThreadReader(reader, sourceThread = null, { wasUnread = false, is
   if (isSenderNew && senderEmail) {
     surface.append(renderSenderTrustCard(reader, senderEmail));
   }
+  // Unsubscribe button: shown when any message has unsubscribe data and thread isn't already unsubscribed
+  const hasUnsubscribe = reader.messages.some((msg) => msg.unsubscribeUrl || msg.unsubscribeMailto);
+  if (hasUnsubscribe) {
+    const alreadyUnsubscribed = unsubscribeStore.isUnsubscribed(reader.id);
+    if (alreadyUnsubscribed) {
+      header.append(el('span', { className: 'unsub-done', text: 'Unsubscribed ✓' }));
+    } else {
+      const unsubBtn = el('button', { type: 'button', className: 'secondary-mail-action reader-unsub-button', text: 'Unsubscribe', id: 'reader-unsub' });
+      unsubBtn.dataset.threadId = reader.id;
+      header.append(unsubBtn);
+    }
+  }
   surface.append(header, renderReaderTriageBar(sourceThread || reader), renderReaderMeta(reader), renderReaderSummaryPanel(reader));
   reader.messages.forEach((message) => surface.append(renderReaderMessage(message)));
+  // Confirmation modal if pending
+  if (state.unsub.pendingThreadId === reader.id) {
+    surface.append(renderUnsubConfirmModal(reader));
+  }
   shell.append(surface);
   return shell;
 }
@@ -777,6 +798,21 @@ function renderApprovalGate(approval) {
   );
   gate.append(actions);
   return gate;
+}
+
+function renderUnsubConfirmModal(reader) {
+  const senderName = reader.sender?.label || reader.sender?.name || reader.sender?.email || 'this sender';
+  const modal = el('section', { className: 'unsub-modal', ariaLabel: 'Confirm unsubscribe', role: 'dialog' });
+  const card = el('div', { className: 'unsub-modal-body' });
+  card.append(el('p', { className: 'unsub-modal-text', text: `Unsubscribe from ${senderName}? This sends a one-click unsubscribe request.` }));
+  const actions = el('div', { className: 'unsub-modal-actions' });
+  actions.append(
+    el('button', { type: 'button', className: 'primary-mail-action', text: 'Unsubscribe', id: 'unsub-confirm' }),
+    el('button', { type: 'button', className: 'secondary-mail-action', text: 'Cancel', id: 'unsub-cancel' }),
+  );
+  card.append(actions);
+  modal.append(card);
+  return modal;
 }
 
 function renderReaderMessage(message) {
@@ -967,6 +1003,18 @@ function wireThreadReaderControls() {
   document.querySelectorAll('[data-load-images-message-id]').forEach((button) => {
     button.addEventListener('click', () => loadImagesViaProxy(button.getAttribute('data-load-images-message-id'), button.getAttribute('data-load-images-raw-body') || ''));
   });
+  // Unsubscribe flow
+  document.querySelector('#reader-unsub')?.addEventListener('click', () => {
+    const threadId = state.activeThreadId;
+    if (!threadId) return;
+    state.unsub.pendingThreadId = threadId;
+    renderApp();
+  });
+  document.querySelector('#unsub-cancel')?.addEventListener('click', () => {
+    state.unsub.pendingThreadId = null;
+    renderApp();
+  });
+  document.querySelector('#unsub-confirm')?.addEventListener('click', () => executeUnsubscribe());
 }
 
 async function applyTriageToActiveThread(intent) {
@@ -1156,6 +1204,39 @@ async function loadImagesViaProxy(messageId, rawBody) {
     state.imageProxy.statusByMessageId[messageId] = 'error';
     state.imageProxy.errorByMessageId[messageId] = userFacingError(error, 'Could not load images via proxy.');
   }
+async function executeUnsubscribe() {
+  const threadId = state.unsub.pendingThreadId;
+  if (!threadId) return;
+  state.unsub.pendingThreadId = null;
+
+  // Find the first message with unsubscribe data
+  const allThreads = currentThreads();
+  const thread = allThreads.find((candidate) => candidate.id === threadId);
+  if (!thread) return;
+
+  const reader = normalizeReaderThread(thread);
+  const message = reader.messages.find((msg) => msg.unsubscribeUrl || msg.unsubscribeMailto);
+  if (!message) return;
+
+  // Preference: (1) RFC 8058 one-click POST if available, (2) mailto open, (3) https link open
+  if (message.oneClickPost && message.unsubscribeUrl) {
+    try {
+      await fetch(message.unsubscribeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'List-Unsubscribe=One-Click',
+        mode: 'no-cors',
+      });
+    } catch (_error) {
+      // no-cors fetch may throw — treat as attempted
+    }
+  } else if (message.unsubscribeMailto) {
+    window.open(message.unsubscribeMailto, '_blank');
+  } else if (message.unsubscribeUrl) {
+    window.open(message.unsubscribeUrl, '_blank');
+  }
+
+  unsubscribeStore.markUnsubscribed(threadId);
   renderApp();
 }
 
