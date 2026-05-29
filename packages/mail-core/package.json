@@ -1,1 +1,15 @@
-{"name":"@kept/mail-core","version":"0.1.0","type":"module","private":true,"main":"src/index.js","scripts":{"typecheck":"node -c src/index.js","lint":"node -c src/index.js","build":"node -c src/index.js"}}
+{
+  "name": "@kept/mail-core",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1"
+  }
+}
