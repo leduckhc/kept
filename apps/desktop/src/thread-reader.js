@@ -200,6 +200,7 @@ function normalizeReaderMessages(thread) {
         recipients: normalizeRecipients(message.recipients || thread.recipients || []),
         body: normalizeBody(rawBody),
         htmlBody: looksLikeHtml(rawBody) ? String(rawBody) : null,
+        rawBody: String(rawBody || ''),
         remoteImagesBlocked: hasRemoteImages(rawBody),
         receivedAt,
         dateTime: receivedAt,
