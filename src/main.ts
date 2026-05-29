@@ -7,17 +7,31 @@ let account: Account | null = null;
 let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
-let selectedThread: Thread | null = null;
+// selectedThread reserved for future use
 
 // ── Boot ──────────────────────────────────────────────────
 async function boot() {
   applyTheme(localStorage.getItem('theme') ?? 'light');
-  account = await getAccount();
-  if (account) {
-    showShell();
-    await refresh();
-  } else {
-    showAuth();
+
+  // Show auth screen immediately — don't block on DB
+  showAuth();
+
+  // Check if we're inside a real Tauri window
+  const isTauri = '__TAURI_INTERNALS__' in window;
+  if (!isTauri) {
+    // Browser-only dev: just show the login screen, no DB
+    return;
+  }
+
+  try {
+    account = await getAccount();
+    if (account) {
+      showShell();
+      await refresh();
+    }
+  } catch (e) {
+    console.error('Boot error:', e);
+    // Auth screen already shown — user can log in fresh
   }
 }
 
@@ -189,7 +203,7 @@ function threadRow(t: Thread): string {
 }
 
 // ── Row actions ───────────────────────────────────────────
-async function doMarkRead(t: Thread, row: HTMLElement) {
+async function doMarkRead(t: Thread, _row: HTMLElement) {
   if (!account) return;
   await markRead(account, t);
   t.isUnread = false;
@@ -261,7 +275,7 @@ async function openThread(t: Thread) {
   }
 
   // Reply
-  const lastMsg = null;
+  
   document.getElementById('btn-reply')!.addEventListener('click', () => {
     const compose = document.getElementById('compose')!;
     compose.style.display = 'flex';
