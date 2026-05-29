@@ -261,6 +261,85 @@ fn read_callback_url(stream: &mut TcpStream, host: &str, port: u16) -> Result<St
     Ok(format!("http://{}:{}{}", host, port, target))
 }
 
+/// Construct an RFC 2822 MIME message bytes for a Gmail reply.
+fn build_mime_message(thread_id: &str, to: &str, subject: &str, body: &str) -> Vec<u8> {
+    // Prefix subject with Re: only when not already there
+    let reply_subject = if subject.to_lowercase().starts_with("re:") {
+        subject.to_string()
+    } else {
+        format!("Re: {}", subject)
+    };
+    // Use thread_id as the Message-ID reference for threading
+    let refs = format!("<{}>", thread_id);
+    let message = format!(
+        "To: {to}\r\n\
+         Subject: {subject}\r\n\
+         In-Reply-To: {refs}\r\n\
+         References: {refs}\r\n\
+         Content-Type: text/plain; charset=UTF-8\r\n\
+         \r\n\
+         {body}",
+        to = to,
+        subject = reply_subject,
+        refs = refs,
+        body = body,
+    );
+    message.into_bytes()
+}
+
+#[tauri::command]
+async fn gmail_send_reply(
+    thread_id: String,
+    message_body: String,
+    to: String,
+    subject: String,
+) -> Result<(), String> {
+    // Load access token from keychain (same pattern as keychain_get)
+    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, "acct_local_gmail")
+        .map_err(|_| "Could not open Gmail token store".to_string())?;
+    let raw = match entry.get_password() {
+        Ok(s) => s,
+        Err(keyring::Error::NoEntry) => return Err("Gmail account is not connected".to_string()),
+        Err(_) => return Err("Could not read Gmail tokens from the OS keychain".to_string()),
+    };
+    let tokens: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|_| "Gmail tokens are invalid".to_string())?;
+    let access_token = tokens
+        .get("accessToken")
+        .or_else(|| tokens.get("access_token"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Gmail access token is missing".to_string())?
+        .to_string();
+
+    // Build RFC 2822 MIME message and base64url-encode it
+    let mime_bytes = build_mime_message(&thread_id, &to, &subject, &message_body);
+    let raw_encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&mime_bytes);
+
+    // POST to Gmail API
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|_| "Could not create Gmail send client".to_string())?;
+
+    let response = client
+        .post("https://gmail.googleapis.com/gmail/v1/users/me/messages/send")
+        .bearer_auth(&access_token)
+        .json(&serde_json::json!({
+            "raw": raw_encoded,
+            "threadId": thread_id,
+        }))
+        .send()
+        .await
+        .map_err(|_| "Could not reach Gmail API".to_string())?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        let status = response.status().as_u16();
+        Err(format!("Gmail send failed with status {}", status))
+    }
+}
+
 fn write_loopback_response(stream: &mut TcpStream, status: u16, message: &str) {
     let reason = if status == 200 { "OK" } else { "Not Found" };
     let body = format!("<!doctype html><title>Kept Gmail</title><p>{}</p>", message);
@@ -282,8 +361,39 @@ fn main() {
             gmail_keychain_set,
             gmail_keychain_get,
             gmail_keychain_delete,
+            gmail_send_reply,
             fetch_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kept desktop app");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_mime_message;
+
+    #[test]
+    fn mime_message_contains_required_headers() {
+        let msg = String::from_utf8(build_mime_message("thread-abc", "recipient@example.com", "Hello", "Body text")).unwrap();
+        assert!(msg.contains("To: recipient@example.com"), "missing To header");
+        assert!(msg.contains("Subject: Re: Hello"), "missing Re: subject");
+        assert!(msg.contains("In-Reply-To: <thread-abc>"), "missing In-Reply-To header");
+        assert!(msg.contains("References: <thread-abc>"), "missing References header");
+        assert!(msg.contains("Content-Type: text/plain; charset=UTF-8"), "missing Content-Type header");
+        assert!(msg.contains("\r\n\r\nBody text"), "missing blank line before body");
+    }
+
+    #[test]
+    fn mime_message_does_not_double_re_prefix() {
+        let msg = String::from_utf8(build_mime_message("t1", "a@b.com", "Re: Already there", "hi")).unwrap();
+        assert!(msg.contains("Subject: Re: Already there"));
+        assert!(!msg.contains("Subject: Re: Re:"), "should not double-prefix Re:");
+    }
+
+    #[test]
+    fn mime_message_case_insensitive_re_check() {
+        let msg = String::from_utf8(build_mime_message("t1", "a@b.com", "RE: Uppercase", "hi")).unwrap();
+        assert!(msg.contains("Subject: RE: Uppercase"));
+        assert!(!msg.contains("Re: RE:"), "should not add Re: in front of RE:");
+    }
 }
