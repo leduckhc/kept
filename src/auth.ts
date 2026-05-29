@@ -1,8 +1,12 @@
-// auth.ts — Google OAuth via Tauri shell (system browser) + local redirect
+// auth.ts — Google OAuth via tauri-plugin-oauth (localhost server) + tauri-plugin-shell (open browser)
+/// <reference types="vite/client" />
+import { start, cancel } from '@fabianlars/tauri-plugin-oauth';
+import { open } from '@tauri-apps/plugin-shell';
 import { getDb } from './db';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
-const REDIRECT_URI = 'http://127.0.0.1:9004/oauth/callback';
+const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? '';
+
 const SCOPES = [
   'openid',
   'email',
@@ -27,7 +31,13 @@ export async function getAccount(): Promise<Account | null> {
   }>>('SELECT * FROM accounts LIMIT 1');
   if (!rows.length) return null;
   const r = rows[0];
-  return { id: r.id, email: r.email, accessToken: r.access_token, refreshToken: r.refresh_token, tokenExpiry: r.token_expiry };
+  return {
+    id: r.id,
+    email: r.email,
+    accessToken: r.access_token,
+    refreshToken: r.refresh_token,
+    tokenExpiry: r.token_expiry,
+  };
 }
 
 export async function saveAccount(account: Account): Promise<void> {
@@ -44,9 +54,16 @@ export async function startOAuth(): Promise<Account> {
   const challenge = await pkceChallenge(verifier);
   const state = crypto.randomUUID();
 
+  // tauri-plugin-oauth spawns a localhost server on a random port, returns the port
+  const port = await start({
+    response: '<html><body><h2>Login successful — you can close this tab.</h2></body></html>',
+  });
+
+  const redirectUri = `http://127.0.0.1:${port}`;
+
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.searchParams.set('client_id', GOOGLE_CLIENT_ID);
-  url.searchParams.set('redirect_uri', REDIRECT_URI);
+  url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', SCOPES);
   url.searchParams.set('state', state);
@@ -55,53 +72,56 @@ export async function startOAuth(): Promise<Account> {
   url.searchParams.set('access_type', 'offline');
   url.searchParams.set('prompt', 'consent');
 
-  // Open in system browser
-  const { open } = await import('@tauri-apps/plugin-shell');
+  // Open system browser
   await open(url.toString());
 
-  // Listen for redirect on localhost:9004
-  const code = await waitForOAuthCode(state);
-  return await exchangeCode(code, verifier);
+  // Wait for redirect — tauri-plugin-oauth fires a 'oauth://url' event with the full redirect URL
+  const code = await waitForCode(state);
+
+  try {
+    return await exchangeCode(code, verifier, redirectUri);
+  } finally {
+    await cancel(port).catch(() => {});
+  }
 }
 
-async function waitForOAuthCode(expectedState: string): Promise<string> {
-  // Tauri custom protocol / deep link not yet configured — poll approach
-  // In production use tauri-plugin-deep-link; for now use a simple HTTP listener
+function waitForCode(expectedState: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('OAuth timeout')), 120_000);
-    const poll = setInterval(async () => {
-      try {
-        const res = await fetch(`http://localhost:9004/oauth/poll?state=${expectedState}`);
-        if (res.ok) {
-          const { code } = await res.json() as { code: string };
-          if (code) {
-            clearInterval(poll);
-            clearTimeout(timeout);
-            resolve(code);
-          }
-        }
-      } catch { /* server not ready yet */ }
-    }, 500);
+    const timeout = setTimeout(() => reject(new Error('OAuth timeout after 2 minutes')), 120_000);
+
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<string>('oauth://url', (event) => {
+        try {
+          const url = new URL(event.payload);
+          const returnedState = url.searchParams.get('state');
+          const code = url.searchParams.get('code');
+          const error = url.searchParams.get('error');
+          if (error) { clearTimeout(timeout); reject(new Error(`OAuth error: ${error}`)); return; }
+          if (returnedState !== expectedState || !code) return;
+          clearTimeout(timeout);
+          resolve(code);
+        } catch { /* ignore */ }
+      });
+    });
   });
 }
 
-async function exchangeCode(code: string, verifier: string): Promise<Account> {
-  const clientSecret = import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? '';
+async function exchangeCode(code: string, verifier: string, redirectUri: string): Promise<Account> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
       client_id: GOOGLE_CLIENT_ID,
-      client_secret: clientSecret,
-      redirect_uri: REDIRECT_URI,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
       code_verifier: verifier,
     }),
   });
+  if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
   const tokens = await res.json() as {
-    access_token: string; refresh_token: string;
-    expires_in: number; id_token?: string;
+    access_token: string; refresh_token: string; expires_in: number;
   };
   const profile = await fetchProfile(tokens.access_token);
   const account: Account = {
@@ -124,7 +144,6 @@ async function fetchProfile(token: string): Promise<{ id: string; email: string 
 
 export async function ensureFreshToken(account: Account): Promise<Account> {
   if (Date.now() < account.tokenExpiry - 60_000) return account;
-  const clientSecret = import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? '';
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -132,25 +151,30 @@ export async function ensureFreshToken(account: Account): Promise<Account> {
       grant_type: 'refresh_token',
       refresh_token: account.refreshToken,
       client_id: GOOGLE_CLIENT_ID,
-      client_secret: clientSecret,
+      client_secret: GOOGLE_CLIENT_SECRET,
     }),
   });
+  if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
   const tokens = await res.json() as { access_token: string; expires_in: number };
-  const updated: Account = { ...account, accessToken: tokens.access_token, tokenExpiry: Date.now() + tokens.expires_in * 1000 };
+  const updated: Account = {
+    ...account,
+    accessToken: tokens.access_token,
+    tokenExpiry: Date.now() + tokens.expires_in * 1000,
+  };
   await saveAccount(updated);
   return updated;
 }
 
-// ── PKCE helpers ──────────────────────────────────────────
+// ── PKCE ─────────────────────────────────────────────────
 function generateVerifier(): string {
   const arr = new Uint8Array(32);
   crypto.getRandomValues(arr);
-  return btoa(String.fromCharCode(...arr)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return btoa(String.fromCharCode(...arr))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 async function pkceChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
+  const data = new TextEncoder().encode(verifier);
   const digest = await crypto.subtle.digest('SHA-256', data);
   return btoa(String.fromCharCode(...new Uint8Array(digest)))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
