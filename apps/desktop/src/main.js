@@ -111,6 +111,7 @@ const state = {
     // keyed by message id: Map<originalSrc, dataUri>
     dataByMessageId: {},
     errorByMessageId: {},
+  },
   unsub: {
     pendingThreadId: null,  // thread id waiting for modal confirmation
   },
@@ -689,6 +690,7 @@ function renderThreadReader(reader, sourceThread = null, { wasUnread = false, is
   }
   if (isSenderNew && senderEmail) {
     surface.append(renderSenderTrustCard(reader, senderEmail));
+  }
   // Unsubscribe button: shown when any message has unsubscribe data and thread isn't already unsubscribed
   const hasUnsubscribe = reader.messages.some((msg) => msg.unsubscribeUrl || msg.unsubscribeMailto);
   if (hasUnsubscribe) {
@@ -1201,6 +1203,7 @@ async function loadImagesViaProxy(messageId, rawBody) {
     state.imageProxy.statusByMessageId[messageId] = 'error';
     state.imageProxy.errorByMessageId[messageId] = userFacingError(error, 'Could not load images via proxy.');
   }
+}
 async function executeUnsubscribe() {
   const threadId = state.unsub.pendingThreadId;
   if (!threadId) return;
