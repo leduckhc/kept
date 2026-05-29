@@ -5,6 +5,7 @@ import {
   createBridgeAvailabilityProbe,
   createTauriGmailBridge,
   exchangeAuthorizationCode,
+  invokeGmailSend,
   redactBridgeError,
 } from '../src/tauri-gmail-bridge-core.js';
 
@@ -264,7 +265,7 @@ test('desktop shell loads bridge before main and exposes Tauri globals for packa
   assert.match(rustMain, /option_env!\("KEPT_GMAIL_CLIENT_SECRET"\)/);
   assert.match(rustMain, /option_env!\("GMAIL_CLIENT_SECRET"\)/);
   assert.match(rustMain, /770442354658-ju4vt9tuurrq4a4r936b4ef08l36nati\.apps\.googleusercontent\.com/);
-  for (const command of ['gmail_oauth_config', 'gmail_start_oauth', 'gmail_keychain_set', 'gmail_keychain_get', 'gmail_keychain_delete']) {
+  for (const command of ['gmail_oauth_config', 'gmail_start_oauth', 'gmail_keychain_set', 'gmail_keychain_get', 'gmail_keychain_delete', 'gmail_send_reply']) {
     assert.match(rustMain, new RegExp(command));
   }
 });
@@ -276,4 +277,39 @@ test('redaction removes token, authorization code, verifier, snippets, and body 
   assert.equal(redacted.includes('auth-code-secret'), false);
   assert.equal(redacted.includes('private'), false);
   assert.match(redacted, /\[redacted\]/);
+});
+
+test('invokeGmailSend calls gmail_send_reply with correct command and args', async () => {
+  const calls: { command: string; payload: Record<string, unknown> }[] = [];
+  const mockInvoke = async (command: string, payload?: Record<string, unknown>) => {
+    calls.push({ command, payload: payload ?? {} });
+    if (command === 'gmail_send_reply') return undefined;
+    throw new Error(`unexpected command ${command}`);
+  };
+
+  await invokeGmailSend(mockInvoke, 'thread-xyz', 'Hello there', 'recipient@example.com', 'Re: Meeting');
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'gmail_send_reply');
+  assert.deepEqual(calls[0].payload, {
+    threadId: 'thread-xyz',
+    messageBody: 'Hello there',
+    to: 'recipient@example.com',
+    subject: 'Re: Meeting',
+  });
+});
+
+test('invokeGmailSend rejects with redacted error string on failure', async () => {
+  const mockInvoke = async (_command: string) => {
+    throw new Error('access_token=secret-token internal error');
+  };
+
+  await assert.rejects(
+    invokeGmailSend(mockInvoke, 't1', 'body', 'a@b.com', 'Hi'),
+    (error: any) => {
+      assert.match(error.message, /internal error/);
+      assert.equal(error.message.includes('secret-token'), false, 'should redact token');
+      return true;
+    },
+  );
 });

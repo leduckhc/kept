@@ -172,6 +172,20 @@ function normalizeGoogleOAuthTokens(tokens, { now = () => new Date() } = {}) {
   };
 }
 
+export async function invokeGmailSend(
+  invoke: (command: string, payload?: Record<string, unknown>) => Promise<unknown>,
+  threadId: string,
+  body: string,
+  to: string,
+  subject: string,
+): Promise<void> {
+  try {
+    await invoke('gmail_send_reply', { threadId, messageBody: body, to, subject });
+  } catch (error) {
+    throw new Error(redactBridgeError(error));
+  }
+}
+
 export function redactBridgeError(error) {
   return String(error?.message || error || 'Gmail bridge failed')
     .replace(/(access_token|refresh_token|id_token|code|code_verifier|client_secret|snippet|body)=([^\s&]+)/gi, '$1=[redacted]')
