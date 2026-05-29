@@ -249,7 +249,7 @@ function threadRow(t: Thread): string {
     <div class="thread-row${t.isUnread ? ' unread' : ''}" data-id="${t.id}">
       ${dot}
       ${avatarHtml(t)}
-      <div class="thread-mid">
+      <div class="thread-mid${attachment ? ' has-attachment' : ''}">
         <div class="thread-top">
           <span class="thread-sender">${esc(sender)}</span>
           <span class="thread-date">${date}</span>
