@@ -1,3 +1,5 @@
+// search-core/src/index.ts
+
 export const sqliteSchema = `
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS accounts (
@@ -41,12 +43,44 @@ export const encryptionDecision = {
   ],
 };
 
-export function createInMemorySearchIndex() {
-  const rows = [];
+export interface NormalizedThread {
+  id: string;
+  accountId: string;
+  subject: string;
+  sender: string;
+  senderEmail: string;
+  recipients: string[];
+  snippet: string;
+  body: string;
+  receivedAt: string;
+}
+
+export interface SearchRow {
+  thread: { id: string; account_id: string; subject: string; updated_at: string };
+  message: {
+    id: string; thread_id: string; sender: string; recipients_json: string;
+    subject: string; body_ciphertext: string; body_preview: string; received_at: string;
+  };
+  fts: { subject: string; sender: string; recipients: string; body_preview: string };
+}
+
+export interface SearchResult extends NormalizedThread {
+  score: number;
+  snippet: string;
+}
+
+export interface InMemorySearchIndex {
+  addThread(thread: Record<string, unknown>): void;
+  seed(threads: Record<string, unknown>[]): void;
+  search(query: string): SearchResult[];
+}
+
+export function createInMemorySearchIndex(): InMemorySearchIndex {
+  const rows: NormalizedThread[] = [];
   return {
-    addThread(thread) { rows.push(normalizeThread(thread)); },
-    seed(threads) { threads.forEach((thread) => this.addThread(thread)); },
-    search(query) {
+    addThread(thread: Record<string, unknown>) { rows.push(normalizeThread(thread)); },
+    seed(threads: Record<string, unknown>[]) { threads.forEach((thread) => this.addThread(thread)); },
+    search(query: string): SearchResult[] {
       const terms = normalizeSearchTerms(query);
       if (terms.length === 0) return [];
       return rows
@@ -61,7 +95,7 @@ export function createInMemorySearchIndex() {
   };
 }
 
-export function normalizeSearchTerms(query) {
+export function normalizeSearchTerms(query: string): string[] {
   return String(query || '')
     .toLowerCase()
     .split(/\s+/)
@@ -69,21 +103,21 @@ export function normalizeSearchTerms(query) {
     .filter(Boolean);
 }
 
-export function normalizeThread(thread) {
+export function normalizeThread(thread: Record<string, unknown>): NormalizedThread {
   return {
-    id: thread.id,
-    accountId: thread.accountId || 'acct_demo_gmail',
-    subject: thread.subject || '(no subject)',
-    sender: thread.sender || 'unknown sender',
-    senderEmail: thread.senderEmail || '',
-    recipients: Array.isArray(thread.recipients) ? thread.recipients : [],
-    snippet: thread.snippet || '',
-    body: thread.body || '',
-    receivedAt: thread.receivedAt || new Date(0).toISOString(),
+    id: String(thread['id'] ?? ''),
+    accountId: String(thread['accountId'] ?? 'acct_demo_gmail'),
+    subject: String(thread['subject'] ?? '(no subject)'),
+    sender: String(thread['sender'] ?? 'unknown sender'),
+    senderEmail: String(thread['senderEmail'] ?? ''),
+    recipients: Array.isArray(thread['recipients']) ? (thread['recipients'] as string[]) : [],
+    snippet: String(thread['snippet'] ?? ''),
+    body: String(thread['body'] ?? ''),
+    receivedAt: String(thread['receivedAt'] ?? new Date(0).toISOString()),
   };
 }
 
-export function buildSearchRows(thread) {
+export function buildSearchRows(thread: Record<string, unknown>): SearchRow {
   const normalized = normalizeThread(thread);
   return {
     thread: {

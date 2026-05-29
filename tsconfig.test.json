@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": false,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@kept/ui": ["./packages/ui/dist/index.d.ts"],
+      "@kept/search-core": ["./packages/search-core/dist/index.d.ts"],
+      "@kept/ai-core": ["./packages/ai-core/dist/index.d.ts"],
+      "@kept/mail-core": ["./packages/mail-core/dist/index.d.ts"]
+    }
+  },
+  "include": [
+    "packages/*/test/**/*.ts",
+    "apps/*/test/**/*.ts"
+  ],
+  "exclude": ["node_modules", "**/dist/**"]
+}

@@ -6,6 +6,7 @@
     "allowJs": true,
     "checkJs": false,
     "strict": true,
+    "skipLibCheck": true,
     "outDir": "dist",
     "rootDir": "src",
     "composite": true,
@@ -13,18 +14,17 @@
     "declarationMap": true,
     "sourceMap": true,
     "paths": {
-      "@kept/ui": ["../../packages/ui/src/index.js"],
-      "@kept/search-core": ["../../packages/search-core/src/index.js"],
-      "@kept/ai-core": ["../../packages/ai-core/src/index.js"],
-      "@kept/mail-core": ["../../packages/mail-core/src/index.js"]
+      "@kept/ui": ["../../packages/ui/src/index.ts"],
+      "@kept/search-core": ["../../packages/search-core/src/index.ts"],
+      "@kept/ai-core": ["../../packages/ai-core/src/index.ts"],
+      "@kept/mail-core": ["../../packages/mail-core/src/index.ts"]
     }
   },
   "include": ["src/**/*"],
   "references": [
     { "path": "../../packages/ui" },
     { "path": "../../packages/search-core" },
-    { "path": "../../packages/ai-core" },
-    { "path": "../../packages/mail-core" }
+    { "path": "../../packages/ai-core" }
   ],
   "exclude": ["node_modules", "dist"]
 }

@@ -13,9 +13,13 @@
     "outDir": "dist",
     "rootDir": "src",
     "declaration": true,
+    "composite": true,
     "esModuleInterop": false,
     "ignoreDeprecations": "6.0",
-    "isolatedModules": true
+    "isolatedModules": true,
+    "paths": {
+      "@kept/search-core": ["../search-core/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "test"]
