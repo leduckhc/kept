@@ -1,8 +1,8 @@
-import { brandTokens, renderPipMark } from '/packages/ui/src/index.js';
+import { brandTokens, renderPipMark } from '../../packages/ui/src/index.js';
 import { classifyThread } from './classifier.js';
 import { loadInboxSectionsState, saveInboxSectionsState } from './inbox-sections-state.js';
-import { createBrowserLocalMailRepository, createJsonMailStore, flagsForTriageAction, getInboxSections, parseMboxToThreads, syncGmailInbox } from '/packages/mail-core/src/index.js';
-import { createProviderAdapter, disabledProvider } from '/packages/ai-core/src/index.js';
+import { createBrowserLocalMailRepository, createJsonMailStore, flagsForTriageAction, getInboxSections, parseMboxToThreads, syncGmailInbox } from '../../packages/mail-core/src/index.js';
+import { createProviderAdapter, disabledProvider } from '../../packages/ai-core/src/index.js';
 import {
   applyLocalReadState,
   createLocalReadStateStore,
