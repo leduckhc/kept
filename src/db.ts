@@ -66,6 +66,15 @@ async function migrate(db: Database): Promise<void> {
   `);
 
   await db.execute(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      value TEXT,
+      PRIMARY KEY (key, account_id)
+    )
+  `);
+
+  await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_threads_received ON threads(received_at DESC)
   `);
   await db.execute(`

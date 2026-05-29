@@ -99,8 +99,7 @@ body {
 }
 
 .search-input {
-  flex: 1;
-  max-width: 320px;
+  width: 160px;
   padding: 5px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -109,8 +108,13 @@ body {
   font-size: 13px;
   font-family: var(--font);
   outline: none;
+  transition: width 0.2s ease, border-color 0.15s;
 }
-.search-input:focus { border-color: var(--text-muted); }
+.search-input:focus,
+.search-input.expanded {
+  width: 280px;
+  border-color: var(--text-muted);
+}
 
 .btn-icon {
   background: none;
@@ -144,12 +148,30 @@ body {
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 /* ── Thread row ─────────────────────────────────────────── */
 .thread-row {
   display: grid;
-  grid-template-columns: 40px 1fr auto;
+  grid-template-columns: 8px 40px 1fr auto;
   align-items: center;
   gap: 10px;
   padding: 6px 16px;
@@ -160,6 +182,20 @@ body {
 }
 .thread-row:hover { background: var(--surface); }
 .thread-row.selected { background: var(--surface); }
+
+/* Unread dot */
+.unread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  flex-shrink: 0;
+  justify-self: center;
+}
+.unread-dot.filled {
+  background: var(--unread-dot);
+  border-color: var(--unread-dot);
+}
 
 /* Avatar circle */
 .avatar {
@@ -195,8 +231,12 @@ body {
 
 /* Middle column */
 .thread-mid { min-width: 0; }
-.thread-top { display: flex; align-items: baseline; gap: 6px; }
-.thread-bottom { display: flex; align-items: baseline; gap: 4px; overflow: hidden; }
+.thread-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
 
 .thread-sender {
   font-size: 13px;
@@ -205,37 +245,41 @@ body {
   text-overflow: ellipsis;
   color: var(--text-muted);
   font-weight: 400;
+  flex: 1;
+  min-width: 0;
 }
 .thread-row.unread .thread-sender {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text);
 }
-.thread-subject {
+
+.thread-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.thread-subject-line {
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-muted);
-  flex-shrink: 0;
-  max-width: 40%;
 }
-.thread-row.unread .thread-subject { color: var(--text); font-weight: 500; }
-.thread-sep { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
-.thread-preview {
+.thread-row.unread .thread-subject-line { color: var(--text); font-weight: 500; }
+
+.thread-preview-line {
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
 }
 
-/* Right column */
+/* Right column — hidden since date is now in thread-top */
 .thread-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
+  display: none;
 }
 .thread-meta { text-align: right; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .attachment-icon { font-size: 11px; color: var(--text-muted); }
@@ -250,9 +294,9 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 2px;
+  z-index: 2;
 }
 .thread-row:hover .thread-actions { display: flex; }
-.thread-row:hover .thread-right { display: none; }
 
 .btn-action {
   background: none;
@@ -362,7 +406,8 @@ body {
   gap: 8px;
   color: var(--text-muted);
 }
-.empty-state .icon { font-size: 32px; }
+.empty-state .icon { font-size: 36px; opacity: 0.4; }
+.empty-state .empty-text { font-size: 14px; color: var(--text-muted); opacity: 0.7; }
 
 .spinner {
   width: 20px; height: 20px;
@@ -376,13 +421,14 @@ body {
 
 /* ── Status bar ─────────────────────────────────────────── */
 .statusbar {
-  height: 22px;
+  height: 18px;
   padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
+  opacity: 0.7;
   flex-shrink: 0;
 }

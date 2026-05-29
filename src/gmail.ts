@@ -17,27 +17,133 @@ export interface Thread {
   gmailThreadId: string;
 }
 
+// ── Settings helpers ──────────────────────────────────────
+async function getSetting(accountId: string, key: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ value: string | null }>>(
+    'SELECT value FROM settings WHERE key = ? AND account_id = ?',
+    [key, accountId]
+  );
+  return rows[0]?.value ?? null;
+}
+
+async function setSetting(accountId: string, key: string, value: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    'INSERT OR REPLACE INTO settings (key, account_id, value) VALUES (?, ?, ?)',
+    [key, accountId, value]
+  );
+}
+
 // ── Sync ──────────────────────────────────────────────────
 export async function syncInbox(account: Account, onProgress?: (n: number) => void): Promise<void> {
   const a = await ensureFreshToken(account);
 
-  // Fetch thread list (inbox, not archived)
+  // Try incremental sync first
+  const storedHistoryId = await getSetting(account.id, 'historyId');
+  if (storedHistoryId) {
+    const didIncremental = await trySyncIncremental(a, storedHistoryId, onProgress);
+    if (didIncremental) return;
+    // Fall through to full sync if incremental failed (historyId too old / 404)
+  }
+
+  // Full sync
+  await syncFull(a, account.id, onProgress);
+
+  // After full sync, fetch and store current historyId
+  try {
+    const profile = await gmailGet(a, '/users/me/profile') as { historyId?: string };
+    if (profile.historyId) {
+      await setSetting(account.id, 'historyId', profile.historyId);
+    }
+  } catch {
+    // Non-fatal: next sync will just do another full sync
+  }
+}
+
+async function syncFull(account: Account, accountId: string, onProgress?: (n: number) => void): Promise<void> {
   let pageToken: string | undefined;
   let total = 0;
   do {
     const params = new URLSearchParams({ labelIds: 'INBOX', maxResults: '100' });
     if (pageToken) params.set('pageToken', pageToken);
-    const res = await gmailGet(a, `/users/me/threads?${params}`);
+    const res = await gmailGet(account, `/users/me/threads?${params}`);
     const data = res as { threads?: Array<{ id: string }>; nextPageToken?: string };
     if (!data.threads) break;
 
     for (const t of data.threads) {
-      await syncThread(a, t.id, account.id);
+      await syncThread(account, t.id, accountId);
       total++;
       onProgress?.(total);
     }
     pageToken = data.nextPageToken;
   } while (pageToken);
+}
+
+/** Returns true if incremental sync succeeded, false if we need a full sync fallback. */
+async function trySyncIncremental(
+  account: Account,
+  startHistoryId: string,
+  onProgress?: (n: number) => void
+): Promise<boolean> {
+  try {
+    const params = new URLSearchParams({
+      startHistoryId,
+      historyTypes: 'messageAdded',
+    });
+    params.append('historyTypes', 'labelAdded');
+    params.append('historyTypes', 'labelRemoved');
+
+    const res = await gmailGetRaw(account, `/users/me/history?${params}`);
+    if (res.status === 404) return false; // historyId too old → fall back to full sync
+
+    if (!res.ok) throw new Error(`Gmail History API error ${res.status}`);
+
+    const data = await res.json() as {
+      history?: Array<{
+        messages?: Array<{ id: string; threadId: string }>;
+        messagesAdded?: Array<{ message: { id: string; threadId: string } }>;
+        labelsAdded?: Array<{ message: { id: string; threadId: string }; labelIds: string[] }>;
+        labelsRemoved?: Array<{ message: { id: string; threadId: string }; labelIds: string[] }>;
+      }>;
+      historyId?: string;
+    };
+
+    // Collect unique threadIds that changed
+    const changedThreadIds = new Set<string>();
+    for (const h of data.history ?? []) {
+      for (const m of h.messagesAdded ?? []) changedThreadIds.add(m.message.threadId);
+      for (const m of h.labelsAdded ?? []) changedThreadIds.add(m.message.threadId);
+      for (const m of h.labelsRemoved ?? []) changedThreadIds.add(m.message.threadId);
+      // Fallback: top-level messages array
+      for (const m of h.messages ?? []) changedThreadIds.add(m.threadId);
+    }
+
+    let n = 0;
+    for (const threadId of changedThreadIds) {
+      await syncThread(account, threadId, account.id);
+      n++;
+      onProgress?.(n);
+    }
+
+    // Store the new historyId returned by the history API
+    if (data.historyId) {
+      await setSetting(account.id, 'historyId', data.historyId);
+    }
+
+    return true;
+  } catch (e) {
+    // Network or unexpected error — fall back to full sync
+    console.warn('Incremental sync failed, falling back to full sync:', e);
+    return false;
+  }
+}
+
+/** gmailGet variant that returns the raw Response so we can inspect status codes */
+async function gmailGetRaw(account: Account, path: string): Promise<Response> {
+  return fetch(`${API}${path}`, {
+    headers: { Authorization: `Bearer ${account.accessToken}` },
+  });
 }
 
 async function syncThread(account: Account, gmailThreadId: string, accountId: string): Promise<void> {

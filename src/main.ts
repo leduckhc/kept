@@ -110,6 +110,8 @@ function showShell() {
     searchQuery = searchEl.value;
     renderInbox();
   });
+  searchEl.addEventListener('focus', () => searchEl.classList.add('expanded'));
+  searchEl.addEventListener('blur', () => { if (!searchEl.value) searchEl.classList.remove('expanded'); });
 }
 
 // ── Sync ──────────────────────────────────────────────────
@@ -169,17 +171,21 @@ function renderInbox() {
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="icon">✉</div>
-        <div>${searchQuery ? 'No results' : 'Inbox is empty'}</div>
+        <div class="icon" style="color:var(--text-muted)">✉</div>
+        <div class="empty-text">${searchQuery ? 'No results' : 'All caught up'}</div>
       </div>`;
     return;
   }
 
   const sections = groupBySection(filtered);
-  const html = sections.map(s => `
-    <div class="section-header">${s.label} <span style="opacity:.5">${s.threads.length}</span></div>
+  const html = sections.map(s => {
+    const unread = s.threads.filter(t => t.isUnread).length;
+    const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
+    return `
+    <div class="section-header">${s.label}${badge}</div>
     ${s.threads.map(threadRow).join('')}
-  `).join('');
+  `;
+  }).join('');
 
   container.innerHTML = html;
 
@@ -225,18 +231,18 @@ function threadRow(t: Thread): string {
   const date = formatDate(t.receivedAt);
   const sender = t.senderName || t.senderEmail;
   const attachment = t.hasAttachment ? `<span class="attachment-icon" title="Has attachment">📎</span>` : '';
+  const dot = `<span class="unread-dot${t.isUnread ? ' filled' : ''}"></span>`;
   return `
     <div class="thread-row${t.isUnread ? ' unread' : ''}" data-id="${t.id}">
+      ${dot}
       ${avatarHtml(t)}
       <div class="thread-mid">
         <div class="thread-top">
           <span class="thread-sender">${esc(sender)}</span>
+          <span class="thread-date">${date}</span>
         </div>
-        <div class="thread-bottom">
-          <span class="thread-subject">${esc(t.subject)}</span>
-          <span class="thread-sep">·</span>
-          <span class="thread-preview">${esc(t.snippet)}</span>
-        </div>
+        <div class="thread-subject-line">${esc(t.subject)}</div>
+        <div class="thread-preview-line">${esc(t.snippet)}</div>
       </div>
       <div class="thread-right">
         ${attachment}
@@ -256,6 +262,7 @@ async function doMarkRead(t: Thread, row: HTMLElement) {
   await markRead(account, t);
   t.isUnread = false;
   row.classList.remove('unread');
+  row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
 }
 
 async function doArchive(t: Thread, row: HTMLElement) {
