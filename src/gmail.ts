@@ -61,9 +61,12 @@ export async function syncInbox(account: Account, onProgress?: (n: number) => vo
   }
 }
 
+const MAX_SYNC_PAGES = 10;
+
 async function syncFull(account: Account, accountId: string, onProgress?: (n: number) => void): Promise<void> {
   let pageToken: string | undefined;
   let total = 0;
+  let page = 0;
   do {
     const params = new URLSearchParams({ labelIds: 'INBOX', maxResults: '100' });
     if (pageToken) params.set('pageToken', pageToken);
@@ -77,6 +80,11 @@ async function syncFull(account: Account, accountId: string, onProgress?: (n: nu
       onProgress?.(total);
     }
     pageToken = data.nextPageToken;
+    page++;
+    if (page >= MAX_SYNC_PAGES) {
+      console.log('syncFull: hit MAX_SYNC_PAGES, stopping');
+      break;
+    }
   } while (pageToken);
 }
 
@@ -292,7 +300,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
     'Content-Type: text/plain; charset=UTF-8',
     '',
     opts.body,
-  ].filter(l => l !== undefined);
+  ].filter(Boolean);
   const raw = btoa(lines.join('\r\n')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   const payload: Record<string, string> = { raw };
   if (opts.threadId) payload.threadId = opts.threadId;
@@ -302,6 +310,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
 // ── Fetch full message body ───────────────────────────────
 export async function fetchMessageBody(account: Account, gmailThreadId: string): Promise<{
   messages: Array<{ from: string; body: string; receivedAt: number; gmailMessageId: string }>;
+  lastMessageId: string | null;
 }> {
   const a = await ensureFreshToken(account);
   const data = await gmailGet(a, `/users/me/threads/${gmailThreadId}?format=full`) as {
@@ -311,12 +320,15 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
       payload: MimePart & { headers: Array<{ name: string; value: string }> };
     }>;
   };
+  const msgs = data.messages ?? [];
+  const lastMessageId = msgs.length > 0 ? msgs[msgs.length - 1].id : null;
   return {
-    messages: data.messages.map(msg => {
+    messages: msgs.map(msg => {
       const getH = (n: string) => msg.payload.headers.find(h => h.name.toLowerCase() === n)?.value ?? '';
       const body = extractTextBody(msg.payload);
       return { from: getH('from'), body, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
     }),
+    lastMessageId,
   };
 }
 
