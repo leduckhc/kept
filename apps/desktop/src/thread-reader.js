@@ -485,14 +485,7 @@ export function filterBannedSenderThreads(threads = [], trustStore) {
 // ---------------------------------------------------------------------------
 
 /**
- * Stub for sending a Gmail reply. Logs to console; actual API wiring is KPT-018B.
- */
-export function invokeGmailSend(threadId, body) {
-  // eslint-disable-next-line no-console
-  console.log('[KPT-018B] invokeGmailSend stub — threadId:', threadId, 'body length:', body?.length ?? 0);
-}
-
-/**
+ /**
  * Render an inline reply composer panel (hidden by default).
  */
 export function renderReplyComposer({ threadId, senderEmail = '', subject = '' } = {}) {

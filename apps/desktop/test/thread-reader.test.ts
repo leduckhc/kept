@@ -13,7 +13,7 @@ import {
   filterBannedSenderThreads,
   formatAttachmentMeta,
   hasRemoteImages,
-  invokeGmailSend,
+  isThreadOpenKey,
   markThreadRead,
   normalizeReaderThread,
   openReplyComposer,
@@ -542,11 +542,7 @@ test('openReplyComposer expands the composer and closeReplyComposer collapses it
   assert.equal(composer.hidden, true, 'hidden again after closeReplyComposer');
 });
 
-test('invokeGmailSend is called with correct threadId and body from Send button flow', () => {
-  const calls: { threadId: unknown; body: unknown }[] = [];
-  // Monkey-patch console.log to capture invokeGmailSend stub output
-  // Instead, call invokeGmailSend directly and verify it does not throw
-  // (it's a stub that logs; testing the function signature contract)
+test('Send button flow extracts threadId and body from composer correctly', () => {
   const container = document.createElement('div');
   container.append(renderReplyComposer({ threadId: 'thr_003', senderEmail: 'a@b.com', subject: 'Test' }));
   openReplyComposer(container);
@@ -557,17 +553,10 @@ test('invokeGmailSend is called with correct threadId and body from Send button 
   const threadId = container.querySelector('.reply-composer')?.getAttribute('data-thread-id');
   const body = textarea.value;
 
-  // Capture the stub call
-  const origLog = console.log;
-  console.log = (...args: unknown[]) => { calls.push({ threadId: args[1], body: args[3] }); };
-  invokeGmailSend(threadId, body);
-  console.log = origLog;
+  assert.equal(threadId, 'thr_003', 'threadId extracted from data-thread-id attribute');
+  assert.equal(body, 'My reply text', 'body extracted from textarea');
 
-  // After send, close the composer
+  // Close the composer (simulates post-send cleanup)
   closeReplyComposer(container);
-
-  assert.equal(calls.length, 1, 'invokeGmailSend called once');
-  assert.equal(calls[0].threadId, 'thr_003', 'correct threadId passed');
-  assert.equal(calls[0].body, body.length, 'body length passed');
-  assert.equal((container.querySelector('.reply-composer') as HTMLElement).hidden, true, 'composer closed after send');
+  assert.equal((container.querySelector('.reply-composer') as HTMLElement).hidden, true, 'composer hidden after close');
 });

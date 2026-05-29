@@ -12,7 +12,6 @@ import {
   filterBannedSenderThreads,
   formatAttachmentMeta,
   hasRemoteImages,
-  invokeGmailSend,
   isThreadOpenKey,
   markThreadRead,
   normalizeReaderThread,
@@ -39,6 +38,7 @@ import {
   resolveTriageAction,
   statusCopyForTriage,
 } from './triage-actions.js';
+import { createBridgeAvailabilityProbe, invokeGmailSend } from './tauri-gmail-bridge-core.js';
 
 const STORAGE_KEY = 'kept.localMailThreads.v1';
 const IMPORT_META_KEY = 'kept.localMailImportMeta.v1';
@@ -837,8 +837,18 @@ function wireThreadReaderControls() {
   document.querySelector('[data-reply-action="send"]')?.addEventListener('click', () => {
     const surface = document.querySelector('.reader-surface');
     const textarea = surface?.querySelector('.reply-composer-body') as HTMLTextAreaElement | null;
-    const threadId = surface?.querySelector('.reply-composer')?.getAttribute('data-thread-id') || state.activeThreadId;
-    invokeGmailSend(threadId, textarea?.value ?? '');
+    const composer = surface?.querySelector('.reply-composer');
+    const threadId = composer?.getAttribute('data-thread-id') || state.activeThreadId;
+    const to = (composer?.querySelector('.reply-composer-to') as HTMLInputElement | null)?.value ?? '';
+    const subject = (composer?.querySelector('.reply-composer-subject') as HTMLInputElement | null)?.value ?? '';
+    const { invoke } = createBridgeAvailabilityProbe(window);
+    if (typeof invoke === 'function') {
+      invokeGmailSend(invoke, threadId, textarea?.value ?? '', to, subject).catch((err) => {
+        console.error('[KPT-018] Send failed:', err?.message ?? err);
+      });
+    } else {
+      console.warn('[KPT-018] Tauri invoke not available — reply not sent');
+    }
     if (surface) closeReplyComposer(surface);
   });
   document.querySelector('[data-reply-action="cancel"]')?.addEventListener('click', () => {
