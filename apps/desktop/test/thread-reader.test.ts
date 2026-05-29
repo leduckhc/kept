@@ -16,6 +16,7 @@ import {
   sanitizeHtmlForDisplay,
   safeGmailThreadUrl,
   parseListUnsubscribeHeaders,
+  createLocalUnsubscribeStore,
 } from '../src/thread-reader.js';
 
 const baseThread = {
