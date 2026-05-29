@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { flagsForTriageAction } from '../../../packages/mail-core/src/index.js';
 
 const PROVIDER_ACTION_STATUSES = ['queued', 'error', 'needs-reconnect'];

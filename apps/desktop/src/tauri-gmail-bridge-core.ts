@@ -1,4 +1,3 @@
-// @ts-nocheck
 const DEFAULT_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DEFAULT_ACCOUNT_ID = 'acct_local_gmail';
 const KEYCHAIN_SERVICE = 'kept.gmail.oauth';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 const READ_STATE_VERSION = 1;
 const UNSAFE_GMAIL_ID = /(?:token|secret|ya29|access_token|refresh_token|code_verifier)/i;
 

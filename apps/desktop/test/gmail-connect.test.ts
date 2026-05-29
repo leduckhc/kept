@@ -183,7 +183,7 @@ test('repositoryMessagesToInboxThreads lets desktop render repository-backed Gma
 });
 
 test('desktop Gmail sync passes the durable repository into syncGmailInbox', async () => {
-  const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
 
   assert.match(source, /createBrowserLocalMailRepository\(/);
   assert.match(source, /syncGmailInbox\(\{[^}]*repository[^}]*mailStore[^}]*maxResults: 25/s);

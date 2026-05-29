@@ -254,8 +254,8 @@ test('desktop shell loads bridge before main and exposes Tauri globals for packa
     readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'),
     readFile(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf8'),
   ]);
-  assert.ok(indexHtml.indexOf('./src/tauri-gmail-bridge.js') > -1);
-  assert.ok(indexHtml.indexOf('./src/tauri-gmail-bridge.js') < indexHtml.indexOf('./src/main.js'));
+  assert.ok(indexHtml.indexOf('./src/tauri-gmail-bridge.ts') > -1);
+  assert.ok(indexHtml.indexOf('./src/tauri-gmail-bridge.ts') < indexHtml.indexOf('./src/main.ts'));
   const tauriConfig = JSON.parse(tauriConfigText);
   assert.equal(tauriConfig.app.withGlobalTauri, true);
   assert.match(tauriConfig.app.security.csp, /https:\/\/oauth2\.googleapis\.com/);

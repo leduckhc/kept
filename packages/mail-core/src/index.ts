@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-nocheck — full mail-core type migration deferred to KPT-020
 import { buildSearchRows, normalizeSearchTerms } from '../../search-core/src/index.js';
 
 export const sampleThreads = [
@@ -266,7 +266,7 @@ export async function createPkceChallenge(verifier, { cryptoImpl = globalThis.cr
   return base64UrlEncode(new Uint8Array(digest));
 }
 
-export function parseGmailOAuthCallback(callbackUrl, { expectedState } = {}) {
+export function parseGmailOAuthCallback(callbackUrl, { expectedState }: { expectedState?: string } = {}) {
   requireField('callbackUrl', callbackUrl);
   requireField('expectedState', expectedState);
   const parsed = new URL(callbackUrl, 'http://127.0.0.1');
@@ -279,7 +279,7 @@ export function parseGmailOAuthCallback(callbackUrl, { expectedState } = {}) {
   return { ok: true, state, code };
 }
 
-export function createKeychainTokenStore({ keychain, service = gmailOAuthTokenKeyPrefix } = {}) {
+export function createKeychainTokenStore({ keychain, service = gmailOAuthTokenKeyPrefix }: { keychain?: any; service?: string } = {}) {
   requireField('keychain', keychain);
   ['setPassword', 'getPassword', 'deletePassword'].forEach((method) => {
     if (typeof keychain[method] !== 'function') throw new Error(`keychain.${method} is required`);
@@ -334,6 +334,14 @@ export function createGmailApiConnector({
   clientId = '',
   clientSecret = '',
   now = () => new Date(),
+}: {
+  tokenStore?: any;
+  fetchImpl?: typeof globalThis.fetch;
+  accountId?: string;
+  tokenUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
+  now?: () => Date;
 } = {}) {
   requireField('tokenStore', tokenStore);
   requireField('fetchImpl', fetchImpl);
@@ -1710,7 +1718,31 @@ function userSafeSearchError(error) {
   return redactForLogs(error?.message || 'Local search could not finish.');
 }
 
-function normalizeLocalFlags(flags = {}) {
+interface LocalFlagsInput {
+  read?: unknown;
+  starred?: unknown;
+  archived?: unknown;
+  [key: string]: unknown;
+}
+
+interface TriageActionEntryInput {
+  id?: unknown;
+  accountId?: unknown;
+  action?: unknown;
+  status?: unknown;
+  createdAt?: unknown;
+  messageId?: unknown;
+  threadId?: unknown;
+  providerMessageId?: unknown;
+  providerThreadId?: unknown;
+  desiredFlags?: LocalFlagsInput;
+  attemptedAt?: unknown;
+  confirmedAt?: unknown;
+  error?: unknown;
+  metadata?: unknown;
+}
+
+function normalizeLocalFlags(flags: LocalFlagsInput = {}) {
   return {
     read: Boolean(flags.read),
     starred: Boolean(flags.starred),
@@ -1718,7 +1750,7 @@ function normalizeLocalFlags(flags = {}) {
   };
 }
 
-function normalizeTriageActionEntry(entry = {}) {
+function normalizeTriageActionEntry(entry: TriageActionEntryInput = {}) {
   requireField('triageAction.id', entry.id);
   requireField('triageAction.accountId', entry.accountId);
   requireField('triageAction.action', entry.action);
@@ -1744,17 +1776,17 @@ function normalizeTriageActionEntry(entry = {}) {
   };
 }
 
-function normalizePartialLocalFlags(flags = {}) {
-  const next = {};
+function normalizePartialLocalFlags(flags: LocalFlagsInput = {}): Partial<{ read: boolean; starred: boolean; archived: boolean }> {
+  const next: Partial<{ read: boolean; starred: boolean; archived: boolean }> = {};
   if (Object.hasOwn(flags, 'read')) next.read = Boolean(flags.read);
   if (Object.hasOwn(flags, 'starred')) next.starred = Boolean(flags.starred);
   if (Object.hasOwn(flags, 'archived')) next.archived = Boolean(flags.archived);
   return next;
 }
 
-function hasUnresolvedTriageActionForMessage(state, accountId, messageId, providerMessageId) {
+function hasUnresolvedTriageActionForMessage(state: Record<string, unknown>, accountId: string, messageId: string, providerMessageId: string) {
   const unresolved = new Set(['queued', 'syncing', 'error', 'needs-reconnect']);
-  return Object.values(state.triageActions || {}).some((entry) => unresolved.has(entry.status)
+  return Object.values((state.triageActions as Record<string, TriageActionEntryInput>) || {}).some((entry) => unresolved.has(String(entry.status))
     && entry.accountId === accountId
     && ((messageId && entry.messageId === messageId) || (providerMessageId && entry.providerMessageId === providerMessageId)));
 }

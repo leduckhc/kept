@@ -11,7 +11,7 @@ await cp('../../packages', 'dist/packages', {
   filter: (source) => !source.includes('/node_modules/') && !source.includes('/test/'),
 });
 
-for (const packagedPath of ['dist/src/main.js', 'dist/src/tauri-gmail-bridge.js']) {
+for (const packagedPath of ['dist/src/main.ts', 'dist/src/tauri-gmail-bridge.ts']) {
   const packagedSource = await readFile(packagedPath, 'utf8');
   // Rewrite both legacy root-absolute '/packages/' and NodeNext-relative '../../packages/' to '../packages/'
   const rewritten = packagedSource

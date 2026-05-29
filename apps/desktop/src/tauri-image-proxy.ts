@@ -7,11 +7,11 @@ const probe = createBridgeAvailabilityProbe(window);
  * Returns a base64 data URI, or null if Tauri is unavailable.
  * Throws with a user-facing message on fetch failure.
  */
-export async function proxyImage(url) {
+export async function proxyImage(url: string): Promise<string | null> {
   if (!probe.available) return null;
-  return probe.invoke('fetch_image', { url });
+  return probe.invoke('fetch_image', { url }) as Promise<string>;
 }
 
-export function isImageProxyAvailable() {
+export function isImageProxyAvailable(): boolean {
   return probe.available;
 }

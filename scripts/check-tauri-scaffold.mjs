@@ -5,16 +5,16 @@ const required = [
   'apps/desktop/src-tauri/tauri.conf.json',
   'apps/desktop/src-tauri/Cargo.toml',
   'packages/ui/src/index.ts',
-  'packages/mail-core/src/index.js',
+  'packages/mail-core/src/index.ts',
   'packages/search-core/src/index.ts',
   'packages/ai-core/src/index.ts',
   'apps/desktop/dist/index.html',
-  'apps/desktop/dist/src/main.js',
-  'apps/desktop/dist/src/tauri-gmail-bridge.js',
-  'apps/desktop/dist/src/tauri-gmail-bridge-core.js',
+  'apps/desktop/dist/src/main.ts',
+  'apps/desktop/dist/src/tauri-gmail-bridge.ts',
+  'apps/desktop/dist/src/tauri-gmail-bridge-core.ts',
   'apps/desktop/dist/src/styles.css',
   'apps/desktop/dist/packages/ui/src/index.ts',
-  'apps/desktop/dist/packages/mail-core/src/index.js',
+  'apps/desktop/dist/packages/mail-core/src/index.ts',
   'apps/desktop/dist/packages/ai-core/src/index.ts',
 ];
 
@@ -24,17 +24,17 @@ const tauri = JSON.parse(await readFile('apps/desktop/src-tauri/tauri.conf.json'
 if (tauri.productName !== 'Kept') throw new Error('Tauri productName must be Kept');
 
 const distIndex = await readFile('apps/desktop/dist/index.html', 'utf8');
-if (!distIndex.includes('./src/main.js')) {
+if (!distIndex.includes('./src/main.ts')) {
   throw new Error('desktop dist index must load the Kept runtime script');
 }
 
-const distMain = await readFile('apps/desktop/dist/src/main.js', 'utf8');
-const distBridge = await readFile('apps/desktop/dist/src/tauri-gmail-bridge.js', 'utf8');
-if (!distIndex.includes('./src/tauri-gmail-bridge.js')) {
+const distMain = await readFile('apps/desktop/dist/src/main.ts', 'utf8');
+const distBridge = await readFile('apps/desktop/dist/src/tauri-gmail-bridge.ts', 'utf8');
+if (!distIndex.includes('./src/tauri-gmail-bridge.ts')) {
   throw new Error('desktop dist index must load the Tauri Gmail bridge before the Kept runtime script');
 }
-if (distIndex.indexOf('./src/tauri-gmail-bridge.js') > distIndex.indexOf('./src/main.js')) {
-  throw new Error('desktop dist index must load the Tauri Gmail bridge before main.js');
+if (distIndex.indexOf('./src/tauri-gmail-bridge.ts') > distIndex.indexOf('./src/main.ts')) {
+  throw new Error('desktop dist index must load the Tauri Gmail bridge before main.ts');
 }
 if (distMain.includes("from '/packages/") || distBridge.includes("from '/packages/")) {
   throw new Error('desktop dist runtime must not use root-absolute package imports; Tauri packaged app needs relative imports');
