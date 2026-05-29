@@ -98,6 +98,7 @@ function showShell() {
       await db.execute('DELETE FROM accounts WHERE 1=1');
       account = null;
       threads = [];
+      syncing = false;
       showAuth();
     } catch (e) {
       console.error('Sign out error:', e);
