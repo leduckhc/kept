@@ -804,13 +804,15 @@ function renderApprovalGate(approval) {
 function renderUnsubConfirmModal(reader) {
   const senderName = reader.sender?.label || reader.sender?.name || reader.sender?.email || 'this sender';
   const modal = el('section', { className: 'unsub-modal', ariaLabel: 'Confirm unsubscribe', role: 'dialog' });
-  modal.append(el('p', { className: 'unsub-modal-body', text: `Unsubscribe from ${senderName}? This sends a one-click unsubscribe request.` }));
+  const card = el('div', { className: 'unsub-modal-body' });
+  card.append(el('p', { className: 'unsub-modal-text', text: `Unsubscribe from ${senderName}? This sends a one-click unsubscribe request.` }));
   const actions = el('div', { className: 'unsub-modal-actions' });
   actions.append(
     el('button', { type: 'button', className: 'primary-mail-action', text: 'Unsubscribe', id: 'unsub-confirm' }),
     el('button', { type: 'button', className: 'secondary-mail-action', text: 'Cancel', id: 'unsub-cancel' }),
   );
-  modal.append(actions);
+  card.append(actions);
+  modal.append(card);
   return modal;
 }
 
