@@ -77,7 +77,7 @@ function showShell() {
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
         <button class="btn-icon" id="btn-theme" title="Toggle theme">◑</button>
-        <button class="btn-icon" id="btn-signout" title="Sign out">⇥</button>
+        <button class="btn-icon" id="btn-signout" title="Sign out" style="font-size:13px">Sign out</button>
       </div>
       <div class="inbox" id="inbox"></div>
       <div class="statusbar">
@@ -93,12 +93,15 @@ function showShell() {
     applyTheme(next);
   });
   document.getElementById('btn-signout')!.addEventListener('click', async () => {
-    if (!confirm('Sign out?')) return;
-    const db = await import('./db').then(m => m.getDb());
-    await db.execute('DELETE FROM accounts');
-    account = null;
-    threads = [];
-    showAuth();
+    try {
+      const db = await import('./db').then(m => m.getDb());
+      await db.execute('DELETE FROM accounts WHERE 1=1');
+      account = null;
+      threads = [];
+      showAuth();
+    } catch (e) {
+      console.error('Sign out error:', e);
+    }
   });
 
   const searchEl = document.getElementById('search') as HTMLInputElement;
