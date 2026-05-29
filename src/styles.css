@@ -149,10 +149,10 @@ body {
 /* ── Thread row ─────────────────────────────────────────── */
 .thread-row {
   display: grid;
-  grid-template-columns: 20px 1fr auto;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 10px;
-  padding: 8px 16px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.08s;
@@ -160,25 +160,85 @@ body {
 }
 .thread-row:hover { background: var(--surface); }
 .thread-row.selected { background: var(--surface); }
-.thread-row.unread .thread-sender { font-weight: 600; }
-.thread-row.unread .thread-subject { font-weight: 600; }
 
-.unread-dot {
-  width: 6px;
-  height: 6px;
+/* Avatar circle */
+.avatar {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: var(--unread-dot);
-  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
 }
-.thread-row:not(.unread) .unread-dot { visibility: hidden; }
+.avatar::before {
+  content: attr(data-initial);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
 
-.thread-body { min-width: 0; }
-.thread-sender { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.thread-subject { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
-.thread-row.unread .thread-subject { color: var(--text); }
-.thread-preview { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Middle column */
+.thread-mid { min-width: 0; }
+.thread-top { display: flex; align-items: baseline; gap: 6px; }
+.thread-bottom { display: flex; align-items: baseline; gap: 4px; overflow: hidden; }
 
+.thread-sender {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.thread-row.unread .thread-sender {
+  font-weight: 600;
+  color: var(--text);
+}
+.thread-subject {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  max-width: 40%;
+}
+.thread-row.unread .thread-subject { color: var(--text); font-weight: 500; }
+.thread-sep { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+.thread-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Right column */
+.thread-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
 .thread-meta { text-align: right; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.attachment-icon { font-size: 11px; color: var(--text-muted); }
 
 /* Row actions (appear on hover) */
 .thread-actions {
@@ -192,7 +252,7 @@ body {
   padding: 2px;
 }
 .thread-row:hover .thread-actions { display: flex; }
-.thread-row:hover .thread-meta { display: none; }
+.thread-row:hover .thread-right { display: none; }
 
 .btn-action {
   background: none;

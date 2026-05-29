@@ -34,6 +34,7 @@ async function migrate(db: Database): Promise<void> {
       is_unread INTEGER DEFAULT 1,
       is_archived INTEGER DEFAULT 0,
       is_blocked INTEGER DEFAULT 0,
+      has_attachment INTEGER DEFAULT 0,
       gmail_thread_id TEXT,
       FOREIGN KEY (account_id) REFERENCES accounts(id)
     )
@@ -70,4 +71,8 @@ async function migrate(db: Database): Promise<void> {
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_threads_sender ON threads(sender_email)
   `);
+
+  // Additive migrations — safe to re-run (ALTER TABLE IF NOT EXISTS column not supported in SQLite,
+  // so we catch the "duplicate column" error and ignore it)
+  await db.execute(`ALTER TABLE threads ADD COLUMN has_attachment INTEGER DEFAULT 0`).catch(() => {});
 }

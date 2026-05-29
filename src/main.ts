@@ -7,7 +7,7 @@ let account: Account | null = null;
 let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
-let selectedThread: Thread | null = null; // tracks open thread
+
 
 // ── Boot ──────────────────────────────────────────────────
 async function boot() {
@@ -198,18 +198,50 @@ function renderInbox() {
   });
 }
 
+// ── Avatar ────────────────────────────────────────────────
+const AVATAR_COLORS = [
+  '#d97706', '#7c3aed', '#0891b2', '#16a34a',
+  '#dc2626', '#db2777', '#2563eb', '#65a30d',
+];
+
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function avatarHtml(t: Thread): string {
+  const label = t.senderName || t.senderEmail;
+  const initial = label[0].toUpperCase();
+  const color = AVATAR_COLORS[hashStr(t.senderEmail) % AVATAR_COLORS.length];
+  const domain = t.senderEmail.split('@')[1] ?? '';
+  const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+  return `<div class="avatar" style="background:${color}" data-initial="${initial}">${
+    faviconUrl ? `<img src="${faviconUrl}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''
+  }</div>`;
+}
+
 function threadRow(t: Thread): string {
   const date = formatDate(t.receivedAt);
   const sender = t.senderName || t.senderEmail;
+  const attachment = t.hasAttachment ? `<span class="attachment-icon" title="Has attachment">📎</span>` : '';
   return `
     <div class="thread-row${t.isUnread ? ' unread' : ''}" data-id="${t.id}">
-      <span class="unread-dot"></span>
-      <div class="thread-body">
-        <div class="thread-sender">${esc(sender)}</div>
-        <div class="thread-subject">${esc(t.subject)}</div>
-        <div class="thread-preview">${esc(t.snippet)}</div>
+      ${avatarHtml(t)}
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">${esc(sender)}</span>
+        </div>
+        <div class="thread-bottom">
+          <span class="thread-subject">${esc(t.subject)}</span>
+          <span class="thread-sep">·</span>
+          <span class="thread-preview">${esc(t.snippet)}</span>
+        </div>
       </div>
-      <div class="thread-meta">${date}</div>
+      <div class="thread-right">
+        ${attachment}
+        <span class="thread-meta">${date}</span>
+      </div>
       <div class="thread-actions">
         <button class="btn-action btn-read" title="Mark read">✓</button>
         <button class="btn-action btn-archive" title="Archive">⬇</button>
@@ -233,7 +265,7 @@ async function doArchive(t: Thread, row: HTMLElement) {
   threads = threads.filter(x => x.id !== t.id);
 }
 
-async function doBlock(t: Thread, row: HTMLElement) {
+async function doBlock(t: Thread, _row: HTMLElement) {
   if (!account) return;
   if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
   await blockSender(account, t);
@@ -245,9 +277,17 @@ async function doBlock(t: Thread, row: HTMLElement) {
 // ── Thread reader ─────────────────────────────────────────
 async function openThread(t: Thread) {
   if (!account) return;
-  selectedThread = t;
-  // Mark read
-  if (t.isUnread) await markRead(account, t).catch(() => {});
+  // track open thread for future reply/forward (see openThread)
+  // Mark read — optimistic DOM update, revert on failure
+  if (t.isUnread) {
+    t.isUnread = false;
+    document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.remove('unread');
+    markRead(account, t).catch(() => {
+      // Revert if API call failed
+      t.isUnread = true;
+      document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.add('unread');
+    });
+  }
 
   const overlay = document.createElement('div');
   overlay.className = 'reader-overlay';

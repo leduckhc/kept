@@ -13,13 +13,13 @@ export interface Thread {
   receivedAt: number; // unix ms
   isUnread: boolean;
   isArchived: boolean;
+  hasAttachment: boolean;
   gmailThreadId: string;
 }
 
 // ── Sync ──────────────────────────────────────────────────
 export async function syncInbox(account: Account, onProgress?: (n: number) => void): Promise<void> {
   const a = await ensureFreshToken(account);
-  const db = await getDb();
 
   // Fetch thread list (inbox, not archived)
   let pageToken: string | undefined;
@@ -99,6 +99,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     receivedAt: r.received_at as number,
     isUnread: (r.is_unread as number) === 1,
     isArchived: (r.is_archived as number) === 1,
+    hasAttachment: (r.has_attachment as number) === 1,
     gmailThreadId: r.gmail_thread_id as string,
   };
 }
@@ -201,12 +202,7 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
     messages: Array<{
       id: string;
       internalDate: string;
-      payload: {
-        headers: Array<{ name: string; value: string }>;
-        parts?: Array<{ mimeType: string; body: { data?: string } }>;
-        body?: { data?: string };
-        mimeType: string;
-      };
+      payload: MimePart & { headers: Array<{ name: string; value: string }> };
     }>;
   };
   return {
@@ -218,21 +214,74 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
   };
 }
 
-function extractTextBody(payload: {
+// Recursive MIME part type (supports arbitrary nesting)
+interface MimePart {
   mimeType: string;
   body?: { data?: string };
-  parts?: Array<{ mimeType: string; body: { data?: string } }>;
-}): string {
-  if (payload.body?.data) return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-  const textPart = payload.parts?.find(p => p.mimeType === 'text/plain');
-  if (textPart?.body?.data) return atob(textPart.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-  const htmlPart = payload.parts?.find(p => p.mimeType === 'text/html');
-  if (htmlPart?.body?.data) {
-    const html = atob(htmlPart.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    return div.textContent ?? '';
+  parts?: MimePart[];
+}
+
+function decodeBase64(data: string): string {
+  // Convert base64url → base64
+  const b64 = data.replace(/-/g, '+').replace(/_/g, '/');
+  try {
+    // Use TextDecoder so non-ASCII chars (UTF-8, ISO-8859, etc.) decode correctly
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  } catch {
+    // Last resort fallback
+    return atob(b64);
   }
+}
+
+function htmlToText(html: string): string {
+  // Insert newlines before block tags so content doesn't run together
+  const spaced = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|tr|li|blockquote|h[1-6])[^>]*>/gi, '\n');
+  const doc = new DOMParser().parseFromString(spaced, 'text/html');
+  return (doc.body?.innerText ?? doc.body?.textContent ?? '').trim();
+}
+
+function extractTextBody(payload: MimePart, depth = 0): string {
+  if (depth > 8) return ''; // guard against pathological nesting
+
+  // Inline body data (non-multipart leaf)
+  if (payload.body?.data && !payload.mimeType.startsWith('multipart/')) {
+    const text = decodeBase64(payload.body.data);
+    if (payload.mimeType === 'text/html') return htmlToText(text);
+    return text;
+  }
+
+  const parts = payload.parts ?? [];
+
+  // For multipart/alternative, prefer text/plain > text/html > first part
+  if (payload.mimeType === 'multipart/alternative') {
+    const plain = parts.find(p => p.mimeType === 'text/plain');
+    if (plain?.body?.data) return decodeBase64(plain.body.data);
+    const html = parts.find(p => p.mimeType === 'text/html');
+    if (html?.body?.data) return htmlToText(decodeBase64(html.body.data));
+    // Recurse into nested multipart
+    for (const p of parts) {
+      const result = extractTextBody(p, depth + 1);
+      if (result) return result;
+    }
+    return '';
+  }
+
+  // For multipart/mixed and others: collect text from all parts, join with newline
+  if (payload.mimeType.startsWith('multipart/')) {
+    const texts: string[] = [];
+    for (const p of parts) {
+      // Skip attachments (parts with filename)
+      const isAttachment = (p as { filename?: string }).filename;
+      if (isAttachment) continue;
+      const t = extractTextBody(p, depth + 1);
+      if (t) texts.push(t);
+    }
+    return texts.join('\n\n');
+  }
+
   return '';
 }
 
