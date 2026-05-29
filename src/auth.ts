@@ -5,8 +5,6 @@ import { open } from '@tauri-apps/plugin-shell';
 import { getDb } from './db';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
-const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? '';
-
 const SCOPES = [
   'openid',
   'email',
@@ -87,7 +85,12 @@ export async function startOAuth(): Promise<Account> {
 
 function waitForCode(expectedState: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('OAuth timeout after 2 minutes')), 120_000);
+    let unlisten: (() => void) | undefined;
+
+    const timeout = setTimeout(() => {
+      unlisten?.();
+      reject(new Error('OAuth timeout after 2 minutes'));
+    }, 120_000);
 
     import('@tauri-apps/api/event').then(({ listen }) => {
       listen<string>('oauth://url', (event) => {
@@ -96,12 +99,13 @@ function waitForCode(expectedState: string): Promise<string> {
           const returnedState = url.searchParams.get('state');
           const code = url.searchParams.get('code');
           const error = url.searchParams.get('error');
-          if (error) { clearTimeout(timeout); reject(new Error(`OAuth error: ${error}`)); return; }
+          if (error) { clearTimeout(timeout); unlisten?.(); reject(new Error(`OAuth error: ${error}`)); return; }
           if (returnedState !== expectedState || !code) return;
           clearTimeout(timeout);
+          unlisten?.();
           resolve(code);
         } catch { /* ignore */ }
-      });
+      }).then((fn) => { unlisten = fn; });
     });
   });
 }
@@ -113,7 +117,6 @@ async function exchangeCode(code: string, verifier: string, redirectUri: string)
     body: new URLSearchParams({
       code,
       client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
       code_verifier: verifier,
@@ -139,6 +142,7 @@ async function fetchProfile(token: string): Promise<{ id: string; email: string 
   const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (!res.ok) throw new Error(`Profile fetch failed: ${res.status}`);
   return res.json() as Promise<{ id: string; email: string }>;
 }
 
@@ -151,7 +155,6 @@ export async function ensureFreshToken(account: Account): Promise<Account> {
       grant_type: 'refresh_token',
       refresh_token: account.refreshToken,
       client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
     }),
   });
   if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
