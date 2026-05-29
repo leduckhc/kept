@@ -7,7 +7,7 @@ let account: Account | null = null;
 let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
-// selectedThread reserved for future use
+let selectedThread: Thread | null = null; // tracks open thread
 
 // ── Boot ──────────────────────────────────────────────────
 async function boot() {
@@ -113,8 +113,8 @@ async function refresh() {
   if (!account) return;
   threads = await loadThreads(account.id);
   renderInbox();
-  // Kick off background sync if inbox is empty
-  if (threads.length === 0) syncAndRender();
+  // Always sync on boot to get fresh data
+  syncAndRender();
 }
 
 async function syncAndRender() {
@@ -129,11 +129,23 @@ async function syncAndRender() {
     renderInbox();
     setStatus(`Synced — ${threads.length} threads`);
   } catch (e) {
-    setStatus(`Sync error: ${e}`);
+    console.error('Sync error:', e);
+    const msg = e instanceof Error ? e.message : String(e);
+    setStatus(`Sync error: ${msg}`);
+    // Show error in inbox if it's empty so user sees it
+    if (threads.length === 0) {
+      const container = document.getElementById('inbox');
+      if (container) container.innerHTML = `
+        <div class="empty-state" style="color:var(--text-muted)">
+          <div style="font-size:24px">⚠</div>
+          <div>Sync failed</div>
+          <div style="font-size:12px; margin-top:4px; max-width:320px; word-break:break-all">${msg}</div>
+        </div>`;
+    }
   } finally {
     syncing = false;
     if (btn) btn.style.opacity = '';
-    setTimeout(() => setStatus(''), 3000);
+    setTimeout(() => setStatus(''), 5000);
   }
 }
 
@@ -203,7 +215,7 @@ function threadRow(t: Thread): string {
 }
 
 // ── Row actions ───────────────────────────────────────────
-async function doMarkRead(t: Thread, _row: HTMLElement) {
+async function doMarkRead(t: Thread, row: HTMLElement) {
   if (!account) return;
   await markRead(account, t);
   t.isUnread = false;
