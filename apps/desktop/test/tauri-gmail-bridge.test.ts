@@ -54,8 +54,8 @@ function makeMailCore({ savedTokens = [] } = {}) {
 }
 
 test('bridge availability probe only enables Gmail when Tauri invoke exists', () => {
-  assert.equal(createBridgeAvailabilityProbe({}).available, false);
-  assert.equal(createBridgeAvailabilityProbe({ __TAURI__: { core: { invoke() {} } } }).available, true);
+  assert.equal(createBridgeAvailabilityProbe({} as any).available, false);
+  assert.equal(createBridgeAvailabilityProbe({ __TAURI__: { core: { invoke() {} } } } as any).available, true);
 });
 
 test('startOAuth uses readonly OAuth config, loopback callback parsing, and keychain token persistence', async () => {
@@ -63,7 +63,7 @@ test('startOAuth uses readonly OAuth config, loopback callback parsing, and keyc
   const keychain = new Map();
   const savedTokens = [];
   const bridge = createTauriGmailBridge({
-    mailCore: makeMailCore({ savedTokens }),
+    mailCore: makeMailCore({ savedTokens }) as any as any,
     randomState: () => 'state-secret',
     invoke: async (command, payload) => {
       invocations.push({ command, payload });
@@ -94,7 +94,7 @@ test('startOAuth uses readonly OAuth config, loopback callback parsing, and keyc
       if (command === 'gmail_keychain_get') return keychain.get(`${payload.service}:${payload.account}`) || null;
       throw new Error(`unexpected command ${command}`);
     },
-    fetchImpl: async (url, options) => {
+    fetchImpl: async (url: any, options: any) => {
       assert.equal(String(url), 'https://oauth2.googleapis.com/token');
       assert.equal(options.method, 'POST');
       const body = new URLSearchParams(options.body);
@@ -103,7 +103,7 @@ test('startOAuth uses readonly OAuth config, loopback callback parsing, and keyc
       assert.equal(body.get('redirect_uri'), 'http://127.0.0.1:49210/oauth/google/callback');
       assert.equal(body.get('code'), 'real-auth-code');
       assert.equal(body.get('code_verifier'), 'verifier-secret');
-      return { ok: true, async json() { return { access_token: 'access-value', refresh_token: 'refresh-value', expires_in: 3600, token_type: 'Bearer' }; } };
+      return { ok: true, async json() { return { access_token: 'access-value', refresh_token: 'refresh-value', expires_in: 3600, token_type: 'Bearer' }; } } as unknown as Response;
     },
   });
 
@@ -124,8 +124,8 @@ test('startOAuth uses readonly OAuth config, loopback callback parsing, and keyc
 });
 
 test('exchangeAuthorizationCode normalizes Google snake_case tokens for the mail-core keychain store', async () => {
-  const tokens = await exchangeAuthorizationCode({
-    fetchImpl: async (_url, _options) => ({
+  const tokens = await (exchangeAuthorizationCode as any)({
+    fetchImpl: async (_url: any, _options: any) => ({
       ok: true,
       async json() {
         return {
@@ -170,7 +170,7 @@ test('exchangeAuthorizationCode includes client_secret when packaged with a Goog
 
 test('exchangeAuthorizationCode surfaces safe Google token exchange errors after loopback callback', async () => {
   await assert.rejects(
-    exchangeAuthorizationCode({
+    (exchangeAuthorizationCode as any)({
       fetchImpl: async () => ({
         ok: false,
         status: 400,
@@ -187,7 +187,7 @@ test('exchangeAuthorizationCode surfaces safe Google token exchange errors after
       code: 'secret-code',
       verifier: 'verifier-secret',
     }),
-    (error) => {
+    (error: any) => {
       assert.match(error.message, /Gmail OAuth token exchange failed/);
       assert.match(error.message, /invalid_grant/);
       assert.match(error.message, /redirect_uri/);
@@ -200,7 +200,7 @@ test('exchangeAuthorizationCode surfaces safe Google token exchange errors after
 
 test('exchangeAuthorizationCode explains missing client_secret configuration without leaking secrets', async () => {
   await assert.rejects(
-    exchangeAuthorizationCode({
+    (exchangeAuthorizationCode as any)({
       fetchImpl: async () => ({
         ok: false,
         status: 400,
@@ -217,7 +217,7 @@ test('exchangeAuthorizationCode explains missing client_secret configuration wit
       code: 'secret-code',
       verifier: 'verifier-secret',
     }),
-    (error) => {
+    (error: any) => {
       assert.match(error.message, /invalid_request/);
       assert.match(error.message, /client_secret is missing/);
       assert.match(error.message, /KEPT_GMAIL_CLIENT_SECRET/);
@@ -229,7 +229,7 @@ test('exchangeAuthorizationCode explains missing client_secret configuration wit
 
 test('createConnector returns Gmail API connector backed by Tauri keychain adapter', async () => {
   const bridge = createTauriGmailBridge({
-    mailCore: makeMailCore(),
+    mailCore: makeMailCore() as any,
     invoke: async (command, payload) => {
       if (command === 'gmail_oauth_config') return { tokenUrl: 'https://oauth2.googleapis.com/token', clientId: 'desktop-client.apps.googleusercontent.com' };
       if (command === 'gmail_keychain_get') {
@@ -238,7 +238,7 @@ test('createConnector returns Gmail API connector backed by Tauri keychain adapt
       }
       throw new Error(`unexpected command ${command}`);
     },
-    fetchImpl: async () => ({ ok: true, async json() { return {}; } }),
+    fetchImpl: async () => ({ ok: true, async json() { return {}; } } as unknown as Response),
   });
 
   const connector = await bridge.createConnector({ accountId });

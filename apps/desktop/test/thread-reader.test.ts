@@ -65,12 +65,12 @@ test('controller opens rows by click or keyboard, marks local unread read, and r
   const controller = createThreadReaderController({
     threads: [baseThread],
     readStateStore: store,
-    focusRow: (rowId) => focused.push(rowId),
+    focusRow: (rowId) => { focused.push(rowId); },
   });
 
   const clickOpened = controller.openFromRowClick({ threadId: 'thr_local', rowId: 'row-thr_local' });
   assert.equal(clickOpened.reader.subject, 'Dinner packet');
-  assert.equal(store.load().thr_local, true);
+  assert.equal((store.load() as any).thr_local, true);
 
   controller.closeReader();
   assert.deepEqual(focused, ['row-thr_local']);
@@ -117,7 +117,7 @@ test('summary action prepares an approval preview, cancels without provider call
   const adapter = {
     async summarizeThread(thread, options = {}) {
       calls.push({ thread, options });
-      return options.approved
+      return (options as any).approved
         ? { status: 'ok', envelope: { payloadHash: 'hash-1' }, response: { text: 'Summary for dinner packet.' } }
         : { status: 'approval_denied', envelope: { provider: 'ollama', model: 'llama3.2', action: 'Summarize selected local thread', payloadPreview: '{"messages":[]}', payloadHash: 'hash-1' } };
     },
@@ -197,7 +197,7 @@ test('markThreadRead tracks read state and createMemoryReadStateStore round-trip
 
   // Marking unread should persist
   markThreadRead(store, 'thr_a', false);
-  assert.equal(store.load().thr_a, false);
+  assert.equal((store.load() as any).thr_a, false);
 });
 
 test('sanitizeHtmlForDisplay strips script, style, and event handlers but keeps structural tags and img', () => {

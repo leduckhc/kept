@@ -13,7 +13,11 @@ await cp('../../packages', 'dist/packages', {
 
 for (const packagedPath of ['dist/src/main.js', 'dist/src/tauri-gmail-bridge.js']) {
   const packagedSource = await readFile(packagedPath, 'utf8');
-  await writeFile(packagedPath, packagedSource.replaceAll("from '/packages/", "from '../packages/"));
+  // Rewrite both legacy root-absolute '/packages/' and NodeNext-relative '../../packages/' to '../packages/'
+  const rewritten = packagedSource
+    .replaceAll("from '/packages/", "from '../packages/")
+    .replaceAll("from '../../packages/", "from '../packages/");
+  await writeFile(packagedPath, rewritten);
 }
 
 console.log('desktop static shell built with Tauri-safe runtime assets');

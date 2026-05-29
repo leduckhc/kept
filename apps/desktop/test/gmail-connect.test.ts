@@ -82,7 +82,8 @@ test('filterInboxThreads searches synced local inbox fields without remote calls
 
 test('filterInboxThreads searches sender, email, subject, snippet, and body after persisted reload', async () => {
   const storage = createMemoryJsonStorage();
-  const store = createJsonMailStore({ storage });
+  const store = createJsonMailStore({ storage } as any);
+
   await store.saveSyncResult({
     accountId: 'acct_local_gmail',
     provider: 'gmail',
@@ -98,7 +99,7 @@ test('filterInboxThreads searches sender, email, subject, snippet, and body afte
     }],
   });
 
-  const reopened = await createJsonMailStore({ storage }).loadSyncState();
+  const reopened = await createJsonMailStore({ storage } as any).loadSyncState();
   const threads = getSyncedGmailThreads(reopened);
 
   assert.equal(threads[0].body, undefined);

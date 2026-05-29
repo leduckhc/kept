@@ -42,7 +42,7 @@ function createRepository() {
       Object.assign(action, patch);
       return { ...action };
     },
-    async listTriageActions({ status } = {}) {
+    async listTriageActions({ status }: { status?: any } = {}) {
       const statuses = Array.isArray(status) ? status : (status ? [status] : null);
       return actions.filter((action) => !statuses || statuses.includes(action.status)).map((action) => ({ ...action }));
     },
@@ -86,11 +86,11 @@ test('controller optimistically queues then syncs Gmail actions without leaking 
     now: () => new Date('2026-05-28T00:00:00Z'),
     online: () => true,
     idFactory: () => 'act_1',
-  });
+  } as any);
 
   const result = await controller.applyThreadAction({ ...baseThread, body: 'private body must not leak' }, 'archive');
 
-  assert.equal(result.status, 'synced');
+  assert.equal((result as any).status, 'synced');
   assert.deepEqual(repository.flags.get('msg_1'), { read: false, starred: false, archived: true });
   assert.deepEqual(connectorCalls, [{ messageId: 'gmail_msg_1', action: 'archive' }]);
   assert.equal(repository.actions[0].error, null);
@@ -99,22 +99,22 @@ test('controller optimistically queues then syncs Gmail actions without leaking 
 
 test('controller keeps local-only actions saved locally when no provider message id exists', async () => {
   const repository = createRepository();
-  const controller = createTriageActionController({ repository, accountId: 'acct_gmail_primary', idFactory: () => 'act_local' });
+  const controller = createTriageActionController({ repository, accountId: 'acct_gmail_primary', idFactory: () => 'act_local' } as any);
 
   const result = await controller.applyThreadAction({ ...baseThread, providerMessageId: '', source: 'local' }, 'star');
 
-  assert.equal(result.status, 'saved-locally');
+  assert.equal((result as any).status, 'saved-locally');
   assert.deepEqual(repository.flags.get('msg_1'), { read: false, starred: true, archived: false });
   assert.deepEqual(repository.actions, []);
 });
 
 test('controller leaves provider actions queued offline and status copy is user-facing', async () => {
   const repository = createRepository();
-  const controller = createTriageActionController({ repository, accountId: 'acct_gmail_primary', online: () => false, idFactory: () => 'act_queued' });
+  const controller = createTriageActionController({ repository, accountId: 'acct_gmail_primary', online: () => false, idFactory: () => 'act_queued' } as any);
 
   const result = await controller.applyThreadAction(baseThread, 'mark-read');
 
-  assert.equal(result.status, 'queued');
+  assert.equal((result as any).status, 'queued');
   assert.equal(repository.actions[0].status, 'queued');
   assert.equal(statusCopyForTriage('saved-locally'), 'Saved locally');
   assert.equal(statusCopyForTriage('queued'), 'Queued');

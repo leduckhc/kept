@@ -44,7 +44,7 @@ test('gmail OAuth URL uses desktop-safe PKCE parameters and minimal readonly sco
     redirectUri: 'http://127.0.0.1:49210/oauth/google/callback',
     state: 'state-123',
     codeChallenge: 'challenge-abc',
-  });
+  } as any);
 
   assert.equal(url.origin, 'https://accounts.google.com');
   assert.equal(url.searchParams.get('response_type'), 'code');
@@ -66,7 +66,7 @@ test('gmail scope builder keeps readonly default and adds modify only for triage
     state: 'state-123',
     codeChallenge: 'challenge-abc',
     enableModify: true,
-  });
+  } as any);
   assert.match(modifyUrl.searchParams.get('scope'), /gmail\.readonly/);
   assert.match(modifyUrl.searchParams.get('scope'), /gmail\.modify/);
 });
@@ -155,7 +155,7 @@ test('sync cursor plan prefers Gmail history id then bounded full resync fallbac
 
 test('token store keeps OAuth tokens behind injected keychain adapter', async () => {
   const keychain = createMemoryKeychain();
-  const tokenStore = createKeychainTokenStore({ keychain });
+  const tokenStore = createKeychainTokenStore({ keychain } as any);
 
   await tokenStore.saveTokens('acct_local_gmail', {
     accessToken: 'ya29.access-token',
@@ -189,7 +189,7 @@ test('token store skips redundant keychain writes when OAuth tokens are unchange
       return baseKeychain.deletePassword(service, account);
     },
   };
-  const tokenStore = createKeychainTokenStore({ keychain });
+  const tokenStore = createKeychainTokenStore({ keychain } as any);
 
   const tokens = {
     accessToken: 'ya29.access-token',
@@ -280,7 +280,7 @@ test('Gmail label ids are preserved and normalized into local read/star/archive 
       accountId: 'acct_local_gmail',
       repository: repo,
       maxResults: 1,
-    });
+    } as any);
     const saved = await repo.getMessage('msg-1');
     assert.deepEqual(saved.flags, { read: false, starred: true, archived: true });
     assert.deepEqual(saved.metadata.gmailLabelIds, ['UNREAD', 'STARRED']);
@@ -375,7 +375,7 @@ test('gmail sync writes real messages into the durable local repository and relo
       repository: repo,
       accountEmail: 'you@example.com',
       maxResults: 5,
-    });
+    } as any);
     await repo.close();
 
     assert.equal(result.status, 'connected');
@@ -477,7 +477,7 @@ test('gmail sync reconciliation does not overwrite optimistic flags for unresolv
       accountId: 'acct_local_gmail',
       repository: repo,
       maxResults: 1,
-    });
+    } as any);
 
     assert.equal((await repo.getMessage('msg-1')).flags.archived, true);
     assert.equal((await repo.getMessage('msg-1')).metadata.historyId, 'h2');

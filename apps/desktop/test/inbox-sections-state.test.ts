@@ -7,14 +7,16 @@ import {
 } from '../src/inbox-sections-state.js';
 
 // Minimal synchronous storage stub
-function makeStorage(initial = {}) {
-  const store = { ...initial };
+function makeStorage(initial: Record<string, string> = {}): Storage {
+  const store: Record<string, string> = { ...initial };
   return {
-    getItem: (key) => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null),
-    setItem: (key, value) => { store[key] = value; },
-    removeItem: (key) => { delete store[key]; },
-    _store: store,
-  };
+    getItem: (key: string) => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null),
+    setItem: (key: string, value: string) => { store[key] = value; },
+    removeItem: (key: string) => { delete store[key]; },
+    length: 0,
+    clear: () => { Object.keys(store).forEach((k) => delete store[k]); },
+    key: (index: number) => Object.keys(store)[index] ?? null,
+  } as unknown as Storage;
 }
 
 test('loadInboxSectionsState defaults both sections to collapsed when storage is empty', () => {
@@ -79,5 +81,5 @@ test('saveInboxSectionsState silently ignores storage errors', () => {
     setItem: () => { throw new Error('quota exceeded'); },
   };
   // Should not throw
-  assert.doesNotThrow(() => saveInboxSectionsState({ newsletters: true, updates: true }, brokenStorage));
+  assert.doesNotThrow(() => saveInboxSectionsState({ newsletters: true, updates: true }, brokenStorage as unknown as Storage));
 });

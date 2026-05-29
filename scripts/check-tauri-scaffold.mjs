@@ -4,18 +4,18 @@ const required = [
   'apps/desktop/index.html',
   'apps/desktop/src-tauri/tauri.conf.json',
   'apps/desktop/src-tauri/Cargo.toml',
-  'packages/ui/src/index.js',
+  'packages/ui/src/index.ts',
   'packages/mail-core/src/index.js',
-  'packages/search-core/src/index.js',
-  'packages/ai-core/src/index.js',
+  'packages/search-core/src/index.ts',
+  'packages/ai-core/src/index.ts',
   'apps/desktop/dist/index.html',
   'apps/desktop/dist/src/main.js',
   'apps/desktop/dist/src/tauri-gmail-bridge.js',
   'apps/desktop/dist/src/tauri-gmail-bridge-core.js',
   'apps/desktop/dist/src/styles.css',
-  'apps/desktop/dist/packages/ui/src/index.js',
+  'apps/desktop/dist/packages/ui/src/index.ts',
   'apps/desktop/dist/packages/mail-core/src/index.js',
-  'apps/desktop/dist/packages/ai-core/src/index.js',
+  'apps/desktop/dist/packages/ai-core/src/index.ts',
 ];
 
 for (const path of required) await access(path);

@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["DOM", "ESNext"],
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "/packages/ui/src/index.js": ["../../packages/ui/src/index.ts"],
+      "/packages/mail-core/src/index.js": ["../../packages/mail-core/src/index.ts"],
+      "/packages/ai-core/src/index.js": ["../../packages/ai-core/src/index.ts"],
+      "/packages/search-core/src/index.js": ["../../packages/search-core/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -32,7 +32,7 @@ test('groupInboxThreads extracts priority regardless of date and keeps section o
     makeThread({ id: 'last-week', receivedAt: '2026-05-20T00:00:00Z' }),
   ];
 
-  const grouped = groupInboxThreads(threads, { now: NOW });
+  const grouped = groupInboxThreads(threads, { now: NOW as any });
 
   assert.deepEqual(Object.keys(grouped), ['Priority', 'Today', 'Yesterday', 'Last Week']);
   assert.deepEqual(grouped.Priority.map((thread) => thread.id), ['old-priority']);
@@ -49,7 +49,7 @@ test('groupInboxThreads sorts newest-first stably within each section', () => {
     makeThread({ id: 'oldest', receivedAt: '2026-05-26T01:00:00Z' }),
   ];
 
-  const grouped = groupInboxThreads(threads, { now: NOW });
+  const grouped = groupInboxThreads(threads, { now: NOW as any });
 
   assert.deepEqual(grouped.Today.map((thread) => thread.id), [
     'newest',
@@ -70,7 +70,7 @@ test('groupInboxThreads handles Today, Yesterday, and Last Week UTC boundaries',
     makeThread({ id: 'future', receivedAt: '2026-05-27T00:00:00Z' }),
   ];
 
-  const grouped = groupInboxThreads(threads, { now: NOW });
+  const grouped = groupInboxThreads(threads, { now: NOW as any });
 
   assert.deepEqual(grouped.Today.map((thread) => thread.id), ['today-start']);
   assert.deepEqual(grouped.Yesterday.map((thread) => thread.id), ['yesterday-end', 'yesterday-start']);
@@ -81,7 +81,7 @@ test('groupInboxThreads handles Today, Yesterday, and Last Week UTC boundaries',
 });
 
 test('getInboxSections returns all sections including empty sections', () => {
-  const sections = getInboxSections([], { now: NOW });
+  const sections = getInboxSections([], { now: NOW as any });
 
   assert.deepEqual(
     sections.map((section) => ({ id: section.id, title: section.title, count: section.threads.length })),
@@ -117,7 +117,7 @@ test('sample inbox data covers required fields and uses only synthetic redacted-
 });
 
 test('sample inbox data renders deterministic sections with injected now', () => {
-  const sections = getInboxSections(sampleInboxThreads, { now: NOW });
+  const sections = getInboxSections(sampleInboxThreads, { now: NOW as any });
 
   assert.deepEqual(sections.map((section) => section.title), ['Priority', 'Today', 'Yesterday', 'Last Week']);
   assert.ok(sections.every((section) => section.threads.length > 0));

@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/ui" },
+    { "path": "./packages/search-core" },
+    { "path": "./packages/ai-core" },
+    { "path": "./apps/desktop" }
+  ],
+  "compilerOptions": {
+    "paths": {
+      "@kept/ui": ["./packages/ui/src/index.ts"],
+      "@kept/search-core": ["./packages/search-core/src/index.ts"],
+      "@kept/ai-core": ["./packages/ai-core/src/index.ts"],
+      "@kept/mail-core": ["./packages/mail-core/src/index.ts"]
+    }
+  }
+}

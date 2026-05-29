@@ -14,7 +14,14 @@
  *   e.g. { 'list-unsubscribe': '<mailto:...>', 'list-id': '...' }
  */
 
-const UPDATE_DOMAINS = new Set([
+export type InboxSection = 'newsletter' | 'update' | 'primary';
+
+export interface ClassifiableThread {
+  senderEmail?: string;
+  headers?: Record<string, string>;
+}
+
+const UPDATE_DOMAINS = new Set<string>([
   'github.com',
   'github.io',
   'stripe.com',
@@ -50,7 +57,7 @@ const UPDATE_DOMAINS = new Set([
  * Extract the domain part from an email address string.
  * Handles "Name <email@domain>" format and bare addresses.
  */
-function extractDomain(email) {
+function extractDomain(email: string): string {
   if (!email) return '';
   const str = String(email);
   // Handle "Display Name <addr@domain>" — extract just the address part
@@ -64,10 +71,10 @@ function extractDomain(email) {
 /**
  * Classify a thread into 'newsletter', 'update', or 'primary'.
  *
- * @param {{ senderEmail?: string, headers?: Record<string,string> }} thread
- * @returns {'newsletter'|'update'|'primary'}
+ * @param thread - Thread with optional senderEmail and headers
+ * @returns The inbox section for this thread
  */
-export function classifyThread(thread) {
+export function classifyThread(thread: ClassifiableThread): InboxSection {
   const headers = thread.headers || {};
 
   // List-Unsubscribe present -> newsletter

@@ -12,12 +12,16 @@
     "build": "npm run build --workspaces --if-present && node scripts/check-tauri-scaffold.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "test": "node --test packages/*/test/*.test.mjs apps/*/test/*.test.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "test": "node --import tsx/esm --test packages/*/test/*.test.ts apps/*/test/*.test.ts",
+    "tsc": "tsc --noEmit",
+    "verify": "npm run tsc && npm run typecheck && npm run lint && npm run test && npm run build",
     "tauri:dev": "npm run tauri:dev -w @kept/desktop",
     "tauri:build": "npm run tauri:build -w @kept/desktop"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.2"
+    "@tauri-apps/cli": "^2.11.2",
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
   }
 }
