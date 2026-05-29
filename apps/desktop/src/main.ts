@@ -5,15 +5,19 @@ import { createBrowserLocalMailRepository, createJsonMailStore, flagsForTriageAc
 import { createProviderAdapter, disabledProvider } from '../../packages/ai-core/src/index.js';
 import {
   applyLocalReadState,
+  closeReplyComposer,
   createLocalReadStateStore,
   createSenderTrustStore,
   createThreadSummaryActionController,
   filterBannedSenderThreads,
   formatAttachmentMeta,
   hasRemoteImages,
+  invokeGmailSend,
   isThreadOpenKey,
   markThreadRead,
   normalizeReaderThread,
+  openReplyComposer,
+  renderReplyComposer,
   sanitizeHtmlForDisplay,
 } from './thread-reader.js';
 import {
@@ -558,6 +562,8 @@ function renderReaderTriageBar(thread) {
   bar.append(renderThreadTriageControls(thread));
   const status = state.triage.statusByThreadId[thread.id];
   if (status) bar.append(renderTriageStatus(status));
+  const replyBtn = el('button', { type: 'button', className: 'secondary-mail-action reader-reply-btn', text: 'Reply', id: 'open-reply-composer' });
+  bar.append(replyBtn);
   return bar;
 }
 
@@ -604,6 +610,7 @@ function renderThreadReader(reader, sourceThread = null, { wasUnread = false, is
   }
   surface.append(header, renderReaderTriageBar(sourceThread || reader), renderReaderMeta(reader), renderReaderSummaryPanel(reader));
   reader.messages.forEach((message) => surface.append(renderReaderMessage(message)));
+  surface.append(renderReplyComposer({ threadId: reader.id, senderEmail, subject: reader.subject }));
   shell.append(surface);
   return shell;
 }
@@ -822,6 +829,22 @@ function wireThreadReaderControls() {
   document.querySelector('#summarize-thread')?.addEventListener('click', requestThreadSummary);
   document.querySelector('#approve-summary')?.addEventListener('click', approveThreadSummary);
   document.querySelector('#cancel-summary')?.addEventListener('click', cancelThreadSummary);
+  // Reply composer controls
+  document.querySelector('#open-reply-composer')?.addEventListener('click', () => {
+    const surface = document.querySelector('.reader-surface');
+    if (surface) openReplyComposer(surface);
+  });
+  document.querySelector('[data-reply-action="send"]')?.addEventListener('click', () => {
+    const surface = document.querySelector('.reader-surface');
+    const textarea = surface?.querySelector('.reply-composer-body') as HTMLTextAreaElement | null;
+    const threadId = surface?.querySelector('.reply-composer')?.getAttribute('data-thread-id') || state.activeThreadId;
+    invokeGmailSend(threadId, textarea?.value ?? '');
+    if (surface) closeReplyComposer(surface);
+  });
+  document.querySelector('[data-reply-action="cancel"]')?.addEventListener('click', () => {
+    const surface = document.querySelector('.reader-surface');
+    if (surface) closeReplyComposer(surface);
+  });
   document.querySelectorAll('.load-images-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const messageId = btn.getAttribute('data-message-id');
