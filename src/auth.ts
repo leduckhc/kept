@@ -2,7 +2,7 @@
 import { getDb } from './db';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
-const REDIRECT_URI = 'http://localhost:9004/oauth/callback';
+const REDIRECT_URI = 'http://127.0.0.1:9004/oauth/callback';
 const SCOPES = [
   'openid',
   'email',
