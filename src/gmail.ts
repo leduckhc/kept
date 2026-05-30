@@ -1,4 +1,4 @@
-// gmail.ts — Gmail API sync, send, reply, block
+// gmail.ts — Gmail API sync, send, reply, block, snooze
 import { type Account, ensureFreshToken } from './auth';
 import { getDb } from './db';
 
@@ -15,6 +15,7 @@ export interface Thread {
   isArchived: boolean;
   hasAttachment: boolean;
   gmailThreadId: string;
+  snoozedUntil: number | null; // unix ms, null = not snoozed
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -215,8 +216,11 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 // ── Load inbox from DB ────────────────────────────────────
 export async function loadThreads(accountId: string, search?: string): Promise<Thread[]> {
   const db = await getDb();
-  let sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0`;
-  const params: (string | number)[] = [accountId];
+  const nowMs = Date.now();
+  // Exclude snoozed threads (snoozed_until is in the future)
+  let sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0
+             AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+  const params: (string | number)[] = [accountId, nowMs];
   if (search) {
     sql += ` AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?)`;
     const q = `%${search}%`;
@@ -236,6 +240,16 @@ export async function loadSenderEmails(accountId: string): Promise<string[]> {
   return rows.map(r => r.sender_email);
 }
 
+export async function loadSnoozedThreads(accountId: string): Promise<Thread[]> {
+  const db = await getDb();
+  const nowMs = Date.now();
+  const sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0
+               AND snoozed_until IS NOT NULL AND snoozed_until > ?
+               ORDER BY snoozed_until ASC LIMIT 500`;
+  const rows = await db.select<Array<Record<string, unknown>>>(sql, [accountId, nowMs]);
+  return rows.map(rowToThread);
+}
+
 function rowToThread(r: Record<string, unknown>): Thread {
   return {
     id: r.id as string,
@@ -248,6 +262,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     isArchived: (r.is_archived as number) === 1,
     hasAttachment: (r.has_attachment as number) === 1,
     gmailThreadId: r.gmail_thread_id as string,
+    snoozedUntil: (r.snoozed_until as number | null) ?? null,
   };
 }
 
@@ -291,6 +306,17 @@ export async function blockSender(account: Account, thread: Thread): Promise<voi
     'UPDATE threads SET is_blocked = 1, is_archived = 1 WHERE sender_email = ? AND account_id = ?',
     [thread.senderEmail, account.id]
   );
+}
+
+// ── Snooze ────────────────────────────────────────────────
+export async function snoozeThread(thread: Thread, untilMs: number): Promise<void> {
+  const db = await getDb();
+  await db.execute('UPDATE threads SET snoozed_until = ? WHERE id = ?', [untilMs, thread.id]);
+}
+
+export async function unsnoozeThread(thread: Thread): Promise<void> {
+  const db = await getDb();
+  await db.execute('UPDATE threads SET snoozed_until = NULL WHERE id = ?', [thread.id]);
 }
 
 async function ensureLabel(account: Account, name: string): Promise<string> {
@@ -507,9 +533,10 @@ export function groupBySection(threads: Thread[]): Array<{ label: string; thread
 }
 
 function startOf(unit: 'day' | 'week' | 'month', d: Date): Date {
-  const r = new Date(d);
-  r.setHours(0, 0, 0, 0);
-  if (unit === 'week') r.setDate(r.getDate() - r.getDay());
-  if (unit === 'month') r.setDate(1);
-  return r;
+  if (unit === 'day') return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (unit === 'week') {
+    const day = d.getDay(); // 0=Sun
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
+  }
+  return new Date(d.getFullYear(), d.getMonth(), 1);
 }
