@@ -1204,7 +1204,15 @@ async function openThread(t: Thread) {
       localStorage.removeItem(draftKey);
       overlay.remove();
     } catch (e) {
-      alert(`Send failed: ${e}`);
+      // Show inline error in reply footer — no alert() per KPT-025Q spec
+      const errDiv = document.getElementById('reply-send-error') ?? (() => {
+        const d = document.createElement('div');
+        d.id = 'reply-send-error';
+        d.style.cssText = 'font-size:12px;color:var(--danger,#dc2626);padding:4px 0;';
+        btn.parentElement!.insertBefore(d, btn);
+        return d;
+      })();
+      errDiv.textContent = `Send failed: ${e instanceof Error ? e.message : String(e)}`;
       btn.disabled = false;
       btn.textContent = 'Send';
     }
