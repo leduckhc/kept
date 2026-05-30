@@ -1,9 +1,11 @@
 // main.ts — Kept inbox UI
-import { type Account, getAccount, startOAuth } from './auth';
+import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
+import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
 import { type Thread, syncInbox, loadThreads, loadSenderEmails, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
 
 // ── State ─────────────────────────────────────────────────
-let account: Account | null = null;
+let account: Account | null = null;      // active account
+let accounts: Account[] = [];            // all accounts
 let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
@@ -17,7 +19,10 @@ const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Drafts',  icon: '✏' },
   { name: 'Starred', icon: '★' },
 ];
-function setAccount(a: Account) { account = a; }
+function setAccount(a: Account) {
+  account = a;
+  setActiveAccountId(a.id);
+}
 
 
 // ── Boot ──────────────────────────────────────────────────
@@ -35,10 +40,11 @@ async function boot() {
   }
 
   try {
-    account = await getAccount();
+    accounts = await getAllAccounts();
+    account = await resolveActiveAccount();
     if (account) {
       showShell();
-      await refresh();
+      await refreshAll();
     }
   } catch (e) {
     console.error('Boot error:', e);
@@ -70,8 +76,10 @@ function showAuth() {
     btn.textContent = 'Opening browser…';
     try {
       account = await startOAuth();
+      accounts = await getAllAccounts();
+      setAccount(account);
       showShell();
-      await refresh();
+      await refreshAll();
     } catch (e) {
       btn.disabled = false;
       btn.innerHTML = originalHTML;
@@ -93,7 +101,7 @@ function showShell() {
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
         <button class="btn-icon" id="btn-theme" title="Toggle theme">◑</button>
-        <button class="btn-icon" id="btn-signout" title="Sign out" style="font-size:13px">Sign out</button>
+        <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${account?.email?.split('@')[0] ?? '…'} ▾</button>
       </div>
       <div class="nav-tray-wrapper">
         <div class="nav-tray" id="nav-tray" role="listbox">
@@ -163,24 +171,8 @@ function showShell() {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     applyTheme(next);
   });
-  document.getElementById('btn-signout')!.addEventListener('click', async () => {
-    try {
-      const db = await import('./db').then(m => m.getDb());
-      const acctId = account?.id;
-      await db.execute('DELETE FROM accounts WHERE 1=1');
-      if (acctId != null) {
-        await db.execute('DELETE FROM threads WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM messages WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM blocked_senders WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM settings WHERE account_id = ?', [acctId]);
-      }
-      account = null;
-      threads = [];
-      syncing = false;
-      showAuth();
-    } catch (e) {
-      console.error('Sign out error:', e);
-    }
+  document.getElementById('btn-account')!.addEventListener('click', () => {
+    showAccountMenu();
   });
 
   const searchEl = document.getElementById('search') as HTMLInputElement;
@@ -241,12 +233,28 @@ function renderViewPlaceholder(view: ViewName) {
 }
 
 // ── Sync ──────────────────────────────────────────────────
-async function refresh() {
+/** On boot: load active account threads, then kick off parallel sync for all accounts. */
+async function refreshAll() {
   if (!account) return;
   threads = await loadThreads(account.id);
   renderInbox();
-  // Always sync on boot to get fresh data
-  syncAndRender();
+
+  // Parallel sync — one per account, errors are non-fatal per account
+  const allAccts = await getAllAccounts();
+  const syncPromises = allAccts.map(acct =>
+    syncInbox(acct, acct.id === account!.id ? n => setStatus(`Syncing… ${n} threads`) : undefined)
+      .catch(err => console.error(`Sync error for ${acct.email}:`, err))
+  );
+  const btn = document.getElementById('btn-sync');
+  if (btn) btn.style.opacity = '0.4';
+  setStatus('Syncing…');
+  await Promise.all(syncPromises);
+  if (btn) btn.style.opacity = '';
+  // Reload threads for the active account after all syncs complete
+  threads = await loadThreads(account.id);
+  renderInbox();
+  setStatus(`Synced — ${threads.length} threads`);
+  setTimeout(() => setStatus(''), 5000);
 }
 
 async function syncAndRender() {
@@ -279,6 +287,134 @@ async function syncAndRender() {
     if (btn) btn.style.opacity = '';
     setTimeout(() => setStatus(''), 5000);
   }
+}
+
+// ── Account menu ──────────────────────────────────────────
+function showAccountMenu() {
+  // Remove any existing menu
+  document.getElementById('account-menu-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'account-menu-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const menu = document.createElement('div');
+  menu.className = 'account-menu';
+  menu.innerHTML = `
+    <div class="account-menu-header">Accounts</div>
+    ${accounts.map(a => `
+      <button class="account-menu-item${a.id === account?.id ? ' active' : ''}" data-id="${a.id}">
+        <span class="account-email">${esc(a.email)}</span>
+        ${a.id === account?.id ? '<span class="account-active-badge">active</span>' : ''}
+        <button class="account-remove-btn" data-remove-id="${a.id}" title="Remove account">×</button>
+      </button>`).join('')}
+    <button class="account-menu-add" id="btn-add-account">+ Add account</button>
+    <hr style="border:none;border-top:1px solid var(--border);margin:4px 0"/>
+    <button class="account-menu-signout" id="btn-signout-all">Sign out of all accounts</button>
+  `;
+
+  overlay.appendChild(menu);
+  document.body.appendChild(overlay);
+
+  // Switch account
+  menu.querySelectorAll<HTMLButtonElement>('.account-menu-item').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      if ((e.target as HTMLElement).closest('.account-remove-btn')) return;
+      const id = btn.dataset.id!;
+      const target = accounts.find(a => a.id === id);
+      if (!target || target.id === account?.id) { overlay.remove(); return; }
+      setAccount(target);
+      threads = await loadThreads(target.id);
+      renderInbox();
+      const statusLeft = document.getElementById('status-left');
+      if (statusLeft) statusLeft.textContent = target.email;
+      const acctBtn = document.getElementById('btn-account');
+      if (acctBtn) acctBtn.textContent = `${target.email.split('@')[0]} ▾`;
+      overlay.remove();
+      syncAndRender();
+    });
+  });
+
+  // Remove account
+  menu.querySelectorAll<HTMLButtonElement>('.account-remove-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const removeId = btn.dataset.removeId!;
+      const target = accounts.find(a => a.id === removeId);
+      if (!target) return;
+      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
+      overlay.remove();
+      try {
+        await removeAccount(target);
+        accounts = accounts.filter(a => a.id !== removeId);
+        if (account?.id === removeId) {
+          // Switch to another account or go to auth
+          const next = accounts[0] ?? null;
+          if (next) {
+            setAccount(next);
+            threads = await loadThreads(next.id);
+            showShell();
+            await refreshAll();
+          } else {
+            clearActiveAccountId();
+            account = null;
+            threads = [];
+            syncing = false;
+            showAuth();
+          }
+        }
+      } catch (err) {
+        console.error('Remove account error:', err);
+        setStatus('Failed to remove account');
+      }
+    });
+  });
+
+  // Add account
+  document.getElementById('btn-add-account')!.addEventListener('click', async () => {
+    overlay.remove();
+    const addBtn = document.getElementById('btn-account') as HTMLButtonElement | null;
+    if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Connecting…'; }
+    try {
+      const newAcct = await startOAuth();
+      // Check if already in list (duplicate email → update token, already done by saveAccount)
+      const existing = accounts.find(a => a.id === newAcct.id);
+      if (existing) {
+        // Update token in-list
+        const idx = accounts.indexOf(existing);
+        accounts[idx] = newAcct;
+        setStatus(`${newAcct.email} token refreshed`);
+      } else {
+        accounts.push(newAcct);
+        setStatus(`${newAcct.email} added`);
+      }
+    } catch (e) {
+      console.error('Add account error:', e);
+      setStatus(`Add account failed: ${e}`);
+    } finally {
+      if (addBtn) { addBtn.disabled = false; addBtn.textContent = `${account?.email?.split('@')[0] ?? '…'} ▾`; }
+      setTimeout(() => setStatus(''), 5000);
+    }
+  });
+
+  // Sign out of all accounts
+  document.getElementById('btn-signout-all')!.addEventListener('click', async () => {
+    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
+    overlay.remove();
+    try {
+      for (const a of accounts) {
+        await removeAccount(a).catch(e => console.error('Remove error:', e));
+      }
+    } finally {
+      clearActiveAccountId();
+      account = null;
+      accounts = [];
+      threads = [];
+      syncing = false;
+      showAuth();
+    }
+  });
 }
 
 // ── Render inbox ──────────────────────────────────────────
@@ -380,7 +516,7 @@ async function doMarkRead(t: Thread, row: HTMLElement) {
   if (!account) return;
   try {
     await markRead(account, t);
-    const fresh = await getAccount();
+    const fresh = account ? await getAccountById(account.id) : null;
     if (fresh) setAccount(fresh);
     t.isUnread = false;
     row.classList.remove('unread');
@@ -397,7 +533,7 @@ async function doArchive(t: Thread, row: HTMLElement) {
   if (!account) return;
   try {
     await archiveThread(account, t);
-    const fresh = await getAccount();
+    const fresh = account ? await getAccountById(account.id) : null;
     if (fresh) setAccount(fresh);
     row.remove();
     threads = threads.filter(x => x.id !== t.id);
@@ -412,7 +548,7 @@ async function doBlock(t: Thread, _row: HTMLElement) {
   if (!account) return;
   if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
   await blockSender(account, t);
-  const fresh = await getAccount();
+  const fresh = account ? await getAccountById(account.id) : null;
   if (fresh) setAccount(fresh);
   // Remove all rows from this sender
   threads = threads.filter(x => x.senderEmail !== t.senderEmail);
@@ -663,7 +799,7 @@ async function openThread(t: Thread) {
   document.getElementById('btn-archive-reader')!.addEventListener('click', async () => {
     if (!account) return;
     await archiveThread(account, t);
-    const fresh = await getAccount();
+    const fresh = account ? await getAccountById(account.id) : null;
     if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.id !== t.id);
     renderInbox();
@@ -673,7 +809,7 @@ async function openThread(t: Thread) {
     if (!account) return;
     if (!confirm(`Block all email from ${t.senderEmail}?`)) return;
     await blockSender(account, t);
-    const fresh = await getAccount();
+    const fresh = account ? await getAccountById(account.id) : null;
     if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.senderEmail !== t.senderEmail);
     renderInbox();
