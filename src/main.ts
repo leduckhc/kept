@@ -710,7 +710,7 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
 
   // Clock indicator for snoozed threads
   const clockIndicator = t.snoozedUntil
-    ? `<span class="snooze-indicator" title="Snoozed until ${formatDate(t.snoozedUntil)}">🕐 ${formatDate(t.snoozedUntil)}</span>`
+    ? `<span class="snooze-badge" title="Snoozed until ${formatDate(t.snoozedUntil)}">🕐 ${formatDate(t.snoozedUntil)}</span>`
     : '';
 
   const actionsHtml = isSnoozed
@@ -790,6 +790,7 @@ async function doUnsnooze(t: Thread, row: HTMLElement) {
   t.snoozedUntil = null;
   row.remove();
   threads = threads.filter(x => x.id !== t.id);
+  showToast('Back in inbox', 3000);
   // Refresh inbox so it picks up resurfaces thread
   if (account) {
     threads = await loadThreads(account.id);
@@ -806,23 +807,32 @@ function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSn
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
 
-  const items: Array<{ label: string; action: () => void }> = [];
+  type MenuItem = { label: string; action: () => void; cls?: string };
+  const items: Array<MenuItem | 'divider'> = [];
 
   if (!isSnoozed) {
-    items.push({ label: '🕐  Snooze…', action: () => { menu.remove(); openSnoozePicker(t, row); } });
+    items.push({ label: '🕐  Snooze…', action: () => { menu.remove(); openSnoozePicker(t, row); }, cls: 'ctx-menu-item--snooze' });
   } else {
-    items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row); } });
+    items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row); }, cls: 'ctx-menu-item--snooze' });
   }
-  items.push({ label: '✓  Mark as read', action: () => { menu.remove(); doMarkRead(t, row); } });
-  items.push({ label: '⬇  Archive', action: () => { menu.remove(); doArchive(t, row); } });
-  items.push({ label: '⊘  Block sender', action: () => { menu.remove(); doBlock(t, row); } });
+  items.push('divider');
+  items.push({ label: '📂  Archive', action: () => { menu.remove(); doArchive(t, row); } });
+  items.push({ label: '✓  Mark read', action: () => { menu.remove(); doMarkRead(t, row); } });
+  items.push('divider');
+  items.push({ label: '🚫  Block sender', action: () => { menu.remove(); doBlock(t, row); }, cls: 'ctx-menu-item--danger' });
 
-  menu.innerHTML = items.map((item, i) =>
-    `<button class="ctx-menu-item" data-idx="${i}">${item.label}</button>`
+  const actionItems = items.filter((x): x is MenuItem => x !== 'divider');
+  menu.innerHTML = items.map((item) =>
+    item === 'divider'
+      ? `<hr class="ctx-menu-divider">`
+      : `<button class="ctx-menu-item${item.cls ? ' ' + item.cls : ''}" data-action-idx="${actionItems.indexOf(item)}">${item.label}</button>`
   ).join('');
 
   menu.querySelectorAll<HTMLButtonElement>('.ctx-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => items[parseInt(btn.dataset.idx!)]?.action());
+    btn.addEventListener('click', () => {
+      const item = actionItems[parseInt(btn.dataset.actionIdx!)];
+      if (item) item.action();
+    });
   });
 
   document.body.appendChild(menu);
@@ -908,7 +918,7 @@ function openSnoozePicker(t: Thread, row: HTMLElement) {
       <label class="snooze-custom-label">Custom date &amp; time</label>
       <input type="datetime-local" id="snooze-dt" class="snooze-dt-input" value="${dtLocal}" />
       <div id="snooze-dt-error" class="snooze-dt-error" style="display:none">Pick a future time</div>
-      <button class="btn-primary snooze-confirm-btn" id="snooze-confirm">Snooze</button>
+      <button class="btn-primary snooze-confirm-btn" id="snooze-confirm" disabled>Snooze</button>
     </div>
   `;
 
@@ -920,29 +930,59 @@ function openSnoozePicker(t: Thread, row: HTMLElement) {
 
   picker.querySelector('.snooze-picker-close')!.addEventListener('click', () => picker.remove());
 
+  let selectedPresetMs: number | null = null;
+  const confirmBtn = document.getElementById('snooze-confirm') as HTMLButtonElement;
+
   picker.querySelectorAll<HTMLButtonElement>('.snooze-preset-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
+      // Highlight selection, store time, enable confirm -- do NOT snooze immediately
+      picker.querySelectorAll('.snooze-preset-btn').forEach(b => b.classList.remove('snooze-preset-btn--active'));
+      btn.classList.add('snooze-preset-btn--active');
       const idx = parseInt(btn.dataset.idx!);
-      const untilMs = presets[idx].untilMs();
-      await doSnooze(t, row, untilMs);
-      picker.remove();
+      selectedPresetMs = presets[idx].untilMs();
+      confirmBtn.disabled = false;
     });
   });
 
-  document.getElementById('snooze-confirm')!.addEventListener('click', async () => {
+  confirmBtn.addEventListener('click', async () => {
     const input = document.getElementById('snooze-dt') as HTMLInputElement;
     const errorEl = document.getElementById('snooze-dt-error')!;
+
+    if (selectedPresetMs !== null) {
+      await doSnooze(t, row, selectedPresetMs);
+      picker.remove();
+      return;
+    }
+
     const val = input.value;
     if (!val) { errorEl.style.display = ''; return; }
     const chosen = new Date(val).getTime();
     if (chosen <= Date.now()) {
       errorEl.style.display = '';
-      errorEl.textContent = 'Pick a future time';
+      errorEl.textContent = 'Must be a future time';
       return;
     }
     errorEl.style.display = 'none';
     await doSnooze(t, row, chosen);
     picker.remove();
+  });
+
+  // When custom datetime changes, clear preset selection and validate
+  (document.getElementById('snooze-dt') as HTMLInputElement).addEventListener('change', () => {
+    const inp = document.getElementById('snooze-dt') as HTMLInputElement;
+    const errorEl = document.getElementById('snooze-dt-error')!;
+    // Clear preset highlight
+    picker.querySelectorAll('.snooze-preset-btn').forEach(b => b.classList.remove('snooze-preset-btn--active'));
+    selectedPresetMs = null;
+    const chosen = new Date(inp.value).getTime();
+    if (chosen <= Date.now()) {
+      errorEl.style.display = '';
+      errorEl.textContent = 'Must be a future time';
+      confirmBtn.disabled = true;
+    } else {
+      errorEl.style.display = 'none';
+      confirmBtn.disabled = false;
+    }
   });
 
   function dismiss(e: MouseEvent | KeyboardEvent) {
@@ -966,8 +1006,7 @@ async function doSnooze(t: Thread, row: HTMLElement, untilMs: number) {
     row.remove();
     threads = threads.filter(x => x.id !== t.id);
   }, 250);
-  setStatus(`Snoozed until ${formatDate(untilMs)}`);
-  setTimeout(() => setStatus(''), 4000);
+  showToast(`Snoozed until ${formatDate(untilMs)}`, 3000);
 }
 
 function setupSnoozeResurface() {

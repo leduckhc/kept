@@ -501,6 +501,7 @@ body {
   transition: background 0.1s;
 }
 .btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-secondary {
   padding: 6px 14px;
@@ -547,13 +548,17 @@ body {
 
 /* ── Snoozed row indicator ──────────────────────────────── */
 .snoozed-row { opacity: 0.8; }
-.snooze-indicator {
+.snooze-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 11px;
   color: var(--lavender-accent);
   font-weight: 500;
+  background: var(--lavender-tint, rgba(124, 124, 248, 0.10));
+  border: 1px solid var(--lavender-border, rgba(124, 124, 248, 0.25));
+  border-radius: 10px;
+  padding: 1px 7px 1px 5px;
 }
 
 /* Snooze-out animation (thread disappears from inbox) */
@@ -593,6 +598,13 @@ body {
   transition: background 0.08s;
 }
 .ctx-menu-item:hover { background: var(--surface); }
+.ctx-menu-item--snooze { color: var(--lavender-accent, #5555e0) !important; }
+.ctx-menu-item--danger  { color: var(--danger, #dc2626) !important; }
+.ctx-menu-divider {
+  margin: 3px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
 
 /* ── Snooze picker ──────────────────────────────────────── */
 .snooze-picker {
@@ -637,6 +649,11 @@ body {
   gap: 8px;
 }
 .snooze-preset-btn:hover { background: var(--lavender-tint); }
+.snooze-preset-btn--active {
+  background: var(--lavender-tint, rgba(124, 124, 248, 0.12)) !important;
+  color: var(--lavender-accent, #5555e0);
+  font-weight: 600;
+}
 
 .snooze-preset-label { flex: 1; }
 .snooze-preset-time {
