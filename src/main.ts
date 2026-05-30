@@ -8,8 +8,23 @@ let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
-let currentLabel = 'INBOX'; // KPT-023: active label view
+type ViewName = 'Inbox' | 'Sent' | 'Drafts' | 'Starred';
+let currentView: ViewName = 'Inbox';
 
+// Map ViewName to Gmail label id used in loadThreads
+const VIEW_TO_LABEL: Record<ViewName, string> = {
+  Inbox:   'INBOX',
+  Sent:    'SENT',
+  Drafts:  'DRAFT',
+  Starred: 'STARRED',
+};
+
+const VIEWS: Array<{ name: ViewName; icon: string }> = [
+  { name: 'Inbox',   icon: '✉' },
+  { name: 'Sent',    icon: '↗' },
+  { name: 'Drafts',  icon: '✏' },
+  { name: 'Starred', icon: '★' },
+];
 function setAccount(a: Account) { account = a; }
 
 
@@ -78,18 +93,24 @@ function showShell() {
   document.getElementById('app')!.innerHTML = `
     <div id="app-shell">
       <div class="toolbar">
-        <span class="toolbar-title">Kept</span>
+        <button class="title-nav" id="title-nav" aria-haspopup="listbox" aria-expanded="false">
+          <span class="title-nav-label">${currentView}</span>
+          <span class="title-nav-chevron">&#x25BE;</span>
+        </button>
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
         <button class="btn-icon" id="btn-theme" title="Toggle theme">◑</button>
         <button class="btn-icon" id="btn-signout" title="Sign out" style="font-size:13px">Sign out</button>
       </div>
-      <nav class="label-nav" id="label-nav">
-        <button class="label-nav-btn active" data-label="INBOX">Inbox</button>
-        <button class="label-nav-btn" data-label="SENT">Sent</button>
-        <button class="label-nav-btn" data-label="DRAFT">Drafts</button>
-        <button class="label-nav-btn" data-label="STARRED">Starred</button>
-      </nav>
+      <div class="nav-tray-wrapper">
+        <div class="nav-tray" id="nav-tray" role="listbox">
+          ${VIEWS.map(v => `
+            <button class="nav-tray-item${v.name === currentView ? ' active' : ''}" data-view="${v.name}" role="option" aria-selected="${v.name === currentView}">
+              <span class="nav-tray-icon">${v.icon}</span>
+              <span class="nav-tray-label">${v.name}</span>
+            </button>`).join('')}
+        </div>
+      </div>
       <div class="inbox" id="inbox"></div>
       <div class="statusbar">
         <span id="status-left">${account?.email ?? ''}</span>
@@ -97,6 +118,50 @@ function showShell() {
       </div>
     </div>
   `;
+
+  // Title-nav toggle
+  const titleNavBtn = document.getElementById('title-nav') as HTMLButtonElement;
+  const navTray = document.getElementById('nav-tray') as HTMLElement;
+
+  function openTray() {
+    titleNavBtn.classList.add('open');
+    navTray.classList.add('open');
+    titleNavBtn.setAttribute('aria-expanded', 'true');
+    // backdrop
+    const backdrop = document.createElement('div');
+    backdrop.className = 'nav-tray-backdrop';
+    backdrop.id = 'nav-tray-backdrop';
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('click', closeTray);
+  }
+
+  function closeTray() {
+    titleNavBtn.classList.remove('open');
+    navTray.classList.remove('open');
+    titleNavBtn.setAttribute('aria-expanded', 'false');
+    document.getElementById('nav-tray-backdrop')?.remove();
+  }
+
+  titleNavBtn.addEventListener('click', () => {
+    if (navTray.classList.contains('open')) closeTray();
+    else openTray();
+  });
+
+  // Tray item selection
+  navTray.querySelectorAll<HTMLButtonElement>('.nav-tray-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const view = item.dataset.view as ViewName;
+      closeTray();
+      switchView(view);
+    });
+  });
+
+  // Swipe-up to dismiss tray
+  let touchStartY = 0;
+  navTray.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  navTray.addEventListener('touchmove', e => {
+    if (e.touches[0].clientY - touchStartY < -30) closeTray();
+  }, { passive: true });
 
   document.getElementById('btn-sync')!.addEventListener('click', () => syncAndRender());
   document.getElementById('btn-theme')!.addEventListener('click', () => {
@@ -117,7 +182,7 @@ function showShell() {
       account = null;
       threads = [];
       syncing = false;
-      currentLabel = 'INBOX';
+      currentView = 'Inbox';
       showAuth();
     } catch (e) {
       console.error('Sign out error:', e);
@@ -130,34 +195,47 @@ function showShell() {
     if (searchDebounce !== null) clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
       if (!account) return;
-      threads = await loadThreads(account.id, currentLabel, searchQuery || undefined);
+      threads = await loadThreads(account.id, VIEW_TO_LABEL[currentView], searchQuery || undefined);
       renderInbox();
     }, 200);
   });
   searchEl.addEventListener('focus', () => searchEl.classList.add('expanded'));
   searchEl.addEventListener('blur', () => { if (!searchEl.value) searchEl.classList.remove('expanded'); });
+}
 
-  // KPT-023: wire label nav buttons
-  document.getElementById('label-nav')!.addEventListener('click', async (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.label-nav-btn');
-    if (!btn || !account) return;
-    const label = btn.dataset.label!;
-    if (label === currentLabel) return;
-    currentLabel = label;
-    searchQuery = '';
-    (document.getElementById('search') as HTMLInputElement).value = '';
-    // Update active style
-    document.querySelectorAll('.label-nav-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    threads = await loadThreads(account.id, currentLabel);
-    renderInbox();
+// ── View switching ────────────────────────────────────────
+function switchView(view: ViewName) {
+  currentView = view;
+  // Update title label
+  const label = document.querySelector('.title-nav-label');
+  if (label) label.textContent = view;
+  // Update tray items
+  document.querySelectorAll<HTMLButtonElement>('.nav-tray-item').forEach(item => {
+    const isActive = item.dataset.view === view;
+    item.classList.toggle('active', isActive);
+    item.setAttribute('aria-selected', String(isActive));
   });
+  // Render appropriate content
+  if (view === 'Inbox') {
+    renderInbox();
+  } else {
+    renderThreadView(view);
+  }
+}
+
+async function renderThreadView(view: ViewName) {
+  if (!account) return;
+  const label = VIEW_TO_LABEL[view];
+  const container = document.getElementById('inbox');
+  if (container) container.innerHTML = '<div class="empty-state"><div style="font-size:20px;opacity:.4">⟳</div><div>Loading…</div></div>';
+  threads = await loadThreads(account.id, label, searchQuery || undefined);
+  renderInbox();
 }
 
 // ── Sync ──────────────────────────────────────────────────
 async function refresh() {
   if (!account) return;
-  threads = await loadThreads(account.id, currentLabel);
+  threads = await loadThreads(account.id, VIEW_TO_LABEL[currentView]);
   renderInbox();
   // Always sync on boot to get fresh data
   syncAndRender();
@@ -171,7 +249,7 @@ async function syncAndRender() {
   if (btn) btn.style.opacity = '0.4';
   try {
     await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
-    threads = await loadThreads(account.id, currentLabel);
+    threads = await loadThreads(account.id, VIEW_TO_LABEL[currentView]);
     renderInbox();
     setStatus(`Synced — ${threads.length} threads`);
   } catch (e) {
