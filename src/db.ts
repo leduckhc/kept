@@ -84,4 +84,8 @@ async function migrate(db: Database): Promise<void> {
   // Additive migrations — safe to re-run (ALTER TABLE IF NOT EXISTS column not supported in SQLite,
   // so we catch the "duplicate column" error and ignore it)
   await db.execute(`ALTER TABLE threads ADD COLUMN has_attachment INTEGER DEFAULT 0`).catch(() => {});
+  // KPT-023: label column for Sent/Draft/Starred/Inbox routing
+  await db.execute(`ALTER TABLE threads ADD COLUMN label TEXT NOT NULL DEFAULT 'INBOX'`).catch(() => {});
+  await db.execute(`ALTER TABLE threads ADD COLUMN is_starred INTEGER NOT NULL DEFAULT 0`).catch(() => {});
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_threads_label ON threads(account_id, label, received_at DESC)`).catch(() => {});
 }

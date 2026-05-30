@@ -8,6 +8,7 @@ let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+let currentLabel = 'INBOX'; // KPT-023: active label view
 
 function setAccount(a: Account) { account = a; }
 
@@ -83,6 +84,12 @@ function showShell() {
         <button class="btn-icon" id="btn-theme" title="Toggle theme">◑</button>
         <button class="btn-icon" id="btn-signout" title="Sign out" style="font-size:13px">Sign out</button>
       </div>
+      <nav class="label-nav" id="label-nav">
+        <button class="label-nav-btn active" data-label="INBOX">Inbox</button>
+        <button class="label-nav-btn" data-label="SENT">Sent</button>
+        <button class="label-nav-btn" data-label="DRAFT">Drafts</button>
+        <button class="label-nav-btn" data-label="STARRED">Starred</button>
+      </nav>
       <div class="inbox" id="inbox"></div>
       <div class="statusbar">
         <span id="status-left">${account?.email ?? ''}</span>
@@ -110,6 +117,7 @@ function showShell() {
       account = null;
       threads = [];
       syncing = false;
+      currentLabel = 'INBOX';
       showAuth();
     } catch (e) {
       console.error('Sign out error:', e);
@@ -122,18 +130,34 @@ function showShell() {
     if (searchDebounce !== null) clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
       if (!account) return;
-      threads = await loadThreads(account.id, searchQuery);
+      threads = await loadThreads(account.id, currentLabel, searchQuery || undefined);
       renderInbox();
     }, 200);
   });
   searchEl.addEventListener('focus', () => searchEl.classList.add('expanded'));
   searchEl.addEventListener('blur', () => { if (!searchEl.value) searchEl.classList.remove('expanded'); });
+
+  // KPT-023: wire label nav buttons
+  document.getElementById('label-nav')!.addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.label-nav-btn');
+    if (!btn || !account) return;
+    const label = btn.dataset.label!;
+    if (label === currentLabel) return;
+    currentLabel = label;
+    searchQuery = '';
+    (document.getElementById('search') as HTMLInputElement).value = '';
+    // Update active style
+    document.querySelectorAll('.label-nav-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    threads = await loadThreads(account.id, currentLabel);
+    renderInbox();
+  });
 }
 
 // ── Sync ──────────────────────────────────────────────────
 async function refresh() {
   if (!account) return;
-  threads = await loadThreads(account.id);
+  threads = await loadThreads(account.id, currentLabel);
   renderInbox();
   // Always sync on boot to get fresh data
   syncAndRender();
@@ -147,7 +171,7 @@ async function syncAndRender() {
   if (btn) btn.style.opacity = '0.4';
   try {
     await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
-    threads = await loadThreads(account.id);
+    threads = await loadThreads(account.id, currentLabel);
     renderInbox();
     setStatus(`Synced — ${threads.length} threads`);
   } catch (e) {

@@ -451,3 +451,38 @@ body {
   opacity: 0.7;
   flex-shrink: 0;
 }
+
+/* ── Label nav (Inbox / Sent / Drafts / Starred) ─────────── */
+.label-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 12px;
+  height: 36px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.label-nav-btn {
+  padding: 4px 12px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.label-nav-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.label-nav-btn.active {
+  background: var(--border);
+  color: var(--text);
+  font-weight: 600;
+}

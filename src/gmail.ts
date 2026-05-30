@@ -15,6 +15,8 @@ export interface Thread {
   isArchived: boolean;
   hasAttachment: boolean;
   gmailThreadId: string;
+  label: string;      // KPT-023: 'INBOX' | 'SENT' | 'DRAFT' | 'STARRED'
+  isStarred: boolean; // KPT-023
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -47,8 +49,12 @@ export async function syncInbox(account: Account, onProgress?: (n: number) => vo
     // Fall through to full sync if incremental failed (historyId too old / 404)
   }
 
-  // Full sync
-  await syncFull(a, account.id, onProgress);
+  // Full sync — INBOX + SENT + DRAFT labels in parallel
+  await Promise.all([
+    syncFull(a, account.id, 'INBOX', onProgress),
+    syncFull(a, account.id, 'SENT'),
+    syncFull(a, account.id, 'DRAFT'),
+  ]);
 
   // After full sync, fetch and store current historyId
   try {
@@ -63,12 +69,12 @@ export async function syncInbox(account: Account, onProgress?: (n: number) => vo
 
 const MAX_SYNC_PAGES = 10;
 
-async function syncFull(account: Account, accountId: string, onProgress?: (n: number) => void): Promise<void> {
+async function syncFull(account: Account, accountId: string, label: string = 'INBOX', onProgress?: (n: number) => void): Promise<void> {
   let pageToken: string | undefined;
   let total = 0;
   let page = 0;
   do {
-    const params = new URLSearchParams({ labelIds: 'INBOX', maxResults: '100' });
+    const params = new URLSearchParams({ labelIds: label, maxResults: '100' });
     if (pageToken) params.set('pageToken', pageToken);
     const res = await gmailGet(account, `/users/me/threads?${params}`);
     const data = res as { threads?: Array<{ id: string }>; nextPageToken?: string };
@@ -77,14 +83,14 @@ async function syncFull(account: Account, accountId: string, onProgress?: (n: nu
     const threadIds = data.threads.map((t: { id: string }) => t.id);
     const BATCH = 10;
     for (let i = 0; i < threadIds.length; i += BATCH) {
-      await Promise.all(threadIds.slice(i, i + BATCH).map((id: string) => syncThread(account, id, accountId)));
+      await Promise.all(threadIds.slice(i, i + BATCH).map((id: string) => syncThread(account, id, accountId, label)));
       total += Math.min(BATCH, threadIds.length - i);
       onProgress?.(total);
     }
     pageToken = data.nextPageToken;
     page++;
     if (page >= MAX_SYNC_PAGES) {
-      console.log('syncFull: hit MAX_SYNC_PAGES, stopping');
+      console.log(`syncFull(${label}): hit MAX_SYNC_PAGES, stopping`);
       break;
     }
   } while (pageToken);
@@ -178,7 +184,7 @@ function hasAttachment(message: any): boolean {
   return checkParts(parts);
 }
 
-async function syncThread(account: Account, gmailThreadId: string, accountId: string): Promise<void> {
+async function syncThread(account: Account, gmailThreadId: string, accountId: string, label: string = 'INBOX'): Promise<void> {
   const db = await getDb();
   const data = await gmailGet(account, `/users/me/threads/${gmailThreadId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`) as {
     id: string;
@@ -203,23 +209,48 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   const { name: senderName, email: senderEmail } = parseFrom(fromRaw);
   const receivedAt = parseInt(last.internalDate, 10);
   const isUnread = last.labelIds.includes('UNREAD') ? 1 : 0;
+  const isStarred = last.labelIds.includes('STARRED') ? 1 : 0;
 
   await db.execute(
     `INSERT OR REPLACE INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id, has_attachment)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId, hasAttachment(last) ? 1 : 0]
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id, has_attachment, label, is_starred)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId, hasAttachment(last) ? 1 : 0, label, isStarred]
   );
 }
 
 // ── Load inbox from DB ────────────────────────────────────
-export async function loadThreads(accountId: string, search?: string): Promise<Thread[]> {
+export async function loadThreads(accountId: string, labelOrSearch?: string, search?: string): Promise<Thread[]> {
   const db = await getDb();
-  let sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0`;
+
+  // Overload: loadThreads(accountId, label, search?) — label is one of INBOX/SENT/DRAFT/STARRED
+  // Backwards-compat: loadThreads(accountId, search) — old call site passes search string as 2nd arg
+  let activeLabel: string;
+  let activeSearch: string | undefined;
+
+  const KNOWN_LABELS = ['INBOX', 'SENT', 'DRAFT', 'STARRED'];
+  if (labelOrSearch && KNOWN_LABELS.includes(labelOrSearch)) {
+    activeLabel = labelOrSearch;
+    activeSearch = search;
+  } else {
+    activeLabel = 'INBOX';
+    activeSearch = labelOrSearch; // backwards-compat
+  }
+
+  let sql: string;
   const params: (string | number)[] = [accountId];
-  if (search) {
+
+  if (activeLabel === 'STARRED') {
+    // Starred: show all starred threads regardless of label, not archived/blocked
+    sql = `SELECT * FROM threads WHERE account_id = ? AND is_starred = 1 AND is_archived = 0 AND is_blocked = 0`;
+  } else {
+    sql = `SELECT * FROM threads WHERE account_id = ? AND label = ? AND is_archived = 0 AND is_blocked = 0`;
+    params.push(activeLabel);
+  }
+
+  if (activeSearch) {
     sql += ` AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?)`;
-    const q = `%${search}%`;
+    const q = `%${activeSearch}%`;
     params.push(q, q, q, q);
   }
   sql += ` ORDER BY received_at DESC LIMIT 500`;
@@ -239,6 +270,8 @@ function rowToThread(r: Record<string, unknown>): Thread {
     isArchived: (r.is_archived as number) === 1,
     hasAttachment: (r.has_attachment as number) === 1,
     gmailThreadId: r.gmail_thread_id as string,
+    label: (r.label as string) ?? 'INBOX',
+    isStarred: (r.is_starred as number) === 1,
   };
 }
 
