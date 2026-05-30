@@ -125,4 +125,7 @@ async function migrate(db: Database): Promise<void> {
 
   // Backfill existing rows — idempotent for content= tables; fast on small datasets
   await db.execute(`INSERT INTO threads_fts(threads_fts) VALUES('rebuild')`).catch(() => {});
+
+  // KPT-029: star toggle
+  await db.execute(`ALTER TABLE threads ADD COLUMN is_starred INTEGER DEFAULT 0`).catch(() => {});
 }

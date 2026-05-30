@@ -13,6 +13,7 @@ export interface Thread {
   receivedAt: number; // unix ms
   isUnread: boolean;
   isArchived: boolean;
+  isStarred: boolean;
   hasAttachment: boolean;
   gmailThreadId: string;
   snoozedUntil: number | null; // unix ms, null = not snoozed
@@ -206,6 +207,7 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   const { name: senderName, email: senderEmail } = parseFrom(fromRaw);
   const receivedAt = parseInt(last.internalDate, 10);
   const isUnread = last.labelIds.includes('UNREAD') ? 1 : 0;
+  const isStarred = last.labelIds.includes('STARRED') ? 1 : 0;
   const newMessageCount = msgs.length;
 
   // Check existing snooze state and message count so we can auto-unsnooze on new messages
@@ -225,8 +227,8 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 
   await db.execute(
     `INSERT INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id, has_attachment, message_count, snoozed_until, snooze_label)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, message_count, snoozed_until, snooze_label)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id    = excluded.account_id,
        subject       = excluded.subject,
@@ -235,12 +237,13 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
        sender_email  = excluded.sender_email,
        received_at   = excluded.received_at,
        is_unread     = excluded.is_unread,
+       is_starred    = excluded.is_starred,
        gmail_thread_id = excluded.gmail_thread_id,
        has_attachment = excluded.has_attachment,
        message_count  = excluded.message_count,
        snoozed_until  = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snoozed_until, excluded.snoozed_until) END,
        snooze_label   = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snooze_label, excluded.snooze_label) END`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId, hasAttachment(last) ? 1 : 0, newMessageCount, snoozedUntil, snoozeLabel]
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, newMessageCount, snoozedUntil, snoozeLabel]
   );
 }
 
@@ -319,6 +322,14 @@ export async function loadSnoozedThreads(accountId: string): Promise<Thread[]> {
   return rows.map(rowToThread);
 }
 
+export async function loadStarredThreads(accountId: string): Promise<Thread[]> {
+  const db = await getDb();
+  const sql = `SELECT * FROM threads WHERE account_id = ? AND is_blocked = 0 AND is_starred = 1
+               ORDER BY received_at DESC LIMIT 500`;
+  const rows = await db.select<Array<Record<string, unknown>>>(sql, [accountId]);
+  return rows.map(rowToThread);
+}
+
 function rowToThread(r: Record<string, unknown>): Thread {
   return {
     id: r.id as string,
@@ -329,6 +340,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     receivedAt: r.received_at as number,
     isUnread: (r.is_unread as number) === 1,
     isArchived: (r.is_archived as number) === 1,
+    isStarred: (r.is_starred as number) === 1,
     hasAttachment: (r.has_attachment as number) === 1,
     gmailThreadId: r.gmail_thread_id as string,
     snoozedUntil: (r.snoozed_until as number | null) ?? null,
@@ -343,6 +355,26 @@ export async function markRead(account: Account, thread: Thread): Promise<void> 
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['UNREAD'] });
   const db = await getDb();
   await db.execute('UPDATE threads SET is_unread = 0 WHERE id = ?', [thread.id]);
+}
+
+export async function markUnread(account: Account, thread: Thread): Promise<void> {
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['UNREAD'] });
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_unread = 1 WHERE id = ?', [thread.id]);
+}
+
+export async function toggleStar(account: Account, thread: Thread): Promise<boolean> {
+  const a = await ensureFreshToken(account);
+  const newStarred = !thread.isStarred;
+  if (newStarred) {
+    await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['STARRED'] });
+  } else {
+    await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['STARRED'] });
+  }
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_starred = ? WHERE id = ?', [newStarred ? 1 : 0, thread.id]);
+  return newStarred;
 }
 
 export async function archiveThread(account: Account, thread: Thread): Promise<void> {
