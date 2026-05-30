@@ -84,4 +84,41 @@ async function migrate(db: Database): Promise<void> {
   // Additive migrations — safe to re-run (ALTER TABLE IF NOT EXISTS column not supported in SQLite,
   // so we catch the "duplicate column" error and ignore it)
   await db.execute(`ALTER TABLE threads ADD COLUMN has_attachment INTEGER DEFAULT 0`).catch(() => {});
+
+  // FTS5 full-text search on threads
+  // content= means FTS5 reads from the threads table; content_rowid= points at the sqlite rowid.
+  // We use sender_name (the actual column name) not from_name.
+  await db.execute(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS threads_fts
+    USING fts5(subject, sender_name, snippet, content='threads', content_rowid='rowid')
+  `).catch(() => {}); // no-op if fts5 module unavailable (older SQLite)
+
+  // Keep FTS in sync on INSERT
+  await db.execute(`
+    CREATE TRIGGER IF NOT EXISTS threads_ai AFTER INSERT ON threads BEGIN
+      INSERT INTO threads_fts(rowid, subject, sender_name, snippet)
+        VALUES (new.rowid, new.subject, new.sender_name, new.snippet);
+    END
+  `).catch(() => {});
+
+  // Keep FTS in sync on UPDATE
+  await db.execute(`
+    CREATE TRIGGER IF NOT EXISTS threads_au AFTER UPDATE ON threads BEGIN
+      INSERT INTO threads_fts(threads_fts, rowid, subject, sender_name, snippet)
+        VALUES ('delete', old.rowid, old.subject, old.sender_name, old.snippet);
+      INSERT INTO threads_fts(rowid, subject, sender_name, snippet)
+        VALUES (new.rowid, new.subject, new.sender_name, new.snippet);
+    END
+  `).catch(() => {});
+
+  // Keep FTS in sync on DELETE
+  await db.execute(`
+    CREATE TRIGGER IF NOT EXISTS threads_ad AFTER DELETE ON threads BEGIN
+      INSERT INTO threads_fts(threads_fts, rowid, subject, sender_name, snippet)
+        VALUES ('delete', old.rowid, old.subject, old.sender_name, old.snippet);
+    END
+  `).catch(() => {});
+
+  // Backfill existing rows — idempotent for content= tables; fast on small datasets
+  await db.execute(`INSERT INTO threads_fts(threads_fts) VALUES('rebuild')`).catch(() => {});
 }
