@@ -579,3 +579,10 @@ function startOf(unit: 'day' | 'week' | 'month', d: Date): Date {
   }
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
+
+/** Returns true if this account has completed at least one sync (historyId is set).
+ * Used to gate notifications: on the very first sync we don't spam. */
+export async function hasSyncedBefore(accountId: string): Promise<boolean> {
+  const historyId = await getSetting(accountId, 'historyId');
+  return historyId !== null;
+}

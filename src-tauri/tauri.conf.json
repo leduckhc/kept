@@ -19,10 +19,10 @@
         "minWidth": 700,
         "minHeight": 500
       }
-    ]
-  },
-  "security": {
-    "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.googleapis.com https://accounts.google.com https://oauth2.googleapis.com https://www.google.com http://127.0.0.1:*; img-src 'self' https://www.google.com data:; font-src 'self';"
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.googleapis.com https://accounts.google.com https://oauth2.googleapis.com https://www.google.com http://127.0.0.1:*; img-src 'self' https://www.google.com data:; font-src 'self';"
+    }
   },
   "plugins": {
     "sql": {
