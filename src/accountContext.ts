@@ -42,10 +42,24 @@ export function getActiveEntry(): AccountEntry | null {
 }
 
 // ── Mutations ──────────────────────────────────────────────────────────────
-export function setActive(accountId: string): void {
-  const entry = accounts.find(e => e.account.id === accountId);
-  if (!entry) throw new Error(`Unknown account: ${accountId}`);
-  activeId = accountId;
+
+/** Alias for getAccounts() returning Account[] (used by tests and external callers). */
+export function listAccounts(): Account[] {
+  return accounts.map(e => e.account);
+}
+
+/** Set the active account. Accepts an Account object or an account id string.
+ *  If an Account object is passed, it is registered (upserted) before activation. */
+export function setActive(accountOrId: Account | string): void {
+  if (typeof accountOrId === 'string') {
+    const entry = accounts.find(e => e.account.id === accountOrId);
+    if (!entry) throw new Error(`unknown account id: ${accountOrId}`);
+    activeId = accountOrId;
+  } else {
+    // Account object: upsert then activate
+    addAccount(accountOrId);
+    activeId = accountOrId.id;
+  }
   notify();
 }
 
