@@ -118,6 +118,12 @@ function showShell() {
             </button>`).join('')}
         </div>
       </div>
+      <nav class="label-nav" id="label-nav">
+        <button class="label-nav-btn active" data-label="INBOX">Inbox</button>
+        <button class="label-nav-btn" data-label="SENT">Sent</button>
+        <button class="label-nav-btn" data-label="DRAFT">Drafts</button>
+        <button class="label-nav-btn" data-label="STARRED">Starred</button>
+      </nav>
       <div class="inbox" id="inbox"></div>
       <div class="statusbar">
         <span id="status-left">${account?.email ?? ''}</span>
@@ -187,7 +193,7 @@ function showShell() {
     if (searchDebounce !== null) clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
       if (!account) return;
-      threads = await loadThreads(account.id, searchQuery);
+      threads = await loadThreads(account.id, searchQuery || undefined);
       renderInbox();
     }, 200);
   });
@@ -227,20 +233,20 @@ function switchView(view: ViewName) {
   } else if (view === 'Starred') {
     renderStarredView();
   } else {
-    renderViewPlaceholder(view);
+    renderLabelView(view);
   }
 }
 
-function renderViewPlaceholder(view: ViewName) {
+function renderLabelView(view: ViewName) {
   const container = document.getElementById('inbox');
   if (!container) return;
-  const icons: Record<ViewName, string> = { Inbox: '✉', Snoozed: '🕐', Sent: '↗', Drafts: '✏', Starred: '★' };
-  container.innerHTML = `
-    <div class="empty-state">
-      <div class="icon" style="color:var(--lavender-accent)">${icons[view]}</div>
-      <div class="empty-text">${view}</div>
-      <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Coming soon</div>
-    </div>`;
+  const VIEW_TO_LABEL: Record<string, string> = { Sent: 'SENT', Drafts: 'DRAFT', Starred: 'STARRED' };
+  const gmailLabel = VIEW_TO_LABEL[view];
+  if (!account || !gmailLabel) return;
+  loadThreads(account.id, gmailLabel).then(ts => {
+    threads = ts;
+    renderInbox();
+  });
 }
 
 // ── Sync ──────────────────────────────────────────────────

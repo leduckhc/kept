@@ -89,6 +89,10 @@ async function migrate(db: Database): Promise<void> {
   await db.execute(`ALTER TABLE threads ADD COLUMN message_count INTEGER NULL`).catch(() => {});
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_threads_snooze ON threads(snoozed_until)`).catch(() => {});
 
+  // KPT-023: label column for Sent/Draft/Starred/Inbox routing
+  await db.execute(`ALTER TABLE threads ADD COLUMN label TEXT NOT NULL DEFAULT 'INBOX'`).catch(() => {});
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_threads_label ON threads(account_id, label, received_at DESC)`).catch(() => {});
+
   // FTS5 full-text search on threads
   // content= means FTS5 reads from the threads table; content_rowid= points at the sqlite rowid.
   // We use sender_name (the actual column name) not from_name.
