@@ -16,6 +16,8 @@ export interface Thread {
   hasAttachment: boolean;
   gmailThreadId: string;
   snoozedUntil: number | null; // unix ms, null = not snoozed
+  snoozeLabel: string | null;
+  messageCount: number | null;
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -204,12 +206,41 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   const { name: senderName, email: senderEmail } = parseFrom(fromRaw);
   const receivedAt = parseInt(last.internalDate, 10);
   const isUnread = last.labelIds.includes('UNREAD') ? 1 : 0;
+  const newMessageCount = msgs.length;
+
+  // Check existing snooze state and message count so we can auto-unsnooze on new messages
+  const existing = await db.select<Array<{ snoozed_until: number | null; snooze_label: string | null; message_count: number | null }>>(
+    'SELECT snoozed_until, snooze_label, message_count FROM threads WHERE id = ?',
+    [gmailThreadId]
+  );
+  const row = existing[0] ?? null;
+
+  // Auto-unsnooze: if snoozed and message count grew, clear snooze
+  let clearSnooze = false;
+  if (row && row.snoozed_until !== null && row.message_count !== null && newMessageCount > row.message_count) {
+    clearSnooze = true;
+  }
+  const snoozedUntil = clearSnooze ? null : (row?.snoozed_until ?? null);
+  const snoozeLabel = clearSnooze ? null : (row?.snooze_label ?? null);
 
   await db.execute(
-    `INSERT OR REPLACE INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id, has_attachment)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId, hasAttachment(last) ? 1 : 0]
+    `INSERT INTO threads
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id, has_attachment, message_count, snoozed_until, snooze_label)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       account_id    = excluded.account_id,
+       subject       = excluded.subject,
+       snippet       = excluded.snippet,
+       sender_name   = excluded.sender_name,
+       sender_email  = excluded.sender_email,
+       received_at   = excluded.received_at,
+       is_unread     = excluded.is_unread,
+       gmail_thread_id = excluded.gmail_thread_id,
+       has_attachment = excluded.has_attachment,
+       message_count  = excluded.message_count,
+       snoozed_until  = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snoozed_until, excluded.snoozed_until) END,
+       snooze_label   = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snooze_label, excluded.snooze_label) END`,
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId, hasAttachment(last) ? 1 : 0, newMessageCount, snoozedUntil, snoozeLabel]
   );
 }
 
@@ -263,6 +294,8 @@ function rowToThread(r: Record<string, unknown>): Thread {
     hasAttachment: (r.has_attachment as number) === 1,
     gmailThreadId: r.gmail_thread_id as string,
     snoozedUntil: (r.snoozed_until as number | null) ?? null,
+    snoozeLabel: (r.snooze_label as string | null) ?? null,
+    messageCount: (r.message_count as number | null) ?? null,
   };
 }
 
@@ -311,12 +344,18 @@ export async function blockSender(account: Account, thread: Thread): Promise<voi
 // ── Snooze ────────────────────────────────────────────────
 export async function snoozeThread(thread: Thread, untilMs: number): Promise<void> {
   const db = await getDb();
-  await db.execute('UPDATE threads SET snoozed_until = ? WHERE id = ?', [untilMs, thread.id]);
+  await db.execute(
+    'UPDATE threads SET snoozed_until = ?, snooze_label = ? WHERE id = ?',
+    [untilMs, 'Snoozed', thread.id]
+  );
 }
 
 export async function unsnoozeThread(thread: Thread): Promise<void> {
   const db = await getDb();
-  await db.execute('UPDATE threads SET snoozed_until = NULL WHERE id = ?', [thread.id]);
+  await db.execute(
+    'UPDATE threads SET snoozed_until = NULL, snooze_label = NULL WHERE id = ?',
+    [thread.id]
+  );
 }
 
 async function ensureLabel(account: Account, name: string): Promise<string> {
