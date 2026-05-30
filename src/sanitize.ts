@@ -27,6 +27,14 @@ const DOMPURIFY_CONFIG: PurifyConfig = {
 // Transparent 1×1 GIF placeholder for blocked images
 const PLACEHOLDER_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
 
+// Hook: remove forbidden elements that some DOM parsers fail to strip via FORBID_TAGS
+DOMPurify.addHook('uponSanitizeElement', (node, data) => {
+  const forbidden = ['form', 'input', 'textarea', 'select', 'button', 'object', 'embed', 'iframe', 'svg', 'math', 'script', 'style'];
+  if (forbidden.includes(data.tagName)) {
+    node.parentNode?.removeChild(node);
+  }
+});
+
 // Hook: block remote images + force external link behaviour
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if ((node as Element).tagName === 'IMG') {
