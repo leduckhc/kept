@@ -20,6 +20,8 @@ let currentView: ViewName = 'Inbox';
 let selectedThreadId: string | null = null;
 let kbRegistered = false;
 let currentInlineReply: HTMLElement | null = null;
+let bulkMode = false;
+let selectedIds = new Set<string>();
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',   icon: '✉' },
@@ -124,6 +126,7 @@ function showShell() {
           <span class="title-nav-chevron">&#x25BE;</span>
         </button>
         <input class="search-input" id="search" placeholder="Search…" type="search" />
+        <button class="btn-icon btn-bulk-select" id="btn-bulk-select" title="Select threads">☐</button>
         <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
         <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${account?.email?.split('@')[0] ?? '…'} ▾</button>
         <button class="btn-icon btn-settings" id="btn-settings" title="Settings">⚙</button>
@@ -241,6 +244,8 @@ function showShell() {
   }, { passive: true });
 
   document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
+
+  document.getElementById('btn-bulk-select')!.addEventListener('click', () => toggleBulkMode());
 
   document.getElementById('btn-sync')!.addEventListener('click', () => syncAndRender());
   document.getElementById('btn-settings')!.addEventListener('click', () => openSettings());
@@ -909,7 +914,23 @@ function registerKeyboardShortcuts() {
         break;
       }
 
+      case 'a':
+      case 'A': {
+        if (!(e.ctrlKey || e.metaKey)) break;
+        e.preventDefault();
+        if (!bulkMode) {
+          bulkMode = true;
+          const btn = document.getElementById('btn-bulk-select');
+          if (btn) btn.classList.add('active');
+        }
+        getVisibleThreadIds().forEach(id => selectedIds.add(id));
+        renderInbox();
+        updateBulkBar();
+        break;
+      }
+
       case 'Escape': {
+        if (bulkMode) { exitBulkMode(); break; }
         const sheet = document.getElementById('kb-cheatsheet');
         if (sheet) { sheet.remove(); break; }
         const readerEl = document.querySelector<HTMLElement>('.reader-fullpage');
@@ -921,6 +942,207 @@ function registerKeyboardShortcuts() {
       }
     }
   });
+}
+
+// ── Bulk select ───────────────────────────────────────────
+function toggleBulkMode() {
+  bulkMode = !bulkMode;
+  if (!bulkMode) {
+    selectedIds.clear();
+    removeBulkBar();
+  }
+  const btn = document.getElementById('btn-bulk-select');
+  if (btn) btn.classList.toggle('active', bulkMode);
+  renderInbox();
+}
+
+function exitBulkMode() {
+  bulkMode = false;
+  selectedIds.clear();
+  removeBulkBar();
+  const btn = document.getElementById('btn-bulk-select');
+  if (btn) btn.classList.remove('active');
+  renderInbox();
+}
+
+function toggleBulkSelection(id: string) {
+  if (selectedIds.has(id)) {
+    selectedIds.delete(id);
+  } else {
+    selectedIds.add(id);
+  }
+  const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+  if (row) {
+    row.classList.toggle('bulk-selected', selectedIds.has(id));
+    const cb = row.querySelector<HTMLInputElement>('.bulk-checkbox');
+    if (cb) cb.checked = selectedIds.has(id);
+  }
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  removeBulkBar();
+  if (selectedIds.size === 0) return;
+
+  const bar = document.createElement('div');
+  bar.id = 'bulk-bar';
+  bar.className = 'bulk-bar';
+  bar.innerHTML = `
+    <span class="bulk-count">${selectedIds.size} selected</span>
+    <button class="bulk-action-btn" id="bulk-archive">Archive All</button>
+    <button class="bulk-action-btn" id="bulk-read">Mark Read</button>
+    <button class="bulk-action-btn" id="bulk-snooze">Snooze All</button>
+    <button class="bulk-cancel-btn" id="bulk-cancel">Cancel</button>
+  `;
+  document.body.appendChild(bar);
+
+  document.getElementById('bulk-archive')!.addEventListener('click', async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      const t = threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doArchive(t, row);
+    }
+    exitBulkMode();
+  });
+
+  document.getElementById('bulk-read')!.addEventListener('click', async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      const t = threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doMarkRead(t, row);
+    }
+    exitBulkMode();
+  });
+
+  document.getElementById('bulk-snooze')!.addEventListener('click', () => {
+    const ids = Array.from(selectedIds);
+    const firstThread = threads.find(x => x.id === ids[0]);
+    if (!firstThread) return;
+    // Use a synthetic row element just for picker positioning
+    const fakeRow = document.querySelector<HTMLElement>(`.thread-row[data-id="${ids[0]}"]`) ?? document.body as HTMLElement;
+    openBulkSnoozePicker(ids, fakeRow);
+  });
+
+  document.getElementById('bulk-cancel')!.addEventListener('click', () => exitBulkMode());
+}
+
+function removeBulkBar() {
+  document.getElementById('bulk-bar')?.remove();
+}
+
+function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement) {
+  document.getElementById('snooze-picker')?.remove();
+
+  const presets = snoozePresets();
+  const now = new Date();
+  const defaultDt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+  const dtLocal = toDatetimeLocal(defaultDt);
+
+  const picker = document.createElement('div');
+  picker.id = 'snooze-picker';
+  picker.className = 'snooze-picker';
+  picker.innerHTML = `
+    <div class="snooze-picker-header">
+      <span>Snooze ${ids.length} threads until…</span>
+      <button class="btn-icon snooze-picker-close" aria-label="Close">✕</button>
+    </div>
+    <div class="snooze-presets">
+      ${presets.map((p, i) => `
+        <button class="snooze-preset-btn" data-idx="${i}">
+          <span class="snooze-preset-label">${p.label}</span>
+          <span class="snooze-preset-time">${formatDate(p.untilMs())}</span>
+        </button>`).join('')}
+    </div>
+    <div class="snooze-custom">
+      <label class="snooze-custom-label">Custom date &amp; time</label>
+      <input type="datetime-local" id="snooze-dt" class="snooze-dt-input" value="${dtLocal}" />
+      <div id="snooze-dt-error" class="snooze-dt-error" style="display:none">Pick a future time</div>
+      <button class="btn-primary snooze-confirm-btn" id="snooze-confirm" disabled>Snooze</button>
+    </div>
+  `;
+
+  document.body.appendChild(picker);
+
+  const rowRect = anchorRow.getBoundingClientRect();
+  picker.style.top = `${Math.min(rowRect.bottom + 4, window.innerHeight - 320)}px`;
+  picker.style.left = `${Math.max(8, Math.min(rowRect.left, window.innerWidth - 280))}px`;
+
+  picker.querySelector('.snooze-picker-close')!.addEventListener('click', () => picker.remove());
+
+  let selectedPresetMs: number | null = null;
+  const confirmBtn = document.getElementById('snooze-confirm') as HTMLButtonElement;
+
+  picker.querySelectorAll<HTMLButtonElement>('.snooze-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      picker.querySelectorAll('.snooze-preset-btn').forEach(b => b.classList.remove('snooze-preset-btn--active'));
+      btn.classList.add('snooze-preset-btn--active');
+      const idx = parseInt(btn.dataset.idx!);
+      selectedPresetMs = presets[idx].untilMs();
+      confirmBtn.disabled = false;
+    });
+  });
+
+  async function applyBulkSnooze(untilMs: number) {
+    for (const id of ids) {
+      const t = threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doSnooze(t, row, untilMs);
+    }
+    picker.remove();
+    exitBulkMode();
+  }
+
+  confirmBtn.addEventListener('click', async () => {
+    const input = document.getElementById('snooze-dt') as HTMLInputElement;
+    const errorEl = document.getElementById('snooze-dt-error')!;
+    if (selectedPresetMs !== null) {
+      await applyBulkSnooze(selectedPresetMs);
+      return;
+    }
+    const val = input.value;
+    if (!val) { errorEl.style.display = ''; return; }
+    const chosen = new Date(val).getTime();
+    if (chosen <= Date.now()) {
+      errorEl.style.display = '';
+      errorEl.textContent = 'Must be a future time';
+      return;
+    }
+    errorEl.style.display = 'none';
+    await applyBulkSnooze(chosen);
+  });
+
+  (document.getElementById('snooze-dt') as HTMLInputElement).addEventListener('change', () => {
+    const inp = document.getElementById('snooze-dt') as HTMLInputElement;
+    const errorEl = document.getElementById('snooze-dt-error')!;
+    picker.querySelectorAll('.snooze-preset-btn').forEach(b => b.classList.remove('snooze-preset-btn--active'));
+    selectedPresetMs = null;
+    const chosen = new Date(inp.value).getTime();
+    if (chosen <= Date.now()) {
+      errorEl.style.display = '';
+      errorEl.textContent = 'Must be a future time';
+      confirmBtn.disabled = true;
+    } else {
+      errorEl.style.display = 'none';
+      confirmBtn.disabled = false;
+    }
+  });
+
+  function dismiss(e: MouseEvent | KeyboardEvent) {
+    if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+    if (e instanceof MouseEvent && picker.contains(e.target as Node)) return;
+    picker.remove();
+    document.removeEventListener('click', dismiss as EventListener);
+    document.removeEventListener('keydown', dismiss as EventListener);
+  }
+  setTimeout(() => {
+    document.addEventListener('click', dismiss as EventListener);
+    document.addEventListener('keydown', dismiss as EventListener);
+  }, 0);
 }
 
 // ── Render inbox ──────────────────────────────────────────
@@ -954,6 +1176,7 @@ function renderInbox() {
 
   container.innerHTML = html;
   wireThreadRows(container, threads, false);
+  if (bulkMode) updateBulkBar();
   // Restore keyboard selection highlight after re-render
   if (selectedThreadId) {
     const row = container.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
@@ -1018,6 +1241,10 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
     if (!t) return;
     row.addEventListener('click', e => {
       if ((e.target as HTMLElement).closest('.thread-actions')) return;
+      if (bulkMode) {
+        toggleBulkSelection(t.id);
+        return;
+      }
       openThread(t);
     });
     row.addEventListener('contextmenu', e => {
@@ -1215,8 +1442,13 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
          <button class="btn-action danger btn-block" title="Block sender">⊘</button>
        </div>`;
 
+  const bulkCheckbox = bulkMode
+    ? `<input type="checkbox" class="bulk-checkbox" ${selectedIds.has(t.id) ? 'checked' : ''} aria-label="Select thread" />`
+    : '';
+
   return `
-    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}" data-id="${t.id}">
+    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}${bulkMode && selectedIds.has(t.id) ? ' bulk-selected' : ''}${bulkMode ? ' bulk-mode' : ''}" data-id="${t.id}">
+      ${bulkCheckbox}
       ${dot}
       <div class="avatar-wrap">
         ${avatarHtml(t)}
