@@ -286,6 +286,8 @@ body {
   cursor: pointer;
   transition: background 0.08s;
   position: relative;
+  overflow: hidden;
+  isolation: isolate;
 }
 .thread-row:hover { background: var(--surface); }
 .thread-row.selected { background: var(--surface); }
@@ -1684,6 +1686,42 @@ body {
 .settings-signout:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* ── Swipe background ───────────────────────────────────── */
+.swipe-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.swipe-bg-archive {
+  background: #16a34a;
+  justify-content: flex-start;
+  padding-left: 20px;
+}
+.swipe-bg-snooze {
+  background: #d97706;
+  justify-content: flex-end;
+  padding-right: 20px;
+}
+.swipe-bg-icon {
+  font-size: 20px;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.12s, transform 0.12s;
+}
+.swipe-bg-icon.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+.thread-row.swiping {
+  transition: none;
+  user-select: none;
 }
 
 /* ── Undo toast ─────────────────────────────────────────── */

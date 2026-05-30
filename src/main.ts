@@ -910,6 +910,84 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
     } else {
       row.querySelector('.btn-snooze')?.addEventListener('click', e => { e.stopPropagation(); openSnoozePicker(t, row); });
     }
+
+    // ── Touch swipe gestures ──────────────────────────────
+    const archiveBg = document.createElement('div');
+    archiveBg.className = 'swipe-bg swipe-bg-archive';
+    archiveBg.innerHTML = '<span class="swipe-bg-icon">📥</span>';
+    const snoozeBg = document.createElement('div');
+    snoozeBg.className = 'swipe-bg swipe-bg-snooze';
+    snoozeBg.innerHTML = '<span class="swipe-bg-icon">🕐</span>';
+    row.prepend(archiveBg, snoozeBg);
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let swipeActive = false;
+    let rafId = 0;
+
+    const THRESHOLD = 100;
+    const ICON_SHOW = 60;
+
+    row.addEventListener('touchstart', e => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      swipeActive = false;
+    }, { passive: true });
+
+    row.addEventListener('touchmove', e => {
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+
+      if (!swipeActive && Math.abs(dy) > Math.abs(dx)) return;
+      swipeActive = true;
+
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const absDx = Math.abs(dx);
+        const isRight = dx > 0;
+
+        row.style.transform = `translateX(${dx}px)`;
+        row.classList.add('swiping');
+
+        archiveBg.style.opacity = isRight ? String(Math.min(absDx / THRESHOLD, 1)) : '0';
+        snoozeBg.style.opacity = !isRight ? String(Math.min(absDx / THRESHOLD, 1)) : '0';
+
+        const archiveIcon = archiveBg.querySelector<HTMLElement>('.swipe-bg-icon')!;
+        const snoozeIcon = snoozeBg.querySelector<HTMLElement>('.swipe-bg-icon')!;
+        archiveIcon.classList.toggle('visible', isRight && absDx >= ICON_SHOW);
+        snoozeIcon.classList.toggle('visible', !isRight && absDx >= ICON_SHOW);
+      });
+    }, { passive: true });
+
+    row.addEventListener('touchend', e => {
+      cancelAnimationFrame(rafId);
+      if (!swipeActive) return;
+
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const absDx = Math.abs(dx);
+
+      row.classList.remove('swiping');
+      archiveBg.style.opacity = '0';
+      snoozeBg.style.opacity = '0';
+      archiveBg.querySelector<HTMLElement>('.swipe-bg-icon')!.classList.remove('visible');
+      snoozeBg.querySelector<HTMLElement>('.swipe-bg-icon')!.classList.remove('visible');
+
+      if (absDx >= THRESHOLD) {
+        if (dx > 0) {
+          row.style.transform = '';
+          doArchive(t, row);
+        } else {
+          row.style.transform = '';
+          openSnoozePicker(t, row);
+        }
+      } else {
+        row.style.transition = 'transform 0.2s ease';
+        row.style.transform = '';
+        row.addEventListener('transitionend', () => { row.style.transition = ''; }, { once: true });
+      }
+
+      swipeActive = false;
+    }, { passive: true });
   });
 }
 
