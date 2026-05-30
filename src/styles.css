@@ -83,6 +83,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  position: relative;
 }
 
 /* ── Toolbar ────────────────────────────────────────────── */
@@ -552,57 +553,160 @@ body {
   flex-shrink: 0;
 }
 
-/* ── Compose new email modal ────────────────────────────── */
-.compose-new-panel {
-  width: 560px;
-  max-width: 95vw;
-}
-.compose-new-fields {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 12px 20px;
-  gap: 8px;
-  overflow-y: auto;
-}
-.compose-field-row {
+/* ── Account avatar button ──────────────────────────────── */
+.account-avatar-btn {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 6px;
-}
-.compose-field-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  width: 52px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
   flex-shrink: 0;
 }
-.compose-field-input {
-  flex: 1;
+.account-avatar-btn:hover .account-initials {
+  filter: brightness(0.9);
+}
+.account-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--lavender-accent, #7c3aed);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  user-select: none;
+  line-height: 1;
+}
+.account-error-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #dc2626;
+  border: 1.5px solid var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ── Account dropdown ───────────────────────────────────── */
+.account-dropdown {
+  position: absolute;
+  top: 42px;
+  right: 8px;
+  z-index: 200;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+  min-width: 220px;
+  max-width: 280px;
+  overflow: hidden;
+  padding: 6px 0;
+}
+.account-list {
+  max-height: 200px; /* 5-account overflow: scroll */
+  overflow-y: auto;
+}
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 14px;
   border: none;
-  outline: none;
   background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
   color: var(--text);
-  font-size: 14px;
-  font-family: var(--font);
-  padding: 2px 0;
+  border-radius: 0;
+  transition: background 0.1s;
 }
-.compose-field-input::placeholder { color: var(--text-muted); }
-.compose-new-body {
-  min-height: 180px;
-  margin-top: 4px;
-  border: none;
+.account-item:hover,
+.account-item:focus-visible {
+  background: var(--hover-bg, rgba(124,58,237,0.06));
   outline: none;
-  resize: vertical;
-  font-size: 14px;
 }
-.compose-new-error {
+.account-item.active {
+  background: var(--hover-bg, rgba(124,58,237,0.08));
+}
+.account-item-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.account-item-email {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.account-item-check {
   font-size: 12px;
-  color: #dc2626;
-  padding: 4px 0;
+  color: var(--lavender-accent, #7c3aed);
+  flex-shrink: 0;
 }
-.btn-primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.acct-error-tag {
+  font-size: 10px;
+  color: #dc2626;
+  background: rgba(220,38,38,0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.account-dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.account-dropdown-action {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.account-dropdown-action:hover,
+.account-dropdown-action:focus-visible {
+  background: var(--hover-bg, rgba(124,58,237,0.06));
+  outline: none;
+}
+.account-dropdown-action.danger {
+  color: #dc2626;
+}
+.account-dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
 }
