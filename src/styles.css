@@ -848,3 +848,76 @@ body {
   inset: 0;
   z-index: 199;
 }
+
+/* ── Account menu ──────────────────────────────────────── */
+.account-menu {
+  position: fixed;
+  top: 44px;
+  right: 8px;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  padding: 6px 0;
+  z-index: 201;
+  font-size: 13px;
+}
+.account-menu-header {
+  padding: 6px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-size: 13px;
+  gap: 8px;
+}
+.account-menu-item:hover { background: var(--hover); }
+.account-menu-item.active { font-weight: 600; }
+.account-email { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-active-badge {
+  font-size: 10px;
+  color: var(--lavender-accent);
+  background: var(--lavender-tint, #f0eeff);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+.account-remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 16px;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.account-remove-btn:hover { opacity: 1; color: var(--danger, #dc2626); }
+.account-menu-add, .account-menu-signout {
+  display: block;
+  width: 100%;
+  padding: 7px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.account-menu-add:hover { color: var(--text); background: var(--hover); }
+.account-menu-signout { color: var(--danger, #dc2626); }
+.account-menu-signout:hover { background: var(--hover); }

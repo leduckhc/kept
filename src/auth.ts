@@ -21,7 +21,10 @@ export interface Account {
   tokenExpiry: number;
 }
 
-type AccountRow = { id: string; email: string; access_token: string; refresh_token: string; token_expiry: number };
+type AccountRow = {
+  id: string; email: string; access_token: string;
+  refresh_token: string; token_expiry: number;
+};
 
 function rowToAccount(r: AccountRow): Account {
   return {
@@ -33,6 +36,7 @@ function rowToAccount(r: AccountRow): Account {
   };
 }
 
+/** Legacy single-account helper — returns first account, or null. */
 export async function getAccount(): Promise<Account | null> {
   const db = await getDb();
   const rows = await db.select<AccountRow[]>('SELECT * FROM accounts LIMIT 1');
@@ -40,10 +44,38 @@ export async function getAccount(): Promise<Account | null> {
   return rowToAccount(rows[0]);
 }
 
+/** Return all accounts ordered by creation time. */
 export async function getAllAccounts(): Promise<Account[]> {
   const db = await getDb();
   const rows = await db.select<AccountRow[]>('SELECT * FROM accounts ORDER BY created_at ASC');
   return rows.map(rowToAccount);
+}
+
+/** Return a specific account by id, or null if not found. */
+export async function getAccountById(id: string): Promise<Account | null> {
+  const db = await getDb();
+  const rows = await db.select<AccountRow[]>(
+    'SELECT * FROM accounts WHERE id = ?', [id]
+  );
+  if (!rows.length) return null;
+  return rowToAccount(rows[0]);
+}
+
+/** Remove an account and all its data. Also revokes the Google token. */
+export async function removeAccount(account: Account): Promise<void> {
+  // Best-effort token revocation — don't fail if it errors
+  try {
+    await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(account.accessToken)}`, {
+      method: 'POST',
+    });
+  } catch { /* ignore */ }
+
+  const db = await getDb();
+  await db.execute('DELETE FROM threads WHERE account_id = ?', [account.id]);
+  await db.execute('DELETE FROM messages WHERE account_id = ?', [account.id]);
+  await db.execute('DELETE FROM blocked_senders WHERE account_id = ?', [account.id]);
+  await db.execute('DELETE FROM settings WHERE account_id = ?', [account.id]);
+  await db.execute('DELETE FROM accounts WHERE id = ?', [account.id]);
 }
 
 export async function saveAccount(account: Account): Promise<void> {
@@ -154,8 +186,25 @@ async function fetchProfile(token: string): Promise<{ id: string; email: string 
   return res.json() as Promise<{ id: string; email: string }>;
 }
 
+// Per-account mutex: map from account_id → in-flight refresh promise
+// Prevents race conditions when two parallel syncs call ensureFreshToken simultaneously.
+const _refreshInFlight: Map<string, Promise<Account>> = new Map();
+
 export async function ensureFreshToken(account: Account): Promise<Account> {
   if (Date.now() < account.tokenExpiry - 60_000) return account;
+
+  // If a refresh is already in flight for this account, reuse it
+  const existing = _refreshInFlight.get(account.id);
+  if (existing) return existing;
+
+  const promise = _doRefreshToken(account).finally(() => {
+    _refreshInFlight.delete(account.id);
+  });
+  _refreshInFlight.set(account.id, promise);
+  return promise;
+}
+
+async function _doRefreshToken(account: Account): Promise<Account> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

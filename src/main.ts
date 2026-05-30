@@ -1,30 +1,28 @@
 // main.ts — Kept inbox UI
-import { type Account, getAccount, startOAuth } from './auth';
-import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread } from './gmail';
-import {
-  loadAccountsFromDb, addAccount, removeAccount, getActive, getAccounts, setActive,
-  persistActiveChoice, onAccountChange,
-} from './accountContext';
+import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
+import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
+import { type Thread, syncInbox, loadThreads, loadSenderEmails, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
 
 // ── State ─────────────────────────────────────────────────
-// `account` is a derived alias for getActive() — kept for backwards compat
-// within action handlers that haven't been refactored yet.
-let account: Account | null = null;
+let account: Account | null = null;      // active account
+let accounts: Account[] = [];            // all accounts
 let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
-type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred';
+type ViewName = 'Inbox' | 'Sent' | 'Drafts' | 'Starred';
 let currentView: ViewName = 'Inbox';
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',   icon: '✉' },
-  { name: 'Snoozed', icon: '🕐' },
   { name: 'Sent',    icon: '↗' },
   { name: 'Drafts',  icon: '✏' },
   { name: 'Starred', icon: '★' },
 ];
-function setAccount(a: Account) { account = a; }
+function setAccount(a: Account) {
+  account = a;
+  setActiveAccountId(a.id);
+}
 
 
 // ── Boot ──────────────────────────────────────────────────
@@ -42,21 +40,11 @@ async function boot() {
   }
 
   try {
-    await loadAccountsFromDb();
-    account = getActive();
+    accounts = await getAllAccounts();
+    account = await resolveActiveAccount();
     if (account) {
-      // Subscribe: re-render whenever the active account changes
-      onAccountChange(() => {
-        account = getActive();
-        if (account) {
-          updateAccountAvatar();
-          threads = [];
-          renderInbox();
-          refresh();
-        }
-      });
       showShell();
-      await refresh();
+      await refreshAll();
     }
   } catch (e) {
     console.error('Boot error:', e);
@@ -87,22 +75,11 @@ function showAuth() {
     const originalHTML = btn.innerHTML;
     btn.textContent = 'Opening browser…';
     try {
-      const newAccount = await startOAuth();
-      addAccount(newAccount);
-      setActive(newAccount.id);
-      persistActiveChoice();
-      account = newAccount;
-      onAccountChange(() => {
-        account = getActive();
-        if (account) {
-          updateAccountAvatar();
-          threads = [];
-          renderInbox();
-          refresh();
-        }
-      });
+      account = await startOAuth();
+      accounts = await getAllAccounts();
+      setAccount(account);
       showShell();
-      await refresh();
+      await refreshAll();
     } catch (e) {
       btn.disabled = false;
       btn.innerHTML = originalHTML;
@@ -111,163 +88,12 @@ function showAuth() {
   });
 }
 
-// ── Account avatar & switcher ─────────────────────────────
-const ACCOUNT_COLORS = [
-  '#7c3aed', '#0891b2', '#16a34a', '#d97706',
-  '#dc2626', '#db2777', '#2563eb', '#65a30d',
-];
-
-function accountInitial(email: string): string {
-  return (email[0] ?? '?').toUpperCase();
-}
-
-function accountColor(email: string): string {
-  let h = 0;
-  for (let i = 0; i < email.length; i++) h = (Math.imul(31, h) + email.charCodeAt(i)) | 0;
-  return ACCOUNT_COLORS[Math.abs(h) % ACCOUNT_COLORS.length];
-}
-
-function accountAvatarHtml(): string {
-  const a = getActive();
-  if (!a) return '<span class="account-initials">?</span>';
-  const initial = accountInitial(a.email);
-  const color = accountColor(a.email);
-  const entry = getAccounts().find(e => e.account.id === a.id);
-  const errorBadge = entry?.error ? '<span class="account-error-badge" title="Account error">!</span>' : '';
-  return `<span class="account-initials" style="background:${color}">${initial}</span>${errorBadge}`;
-}
-
-function accountDropdownContent(): string {
-  const entries = getAccounts();
-  const active = getActive();
-  // Max 5 shown; overflow scrolls via CSS
-  const items = entries.map(e => {
-    const a = e.account;
-    const isActive = a.id === active?.id;
-    const errorLabel = e.error === 'token-expired'
-      ? '<span class="acct-error-tag">Token expired</span>'
-      : e.error === 'sync-failing'
-        ? '<span class="acct-error-tag">Sync failing</span>'
-        : '';
-    return `
-      <button class="account-item${isActive ? ' active' : ''}" data-acctid="${a.id}">
-        <span class="account-item-avatar" style="background:${accountColor(a.email)}">${accountInitial(a.email)}</span>
-        <span class="account-item-email">${esc(a.email)}</span>
-        ${errorLabel}
-        ${isActive ? '<span class="account-item-check">✓</span>' : ''}
-      </button>`;
-  }).join('');
-
-  const signOutLabel = entries.length === 1 ? 'Sign out' : 'Sign out this account';
-  return `
-    <div class="account-list">${items}</div>
-    <div class="account-dropdown-divider"></div>
-    <button class="account-dropdown-action" id="btn-add-account">+ Add account</button>
-    <button class="account-dropdown-action danger" id="btn-signout">${signOutLabel}</button>
-  `;
-}
-
-function updateAccountAvatar() {
-  const btn = document.getElementById('btn-account-menu');
-  if (btn) btn.innerHTML = accountAvatarHtml();
-}
-
-function wireAccountMenu() {
-  const menuBtn = document.getElementById('btn-account-menu') as HTMLButtonElement;
-  const dropdown = document.getElementById('account-dropdown') as HTMLElement;
-
-  function openMenu() {
-    dropdown.innerHTML = accountDropdownContent();
-    dropdown.hidden = false;
-    menuBtn.setAttribute('aria-expanded', 'true');
-
-    // backdrop
-    const backdrop = document.createElement('div');
-    backdrop.className = 'account-dropdown-backdrop';
-    backdrop.id = 'account-dropdown-backdrop';
-    document.body.appendChild(backdrop);
-    backdrop.addEventListener('click', closeMenu);
-
-    // Wire account switches
-    dropdown.querySelectorAll<HTMLButtonElement>('.account-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.acctid!;
-        setActive(id);
-        persistActiveChoice();
-        closeMenu();
-      });
-    });
-
-    // Add account
-    document.getElementById('btn-add-account')?.addEventListener('click', async () => {
-      closeMenu();
-      try {
-        const newAccount = await startOAuth();
-        addAccount(newAccount);
-        setActive(newAccount.id);
-        persistActiveChoice();
-        account = newAccount;
-        updateAccountAvatar();
-        threads = [];
-        renderInbox();
-        await refresh();
-      } catch (e) {
-        console.error('Add account failed:', e);
-        alert(`Add account failed: ${e}`);
-      }
-    });
-
-    // Sign out
-    document.getElementById('btn-signout')?.addEventListener('click', async () => {
-      closeMenu();
-      if (!account) return;
-      try {
-        const db = await import('./db').then(m => m.getDb());
-        const acctId = account.id;
-        await db.execute('DELETE FROM accounts WHERE id = ?', [acctId]);
-        await db.execute('DELETE FROM threads WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM messages WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM blocked_senders WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM settings WHERE account_id = ?', [acctId]);
-
-        removeAccount(acctId);
-
-        const next = getActive();
-        if (next) {
-          account = next;
-          updateAccountAvatar();
-          threads = [];
-          renderInbox();
-          await refresh();
-        } else {
-          account = null;
-          threads = [];
-          syncing = false;
-          showAuth();
-        }
-      } catch (e) {
-        console.error('Sign out error:', e);
-      }
-    });
-  }
-
-  function closeMenu() {
-    dropdown.hidden = true;
-    menuBtn.setAttribute('aria-expanded', 'false');
-    document.getElementById('account-dropdown-backdrop')?.remove();
-  }
-
-  menuBtn.addEventListener('click', () => {
-    if (!dropdown.hidden) closeMenu();
-    else openMenu();
-  });
-}
-
 // ── App shell ─────────────────────────────────────────────
 function showShell() {
   document.getElementById('app')!.innerHTML = `
     <div id="app-shell">
       <div class="toolbar">
+        <button class="btn-icon btn-compose" id="btn-compose" title="Compose new email (C)">✏</button>
         <button class="title-nav" id="title-nav" aria-haspopup="listbox" aria-expanded="false">
           <span class="title-nav-label">${currentView}</span>
           <span class="title-nav-chevron">&#x25BE;</span>
@@ -275,12 +101,7 @@ function showShell() {
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
         <button class="btn-icon" id="btn-theme" title="Toggle theme">◑</button>
-        <button class="account-avatar-btn" id="btn-account-menu" title="Switch account" aria-haspopup="true" aria-expanded="false">
-          ${accountAvatarHtml()}
-        </button>
-      </div>
-      <div class="account-dropdown" id="account-dropdown" hidden>
-        ${accountDropdownContent()}
+        <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${account?.email?.split('@')[0] ?? '…'} ▾</button>
       </div>
       <div class="nav-tray-wrapper">
         <div class="nav-tray" id="nav-tray" role="listbox">
@@ -343,14 +164,16 @@ function showShell() {
     if (e.touches[0].clientY - touchStartY < -30) closeTray();
   }, { passive: true });
 
+  document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
+
   document.getElementById('btn-sync')!.addEventListener('click', () => syncAndRender());
   document.getElementById('btn-theme')!.addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     applyTheme(next);
   });
-
-  // Account menu
-  wireAccountMenu();
+  document.getElementById('btn-account')!.addEventListener('click', () => {
+    showAccountMenu();
+  });
 
   const searchEl = document.getElementById('search') as HTMLInputElement;
   searchEl.addEventListener('input', () => {
@@ -364,6 +187,17 @@ function showShell() {
   });
   searchEl.addEventListener('focus', () => searchEl.classList.add('expanded'));
   searchEl.addEventListener('blur', () => { if (!searchEl.value) searchEl.classList.remove('expanded'); });
+
+  // Keyboard shortcuts (skip when focus is in an input/textarea)
+  function handleKey(e: KeyboardEvent) {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+    if (e.key === 'c' && !e.metaKey && !e.ctrlKey) openComposeNew();
+  }
+  document.addEventListener('keydown', handleKey);
+  // Clean up when shell is replaced
+  const cleanupKey = () => { document.removeEventListener('keydown', handleKey); };
+  document.getElementById('btn-signout')!.addEventListener('click', cleanupKey, { once: true });
 }
 
 // ── View switching ────────────────────────────────────────
@@ -381,8 +215,6 @@ function switchView(view: ViewName) {
   // Render appropriate content
   if (view === 'Inbox') {
     renderInbox();
-  } else if (view === 'Snoozed') {
-    renderSnoozedView();
   } else {
     renderViewPlaceholder(view);
   }
@@ -391,7 +223,7 @@ function switchView(view: ViewName) {
 function renderViewPlaceholder(view: ViewName) {
   const container = document.getElementById('inbox');
   if (!container) return;
-  const icons: Record<ViewName, string> = { Inbox: '✉', Snoozed: '🕐', Sent: '↗', Drafts: '✏', Starred: '★' };
+  const icons: Record<ViewName, string> = { Inbox: '✉', Sent: '↗', Drafts: '✏', Starred: '★' };
   container.innerHTML = `
     <div class="empty-state">
       <div class="icon" style="color:var(--lavender-accent)">${icons[view]}</div>
@@ -401,12 +233,28 @@ function renderViewPlaceholder(view: ViewName) {
 }
 
 // ── Sync ──────────────────────────────────────────────────
-async function refresh() {
+/** On boot: load active account threads, then kick off parallel sync for all accounts. */
+async function refreshAll() {
   if (!account) return;
   threads = await loadThreads(account.id);
   renderInbox();
-  // Always sync on boot to get fresh data
-  syncAndRender();
+
+  // Parallel sync — one per account, errors are non-fatal per account
+  const allAccts = await getAllAccounts();
+  const syncPromises = allAccts.map(acct =>
+    syncInbox(acct, acct.id === account!.id ? n => setStatus(`Syncing… ${n} threads`) : undefined)
+      .catch(err => console.error(`Sync error for ${acct.email}:`, err))
+  );
+  const btn = document.getElementById('btn-sync');
+  if (btn) btn.style.opacity = '0.4';
+  setStatus('Syncing…');
+  await Promise.all(syncPromises);
+  if (btn) btn.style.opacity = '';
+  // Reload threads for the active account after all syncs complete
+  threads = await loadThreads(account.id);
+  renderInbox();
+  setStatus(`Synced — ${threads.length} threads`);
+  setTimeout(() => setStatus(''), 5000);
 }
 
 async function syncAndRender() {
@@ -418,8 +266,7 @@ async function syncAndRender() {
   try {
     await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
     threads = await loadThreads(account.id);
-    if (currentView === 'Inbox') renderInbox();
-    else if (currentView === 'Snoozed') await renderSnoozedView();
+    renderInbox();
     setStatus(`Synced — ${threads.length} threads`);
   } catch (e) {
     console.error('Sync error:', e);
@@ -440,6 +287,134 @@ async function syncAndRender() {
     if (btn) btn.style.opacity = '';
     setTimeout(() => setStatus(''), 5000);
   }
+}
+
+// ── Account menu ──────────────────────────────────────────
+function showAccountMenu() {
+  // Remove any existing menu
+  document.getElementById('account-menu-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'account-menu-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const menu = document.createElement('div');
+  menu.className = 'account-menu';
+  menu.innerHTML = `
+    <div class="account-menu-header">Accounts</div>
+    ${accounts.map(a => `
+      <button class="account-menu-item${a.id === account?.id ? ' active' : ''}" data-id="${a.id}">
+        <span class="account-email">${esc(a.email)}</span>
+        ${a.id === account?.id ? '<span class="account-active-badge">active</span>' : ''}
+        <button class="account-remove-btn" data-remove-id="${a.id}" title="Remove account">×</button>
+      </button>`).join('')}
+    <button class="account-menu-add" id="btn-add-account">+ Add account</button>
+    <hr style="border:none;border-top:1px solid var(--border);margin:4px 0"/>
+    <button class="account-menu-signout" id="btn-signout-all">Sign out of all accounts</button>
+  `;
+
+  overlay.appendChild(menu);
+  document.body.appendChild(overlay);
+
+  // Switch account
+  menu.querySelectorAll<HTMLButtonElement>('.account-menu-item').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      if ((e.target as HTMLElement).closest('.account-remove-btn')) return;
+      const id = btn.dataset.id!;
+      const target = accounts.find(a => a.id === id);
+      if (!target || target.id === account?.id) { overlay.remove(); return; }
+      setAccount(target);
+      threads = await loadThreads(target.id);
+      renderInbox();
+      const statusLeft = document.getElementById('status-left');
+      if (statusLeft) statusLeft.textContent = target.email;
+      const acctBtn = document.getElementById('btn-account');
+      if (acctBtn) acctBtn.textContent = `${target.email.split('@')[0]} ▾`;
+      overlay.remove();
+      syncAndRender();
+    });
+  });
+
+  // Remove account
+  menu.querySelectorAll<HTMLButtonElement>('.account-remove-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const removeId = btn.dataset.removeId!;
+      const target = accounts.find(a => a.id === removeId);
+      if (!target) return;
+      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
+      overlay.remove();
+      try {
+        await removeAccount(target);
+        accounts = accounts.filter(a => a.id !== removeId);
+        if (account?.id === removeId) {
+          // Switch to another account or go to auth
+          const next = accounts[0] ?? null;
+          if (next) {
+            setAccount(next);
+            threads = await loadThreads(next.id);
+            showShell();
+            await refreshAll();
+          } else {
+            clearActiveAccountId();
+            account = null;
+            threads = [];
+            syncing = false;
+            showAuth();
+          }
+        }
+      } catch (err) {
+        console.error('Remove account error:', err);
+        setStatus('Failed to remove account');
+      }
+    });
+  });
+
+  // Add account
+  document.getElementById('btn-add-account')!.addEventListener('click', async () => {
+    overlay.remove();
+    const addBtn = document.getElementById('btn-account') as HTMLButtonElement | null;
+    if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Connecting…'; }
+    try {
+      const newAcct = await startOAuth();
+      // Check if already in list (duplicate email → update token, already done by saveAccount)
+      const existing = accounts.find(a => a.id === newAcct.id);
+      if (existing) {
+        // Update token in-list
+        const idx = accounts.indexOf(existing);
+        accounts[idx] = newAcct;
+        setStatus(`${newAcct.email} token refreshed`);
+      } else {
+        accounts.push(newAcct);
+        setStatus(`${newAcct.email} added`);
+      }
+    } catch (e) {
+      console.error('Add account error:', e);
+      setStatus(`Add account failed: ${e}`);
+    } finally {
+      if (addBtn) { addBtn.disabled = false; addBtn.textContent = `${account?.email?.split('@')[0] ?? '…'} ▾`; }
+      setTimeout(() => setStatus(''), 5000);
+    }
+  });
+
+  // Sign out of all accounts
+  document.getElementById('btn-signout-all')!.addEventListener('click', async () => {
+    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
+    overlay.remove();
+    try {
+      for (const a of accounts) {
+        await removeAccount(a).catch(e => console.error('Remove error:', e));
+      }
+    } finally {
+      clearActiveAccountId();
+      account = null;
+      accounts = [];
+      threads = [];
+      syncing = false;
+      showAuth();
+    }
+  });
 }
 
 // ── Render inbox ──────────────────────────────────────────
@@ -467,62 +442,24 @@ function renderInbox() {
     const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
     return `
     <div class="section-header">${s.label}${badge}</div>
-    ${s.threads.map(t => threadRow(t, false)).join('')}
+    ${s.threads.map(threadRow).join('')}
   `;
   }).join('');
 
   container.innerHTML = html;
 
-  wireThreadRows(container, threads, false);
-}
-
-// ── Render Snoozed view ───────────────────────────────────
-async function renderSnoozedView() {
-  const container = document.getElementById('inbox');
-  if (!container || !account) return;
-
-  const snoozed = await loadSnoozedThreads(account.id);
-
-  if (snoozed.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="icon" style="color:var(--lavender-accent)">🕐</div>
-        <div class="empty-text">No snoozed threads</div>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Snoozed mail will appear here</div>
-      </div>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="section-header">Snoozed <span class="section-badge">${snoozed.length}</span></div>
-    ${snoozed.map(t => threadRow(t, true)).join('')}
-  `;
-
-  wireThreadRows(container, snoozed, true);
-}
-
-// ── Wire row events ───────────────────────────────────────
-function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boolean) {
+  // Wire up row clicks
   container.querySelectorAll<HTMLElement>('.thread-row').forEach(row => {
     const id = row.dataset.id!;
-    const t = list.find(x => x.id === id);
+    const t = threads.find(x => x.id === id);
     if (!t) return;
     row.addEventListener('click', e => {
       if ((e.target as HTMLElement).closest('.thread-actions')) return;
       openThread(t);
     });
-    row.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      showContextMenu(e.clientX, e.clientY, t, row, isSnoozed);
-    });
     row.querySelector('.btn-read')?.addEventListener('click', e => { e.stopPropagation(); doMarkRead(t, row); });
     row.querySelector('.btn-archive')?.addEventListener('click', e => { e.stopPropagation(); doArchive(t, row); });
     row.querySelector('.btn-block')?.addEventListener('click', e => { e.stopPropagation(); doBlock(t, row); });
-    if (isSnoozed) {
-      row.querySelector('.btn-unsnooze')?.addEventListener('click', e => { e.stopPropagation(); doUnsnooze(t, row); });
-    } else {
-      row.querySelector('.btn-snooze')?.addEventListener('click', e => { e.stopPropagation(); openSnoozePicker(t, row); });
-    }
   });
 }
 
@@ -549,31 +486,13 @@ function avatarHtml(t: Thread): string {
   }</div>`;
 }
 
-function threadRow(t: Thread, isSnoozed: boolean): string {
+function threadRow(t: Thread): string {
   const date = formatDate(t.receivedAt);
   const sender = t.senderName || t.senderEmail;
   const attachment = t.hasAttachment ? `<span class="attachment-icon" title="Has attachment">📎</span>` : '';
   const dot = `<span class="unread-dot${t.isUnread ? ' filled' : ''}"></span>`;
-
-  // Clock indicator for snoozed threads
-  const clockIndicator = t.snoozedUntil
-    ? `<span class="snooze-indicator" title="Snoozed until ${formatDate(t.snoozedUntil)}">🕐 ${formatDate(t.snoozedUntil)}</span>`
-    : '';
-
-  const actionsHtml = isSnoozed
-    ? `<div class="thread-actions">
-         <button class="btn-action btn-unsnooze" title="Wake up now">↑</button>
-         <button class="btn-action btn-archive" title="Archive">⬇</button>
-       </div>`
-    : `<div class="thread-actions">
-         <button class="btn-action btn-snooze" title="Snooze">🕐</button>
-         <button class="btn-action btn-read" title="Mark read">✓</button>
-         <button class="btn-action btn-archive" title="Archive">⬇</button>
-         <button class="btn-action danger btn-block" title="Block sender">⊘</button>
-       </div>`;
-
   return `
-    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}" data-id="${t.id}">
+    <div class="thread-row${t.isUnread ? ' unread' : ''}" data-id="${t.id}">
       ${dot}
       ${avatarHtml(t)}
       <div class="thread-mid${attachment ? ' has-attachment' : ''}">
@@ -582,9 +501,13 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
           <span class="thread-date">${date}</span>
         </div>
         <div class="thread-subject-line">${esc(t.subject)}</div>
-        <div class="thread-preview-line">${clockIndicator || esc(t.snippet)}</div>
+        <div class="thread-preview-line">${esc(t.snippet)}</div>
       </div>
-      ${actionsHtml}
+      <div class="thread-actions">
+        <button class="btn-action btn-read" title="Mark read">✓</button>
+        <button class="btn-action btn-archive" title="Archive">⬇</button>
+        <button class="btn-action danger btn-block" title="Block sender">⊘</button>
+      </div>
     </div>`;
 }
 
@@ -593,7 +516,7 @@ async function doMarkRead(t: Thread, row: HTMLElement) {
   if (!account) return;
   try {
     await markRead(account, t);
-    const fresh = await getAccount();
+    const fresh = account ? await getAccountById(account.id) : null;
     if (fresh) setAccount(fresh);
     t.isUnread = false;
     row.classList.remove('unread');
@@ -610,7 +533,7 @@ async function doArchive(t: Thread, row: HTMLElement) {
   if (!account) return;
   try {
     await archiveThread(account, t);
-    const fresh = await getAccount();
+    const fresh = account ? await getAccountById(account.id) : null;
     if (fresh) setAccount(fresh);
     row.remove();
     threads = threads.filter(x => x.id !== t.id);
@@ -625,210 +548,118 @@ async function doBlock(t: Thread, _row: HTMLElement) {
   if (!account) return;
   if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
   await blockSender(account, t);
-  const fresh = await getAccount();
+  const fresh = account ? await getAccountById(account.id) : null;
   if (fresh) setAccount(fresh);
   // Remove all rows from this sender
   threads = threads.filter(x => x.senderEmail !== t.senderEmail);
   renderInbox();
 }
 
-async function doUnsnooze(t: Thread, row: HTMLElement) {
-  await unsnoozeThread(t);
-  t.snoozedUntil = null;
-  row.remove();
-  threads = threads.filter(x => x.id !== t.id);
-  // Refresh inbox count
-  if (account) {
-    threads = await loadThreads(account.id);
+// ── Compose new email ─────────────────────────────────────
+async function openComposeNew() {
+  if (!account) return;
+
+  // Load known sender emails for autocomplete (best-effort)
+  let knownEmails: string[] = [];
+  try {
+    knownEmails = await loadSenderEmails(account.id);
+  } catch { /* non-fatal */ }
+
+  const listId = 'compose-to-list';
+  const overlay = document.createElement('div');
+  overlay.className = 'reader-overlay compose-new-overlay';
+  overlay.innerHTML = `
+    <div class="reader-panel compose-new-panel">
+      <div class="reader-header">
+        <div class="reader-subject">New Message</div>
+        <button class="btn-icon" id="compose-new-close">✕</button>
+      </div>
+      <div class="compose-new-fields">
+        <div class="compose-field-row">
+          <label class="compose-field-label" for="compose-new-to">To</label>
+          <input class="compose-field-input" id="compose-new-to" type="email" placeholder="recipient@example.com" autocomplete="off" list="${listId}" />
+          <datalist id="${listId}">${knownEmails.map(e => `<option value="${esc(e)}">`).join('')}</datalist>
+        </div>
+        <div class="compose-field-row">
+          <label class="compose-field-label" for="compose-new-subject">Subject</label>
+          <input class="compose-field-input" id="compose-new-subject" type="text" placeholder="Subject" />
+        </div>
+        <textarea class="compose-textarea compose-new-body" id="compose-new-body" placeholder="Write your message…"></textarea>
+        <div id="compose-new-error" class="compose-new-error" style="display:none"></div>
+      </div>
+      <div class="reader-footer">
+        <button class="btn-primary" id="compose-new-send" disabled>Send</button>
+        <button class="btn-secondary" id="compose-new-discard">Discard</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const toEl = overlay.querySelector<HTMLInputElement>('#compose-new-to')!;
+  const subjectEl = overlay.querySelector<HTMLInputElement>('#compose-new-subject')!;
+  const bodyEl = overlay.querySelector<HTMLTextAreaElement>('#compose-new-body')!;
+  const sendBtn = overlay.querySelector<HTMLButtonElement>('#compose-new-send')!;
+  const errorEl = overlay.querySelector<HTMLElement>('#compose-new-error')!;
+
+  // Simple email validation: contains @ and some chars around it
+  function isValidEmail(s: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
   }
-}
 
-// ── Context menu ──────────────────────────────────────────
-function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSnoozed: boolean) {
-  // Remove any existing context menus
-  document.getElementById('kept-ctx-menu')?.remove();
-
-  const menu = document.createElement('div');
-  menu.id = 'kept-ctx-menu';
-  menu.className = 'ctx-menu';
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-
-  const items: Array<{ label: string; action: () => void }> = [];
-
-  if (!isSnoozed) {
-    items.push({ label: '🕐  Snooze…', action: () => { menu.remove(); openSnoozePicker(t, row); } });
-  } else {
-    items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row); } });
+  function updateSendState() {
+    const toList = toEl.value.split(',').map(s => s.trim()).filter(Boolean);
+    const allValid = toList.length > 0 && toList.every(isValidEmail);
+    sendBtn.disabled = !(allValid && bodyEl.value.trim().length > 0);
   }
-  items.push({ label: '✓  Mark as read', action: () => { menu.remove(); doMarkRead(t, row); } });
-  items.push({ label: '⬇  Archive', action: () => { menu.remove(); doArchive(t, row); } });
-  items.push({ label: '⊘  Block sender', action: () => { menu.remove(); doBlock(t, row); } });
 
-  menu.innerHTML = items.map((item, i) =>
-    `<button class="ctx-menu-item" data-idx="${i}">${item.label}</button>`
-  ).join('');
+  toEl.addEventListener('input', updateSendState);
+  bodyEl.addEventListener('input', updateSendState);
 
-  menu.querySelectorAll<HTMLButtonElement>('.ctx-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => items[parseInt(btn.dataset.idx!)]?.action());
-  });
+  toEl.focus();
 
-  document.body.appendChild(menu);
-
-  // Ensure menu stays within viewport
-  requestAnimationFrame(() => {
-    const rect = menu.getBoundingClientRect();
-    if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 8}px`;
-    if (rect.bottom > window.innerHeight) menu.style.top = `${y - rect.height}px`;
-  });
-
-  // Dismiss on outside click or Escape
-  function dismiss(e: MouseEvent | KeyboardEvent) {
-    if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-    if (e instanceof MouseEvent && menu.contains(e.target as Node)) return;
-    menu.remove();
-    document.removeEventListener('click', dismiss as EventListener);
-    document.removeEventListener('keydown', dismiss as EventListener);
+  function closeSafe() {
+    overlay.remove();
   }
-  setTimeout(() => {
-    document.addEventListener('click', dismiss as EventListener);
-    document.addEventListener('keydown', dismiss as EventListener);
-  }, 0);
-}
 
-// ── Snooze picker ─────────────────────────────────────────
-function snoozePresets(): Array<{ label: string; untilMs: () => number }> {
-  const now = new Date();
-
-  // +3h
-  const plus3h = () => Date.now() + 3 * 60 * 60 * 1000;
-
-  // Next day 9am
-  const nextDay9am = () => {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0, 0, 0);
-    return d.getTime();
-  };
-
-  // Next Saturday 9am
-  const nextSat9am = () => {
-    const d = new Date(now);
-    const daysUntilSat = (6 - d.getDay() + 7) % 7 || 7; // always future Saturday
-    d.setDate(d.getDate() + daysUntilSat);
-    d.setHours(9, 0, 0, 0);
-    return d.getTime();
-  };
-
-  // Next Monday 9am
-  const nextMon9am = () => {
-    const d = new Date(now);
-    const daysUntilMon = (1 - d.getDay() + 7) % 7 || 7; // always future Monday
-    d.setDate(d.getDate() + daysUntilMon);
-    d.setHours(9, 0, 0, 0);
-    return d.getTime();
-  };
-
-  return [
-    { label: 'In 3 hours', untilMs: plus3h },
-    { label: 'Tomorrow 9am', untilMs: nextDay9am },
-    { label: 'Saturday 9am', untilMs: nextSat9am },
-    { label: 'Monday 9am', untilMs: nextMon9am },
-  ];
-}
-
-function openSnoozePicker(t: Thread, row: HTMLElement) {
-  // Remove existing picker
-  document.getElementById('snooze-picker')?.remove();
-
-  const presets = snoozePresets();
-  const now = new Date();
-  // Default custom datetime = tomorrow 9am
-  const defaultDt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
-  const dtLocal = toDatetimeLocal(defaultDt);
-
-  const picker = document.createElement('div');
-  picker.id = 'snooze-picker';
-  picker.className = 'snooze-picker';
-  picker.innerHTML = `
-    <div class="snooze-picker-header">
-      <span>Snooze until…</span>
-      <button class="btn-icon snooze-picker-close" aria-label="Close">✕</button>
-    </div>
-    <div class="snooze-presets">
-      ${presets.map((p, i) => `
-        <button class="snooze-preset-btn" data-idx="${i}">
-          <span class="snooze-preset-label">${p.label}</span>
-          <span class="snooze-preset-time">${formatDate(p.untilMs())}</span>
-        </button>`).join('')}
-    </div>
-    <div class="snooze-custom">
-      <label class="snooze-custom-label">Custom date &amp; time</label>
-      <input type="datetime-local" id="snooze-dt" class="snooze-dt-input" value="${dtLocal}" />
-      <div id="snooze-dt-error" class="snooze-dt-error" style="display:none">Pick a future time</div>
-      <button class="btn-primary snooze-confirm-btn" id="snooze-confirm">Snooze</button>
-    </div>
-  `;
-
-  document.body.appendChild(picker);
-
-  // Position near the row
-  const rowRect = row.getBoundingClientRect();
-  picker.style.top = `${Math.min(rowRect.bottom + 4, window.innerHeight - 320)}px`;
-  picker.style.left = `${Math.max(8, Math.min(rowRect.left, window.innerWidth - 280))}px`;
-
-  picker.querySelector('.snooze-picker-close')!.addEventListener('click', () => picker.remove());
-
-  // Preset buttons
-  picker.querySelectorAll<HTMLButtonElement>('.snooze-preset-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const idx = parseInt(btn.dataset.idx!);
-      const untilMs = presets[idx].untilMs();
-      await doSnooze(t, row, untilMs);
-      picker.remove();
-    });
-  });
-
-  // Custom datetime confirm
-  document.getElementById('snooze-confirm')!.addEventListener('click', async () => {
-    const input = document.getElementById('snooze-dt') as HTMLInputElement;
-    const errorEl = document.getElementById('snooze-dt-error')!;
-    const val = input.value;
-    if (!val) { errorEl.style.display = ''; return; }
-    const chosen = new Date(val).getTime();
-    if (chosen <= Date.now()) {
-      errorEl.style.display = '';
-      errorEl.textContent = 'Pick a future time';
-      return;
+  function discardWithPrompt() {
+    if (bodyEl.value.trim().length > 0) {
+      if (!confirm('Discard this message?')) return;
     }
-    errorEl.style.display = 'none';
-    await doSnooze(t, row, chosen);
-    picker.remove();
-  });
-
-  // Dismiss on outside click or Escape
-  function dismiss(e: MouseEvent | KeyboardEvent) {
-    if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-    if (e instanceof MouseEvent && picker.contains(e.target as Node)) return;
-    picker.remove();
-    document.removeEventListener('click', dismiss as EventListener);
-    document.removeEventListener('keydown', dismiss as EventListener);
+    closeSafe();
   }
-  setTimeout(() => {
-    document.addEventListener('click', dismiss as EventListener);
-    document.addEventListener('keydown', dismiss as EventListener);
-  }, 0);
-}
 
-async function doSnooze(t: Thread, row: HTMLElement, untilMs: number) {
-  await snoozeThread(t, untilMs);
-  t.snoozedUntil = untilMs;
-  // Remove from inbox immediately
-  row.classList.add('snoozing-out');
-  setTimeout(() => {
-    row.remove();
-    threads = threads.filter(x => x.id !== t.id);
-  }, 250);
-  setStatus(`Snoozed until ${formatDate(untilMs)}`);
-  setTimeout(() => setStatus(''), 4000);
+  overlay.addEventListener('click', e => { if (e.target === overlay) discardWithPrompt(); });
+  document.getElementById('compose-new-close')!.addEventListener('click', discardWithPrompt);
+  document.getElementById('compose-new-discard')!.addEventListener('click', discardWithPrompt);
+
+  // Escape key discards
+  function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') { discardWithPrompt(); document.removeEventListener('keydown', onKeyDown); } }
+  document.addEventListener('keydown', onKeyDown);
+  overlay.addEventListener('remove', () => document.removeEventListener('keydown', onKeyDown));
+
+  sendBtn.addEventListener('click', async () => {
+    const toList = toEl.value.split(',').map(s => s.trim()).filter(Boolean);
+    const subject = subjectEl.value.trim();
+    const body = bodyEl.value.trim();
+    if (!account) return;
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending…';
+    errorEl.style.display = 'none';
+
+    try {
+      // Send to each recipient (comma-separated To field)
+      await sendEmail(account, { to: toList.join(', '), subject: subject || '(no subject)', body });
+      document.removeEventListener('keydown', onKeyDown);
+      closeSafe();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      errorEl.textContent = `Send failed: ${msg}`;
+      errorEl.style.display = 'block';
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send';
+      updateSendState();
+    }
+  });
 }
 
 // ── Thread reader ─────────────────────────────────────────
@@ -968,7 +799,7 @@ async function openThread(t: Thread) {
   document.getElementById('btn-archive-reader')!.addEventListener('click', async () => {
     if (!account) return;
     await archiveThread(account, t);
-    const fresh = await getAccount();
+    const fresh = account ? await getAccountById(account.id) : null;
     if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.id !== t.id);
     renderInbox();
@@ -978,7 +809,7 @@ async function openThread(t: Thread) {
     if (!account) return;
     if (!confirm(`Block all email from ${t.senderEmail}?`)) return;
     await blockSender(account, t);
-    const fresh = await getAccount();
+    const fresh = account ? await getAccountById(account.id) : null;
     if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.senderEmail !== t.senderEmail);
     renderInbox();
@@ -1010,12 +841,6 @@ function formatDate(ms: number): string {
   if (d >= yesterday) return 'Yesterday';
   if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-/** Convert Date to "YYYY-MM-DDTHH:MM" string for datetime-local input */
-function toDatetimeLocal(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // ── Start ─────────────────────────────────────────────────

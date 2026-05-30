@@ -1,20 +1,52 @@
 /**
- * accountContext.test.ts
+ * accountContext.test.ts — KPT-027J
  *
- * Tests for the account context module (KPT-027J0).
- * Verifies: setActive, getActive, listAccounts, addAccount, removeAccount,
- * and the namespaced localStorage draft key format.
+ * Tests for the updated accountContext module (localStorage-based active account).
+ * Verifies: getActiveAccountId, setActiveAccountId, clearActiveAccountId,
+ * and resolveActiveAccount fallback behavior.
+ *
+ * resolveActiveAccount calls getAccountById / getAllAccounts from auth.ts (DB-backed)
+ * so those are mocked here.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest';
+
+// Polyfill localStorage for Node/vitest environment
+// (Tauri webview has it natively; tests run in Node which doesn't.)
+beforeAll(() => {
+  if (typeof localStorage === 'undefined') {
+    const store: Record<string, string> = {};
+    const localStorageMock = {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, val: string) => { store[key] = val; },
+      removeItem: (key: string) => { delete store[key]; },
+      clear: () => { for (const k in store) delete store[k]; },
+    };
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: localStorageMock,
+      writable: true,
+    });
+  }
+});
 import {
-  setActive,
-  getActive,
-  listAccounts,
-  addAccount,
-  removeAccount,
+  getActiveAccountId,
+  setActiveAccountId,
+  clearActiveAccountId,
+  resolveActiveAccount,
 } from '../src/accountContext';
 import type { Account } from '../src/auth';
+
+// ── Mock the auth module ──────────────────────────────────────────────────────
+// resolveActiveAccount uses getAccountById and getAllAccounts from auth.ts.
+// We mock them to avoid needing a real DB in unit tests.
+vi.mock('../src/auth', () => ({
+  getAllAccounts: vi.fn(),
+  getAccountById: vi.fn(),
+}));
+
+import { getAllAccounts, getAccountById } from '../src/auth';
+const mockedGetAll = vi.mocked(getAllAccounts);
+const mockedGetById = vi.mocked(getAccountById);
 
 function makeAccount(id: string, email: string): Account {
   return {
@@ -26,91 +58,83 @@ function makeAccount(id: string, email: string): Account {
   };
 }
 
-// Reset module state between tests by removing all accounts
-function resetContext() {
-  const all = listAccounts();
-  for (const a of all) removeAccount(a.id);
-}
-
-describe('accountContext', () => {
+describe('accountContext — localStorage helpers', () => {
   beforeEach(() => {
-    resetContext();
+    localStorage.clear();
+    vi.clearAllMocks();
   });
 
-  it('getActive returns null when no account has been set', () => {
-    expect(getActive()).toBeNull();
+  it('getActiveAccountId returns null when nothing is stored', () => {
+    expect(getActiveAccountId()).toBeNull();
   });
 
-  it('setActive with an Account object registers and activates it', () => {
-    const a = makeAccount('user-1', 'alice@example.com');
-    setActive(a);
-    expect(getActive()).toEqual(a);
+  it('setActiveAccountId persists to localStorage', () => {
+    setActiveAccountId('user-1');
+    expect(getActiveAccountId()).toBe('user-1');
   });
 
-  it('setActive with an id string activates a previously registered account', () => {
-    const a = makeAccount('user-2', 'bob@example.com');
-    addAccount(a);
-    setActive('user-2');
-    expect(getActive()?.email).toBe('bob@example.com');
+  it('setActiveAccountId overwrites a previously stored id', () => {
+    setActiveAccountId('user-1');
+    setActiveAccountId('user-2');
+    expect(getActiveAccountId()).toBe('user-2');
   });
 
-  it('setActive with unknown id throws', () => {
-    expect(() => setActive('nonexistent-id')).toThrow(/unknown account id/);
+  it('clearActiveAccountId removes the stored id', () => {
+    setActiveAccountId('user-3');
+    clearActiveAccountId();
+    expect(getActiveAccountId()).toBeNull();
+  });
+});
+
+describe('accountContext — resolveActiveAccount', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
   });
 
-  it('listAccounts returns all registered accounts', () => {
-    const a1 = makeAccount('u1', 'a@example.com');
-    const a2 = makeAccount('u2', 'b@example.com');
-    addAccount(a1);
-    addAccount(a2);
-    const list = listAccounts();
-    expect(list).toHaveLength(2);
-    expect(list.map(a => a.id)).toContain('u1');
-    expect(list.map(a => a.id)).toContain('u2');
+  it('returns null when no accounts exist and none stored', async () => {
+    mockedGetAll.mockResolvedValueOnce([]);
+    const result = await resolveActiveAccount();
+    expect(result).toBeNull();
   });
 
-  it('removeAccount removes the account from the store', () => {
-    const a = makeAccount('u3', 'c@example.com');
-    addAccount(a);
-    removeAccount('u3');
-    expect(listAccounts().find(x => x.id === 'u3')).toBeUndefined();
+  it('returns the stored active account when it exists in DB', async () => {
+    const acct = makeAccount('u-abc', 'alice@example.com');
+    setActiveAccountId('u-abc');
+    mockedGetById.mockResolvedValueOnce(acct);
+    const result = await resolveActiveAccount();
+    expect(result).toEqual(acct);
+    expect(mockedGetById).toHaveBeenCalledWith('u-abc');
   });
 
-  it('removeAccount clears active when the active account is removed', () => {
-    const a = makeAccount('u4', 'd@example.com');
-    setActive(a);
-    removeAccount('u4');
-    expect(getActive()).toBeNull();
+  it('falls back to first account and updates localStorage when stored id is stale', async () => {
+    const acct = makeAccount('u-fallback', 'bob@example.com');
+    setActiveAccountId('stale-id');
+    // getAccountById returns null for the stale id
+    mockedGetById.mockResolvedValueOnce(null);
+    // getAllAccounts returns the fallback account
+    mockedGetAll.mockResolvedValueOnce([acct]);
+    const result = await resolveActiveAccount();
+    expect(result).toEqual(acct);
+    // localStorage should now be updated to the fallback account
+    expect(getActiveAccountId()).toBe('u-fallback');
   });
 
-  it('removeAccount does not clear active when a different account is removed', () => {
-    const a = makeAccount('u5', 'e@example.com');
-    const b = makeAccount('u6', 'f@example.com');
-    setActive(a);
-    addAccount(b);
-    removeAccount('u6');
-    expect(getActive()?.id).toBe('u5');
+  it('falls back to first account when no active id is stored', async () => {
+    const acct = makeAccount('u-first', 'charlie@example.com');
+    mockedGetAll.mockResolvedValueOnce([acct]);
+    const result = await resolveActiveAccount();
+    expect(result).toEqual(acct);
+    expect(getActiveAccountId()).toBe('u-first');
   });
 
-  // ── Draft key namespace format ─────────────────────────────
-  // The draft key format in main.ts is: `draft-${accountId}-${gmailThreadId}`
-  // This test documents and verifies that contract.
-
-  it('draft key format includes accountId and gmailThreadId', () => {
-    const accountId = 'user-abc123';
-    const gmailThreadId = 'thread-xyz789';
-    const draftKey = `draft-${accountId}-${gmailThreadId}`;
-    expect(draftKey).toBe('draft-user-abc123-thread-xyz789');
-    // Verify that keys for different accounts don't collide
-    const accountId2 = 'user-def456';
-    const draftKey2 = `draft-${accountId2}-${gmailThreadId}`;
-    expect(draftKey).not.toBe(draftKey2);
-  });
-
-  it('draft keys for same thread across accounts are distinct', () => {
-    const thread = 'thread-shared-001';
-    const k1 = `draft-account-A-${thread}`;
-    const k2 = `draft-account-B-${thread}`;
-    expect(k1).not.toBe(k2);
+  it('returns null when stored id is stale and no accounts exist in DB', async () => {
+    setActiveAccountId('ghost-id');
+    mockedGetById.mockResolvedValueOnce(null);
+    mockedGetAll.mockResolvedValueOnce([]);
+    const result = await resolveActiveAccount();
+    expect(result).toBeNull();
+    // Stale id should be cleared
+    expect(getActiveAccountId()).toBeNull();
   });
 });
