@@ -15,6 +15,8 @@ export interface Thread {
   isArchived: boolean;
   hasAttachment: boolean;
   gmailThreadId: string;
+  snoozedUntil?: number | null; // unix ms, null = not snoozed
+  snoozeLabel?: string | null;
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -203,20 +205,50 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   const { name: senderName, email: senderEmail } = parseFrom(fromRaw);
   const receivedAt = parseInt(last.internalDate, 10);
   const isUnread = last.labelIds.includes('UNREAD') ? 1 : 0;
+  const newMessageCount = msgs.length;
+
+  // Check existing snooze state and message count so we can auto-unsnooze on new messages
+  const existing = await db.select<Array<{ snoozed_until: number | null; snooze_label: string | null; message_count: number | null }>>(
+    'SELECT snoozed_until, snooze_label, message_count FROM threads WHERE id = ?',
+    [gmailThreadId]
+  );
+  const row = existing[0] ?? null;
+
+  // Auto-unsnooze: if snoozed and message count grew, clear snooze
+  let clearSnooze = false;
+  if (row && row.snoozed_until !== null && row.message_count !== null && newMessageCount > row.message_count) {
+    clearSnooze = true;
+  }
+  const snoozedUntil = clearSnooze ? null : (row?.snoozed_until ?? null);
+  const snoozeLabel = clearSnooze ? null : (row?.snooze_label ?? null);
 
   await db.execute(
-    `INSERT OR REPLACE INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id, has_attachment)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId, hasAttachment(last) ? 1 : 0]
+    `INSERT INTO threads
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, gmail_thread_id, has_attachment, message_count, snoozed_until, snooze_label)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       account_id    = excluded.account_id,
+       subject       = excluded.subject,
+       snippet       = excluded.snippet,
+       sender_name   = excluded.sender_name,
+       sender_email  = excluded.sender_email,
+       received_at   = excluded.received_at,
+       is_unread     = excluded.is_unread,
+       gmail_thread_id = excluded.gmail_thread_id,
+       has_attachment = excluded.has_attachment,
+       message_count  = excluded.message_count,
+       snoozed_until  = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snoozed_until, excluded.snoozed_until) END,
+       snooze_label   = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snooze_label, excluded.snooze_label) END`,
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, gmailThreadId, hasAttachment(last) ? 1 : 0, newMessageCount, snoozedUntil, snoozeLabel]
   );
 }
 
 // ── Load inbox from DB ────────────────────────────────────
 export async function loadThreads(accountId: string, search?: string): Promise<Thread[]> {
   const db = await getDb();
-  let sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0`;
-  const params: (string | number)[] = [accountId];
+  const now = Date.now();
+  let sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0 AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+  const params: (string | number)[] = [accountId, now];
   if (search) {
     sql += ` AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?)`;
     const q = `%${search}%`;
@@ -239,6 +271,8 @@ function rowToThread(r: Record<string, unknown>): Thread {
     isArchived: (r.is_archived as number) === 1,
     hasAttachment: (r.has_attachment as number) === 1,
     gmailThreadId: r.gmail_thread_id as string,
+    snoozedUntil: (r.snoozed_until as number | null) ?? null,
+    snoozeLabel: (r.snooze_label as string | null) ?? null,
   };
 }
 
@@ -255,6 +289,22 @@ export async function archiveThread(account: Account, thread: Thread): Promise<v
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] });
   const db = await getDb();
   await db.execute('UPDATE threads SET is_archived = 1 WHERE id = ?', [thread.id]);
+}
+
+export async function snoozeThread(threadId: string, snoozedUntil: number, label: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    'UPDATE threads SET snoozed_until = ?, snooze_label = ? WHERE id = ?',
+    [snoozedUntil, label, threadId]
+  );
+}
+
+export async function unsnoozeThread(threadId: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    'UPDATE threads SET snoozed_until = NULL, snooze_label = NULL WHERE id = ?',
+    [threadId]
+  );
 }
 
 export async function blockSender(account: Account, thread: Thread): Promise<void> {

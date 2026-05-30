@@ -1,6 +1,7 @@
 // main.ts — Kept inbox UI
 import { type Account, getAccount, startOAuth } from './auth';
 import { type Thread, syncInbox, loadThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 // ── State ─────────────────────────────────────────────────
 let account: Account | null = null;
@@ -39,6 +40,7 @@ async function boot() {
     if (account) {
       showShell();
       await refresh();
+      setupSnoozeResurface();
     }
   } catch (e) {
     console.error('Boot error:', e);
@@ -224,6 +226,32 @@ function renderViewPlaceholder(view: ViewName) {
       <div class="empty-text">${view}</div>
       <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Coming soon</div>
     </div>`;
+}
+
+// ── Snooze resurface ──────────────────────────────────────
+function setupSnoozeResurface() {
+  // Poll every 60s — re-query and re-render if any snoozed threads have surfaced
+  setInterval(async () => {
+    if (!account) return;
+    const fresh = await loadThreads(account.id, searchQuery || undefined);
+    if (fresh.length !== threads.length) {
+      threads = fresh;
+      renderInbox();
+    }
+  }, 60_000);
+
+  // Also resurface on window focus (Tauri-only)
+  const isTauri = '__TAURI_INTERNALS__' in window;
+  if (isTauri) {
+    getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused && account) {
+        loadThreads(account.id, searchQuery || undefined).then(fresh => {
+          threads = fresh;
+          renderInbox();
+        }).catch(() => {});
+      }
+    });
+  }
 }
 
 // ── Sync ──────────────────────────────────────────────────

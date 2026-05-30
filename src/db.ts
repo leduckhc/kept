@@ -84,4 +84,8 @@ async function migrate(db: Database): Promise<void> {
   // Additive migrations — safe to re-run (ALTER TABLE IF NOT EXISTS column not supported in SQLite,
   // so we catch the "duplicate column" error and ignore it)
   await db.execute(`ALTER TABLE threads ADD COLUMN has_attachment INTEGER DEFAULT 0`).catch(() => {});
+  await db.execute(`ALTER TABLE threads ADD COLUMN snoozed_until INTEGER NULL`).catch(() => {});
+  await db.execute(`ALTER TABLE threads ADD COLUMN snooze_label TEXT NULL`).catch(() => {});
+  await db.execute(`ALTER TABLE threads ADD COLUMN message_count INTEGER NULL`).catch(() => {});
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_threads_snooze ON threads(snoozed_until)`).catch(() => {});
 }
