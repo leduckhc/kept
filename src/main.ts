@@ -261,7 +261,7 @@ function openSettings() {
   // Wire back button
   document.getElementById('settings-back')!.addEventListener('click', closeSettings, { once: true });
 
-  // Wire dark mode toggle
+  // Wire dark mode toggle (once: true prevents listener accumulation on repeated open/close)
   toggle?.addEventListener('click', () => {
     const nowDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const next = nowDark ? 'light' : 'dark';
@@ -270,9 +270,9 @@ function openSettings() {
     toggle.classList.toggle('on', !nowDark);
     const subEl = document.getElementById('settings-darkmode-sub');
     if (subEl) subEl.textContent = !nowDark ? 'Currently using dark theme' : 'Switch to dark theme';
-  });
+  }, { once: true });
 
-  // Wire sign out
+  // Wire sign out (once: true prevents duplicate confirm dialogs on repeated open/close)
   const signoutBtn = document.getElementById('settings-signout') as HTMLButtonElement;
   signoutBtn?.addEventListener('click', async () => {
     if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
@@ -290,9 +290,9 @@ function openSettings() {
       syncing = false;
       showAuth();
     }
-  });
+  }, { once: true });
 
-  // Wire add account
+  // Wire add account (once: true prevents duplicate OAuth launches on repeated open/close)
   document.getElementById('settings-add-account')!.addEventListener('click', async () => {
     try {
       const newAcct = await startOAuth();
