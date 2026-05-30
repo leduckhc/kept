@@ -19,6 +19,7 @@ export interface Thread {
   snoozedUntil: number | null; // unix ms, null = not snoozed
   snoozeLabel: string | null;
   messageCount: number | null;
+  label: string;      // KPT-023: 'INBOX' | 'SENT' | 'DRAFT' | 'STARRED'
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -51,8 +52,12 @@ export async function syncInbox(account: Account, onProgress?: (n: number) => vo
     // Fall through to full sync if incremental failed (historyId too old / 404)
   }
 
-  // Full sync
-  await syncFull(a, account.id, onProgress);
+  // Full sync — INBOX + SENT + DRAFT labels in parallel
+  await Promise.all([
+    syncFull(a, account.id, 'INBOX', onProgress),
+    syncFull(a, account.id, 'SENT'),
+    syncFull(a, account.id, 'DRAFT'),
+  ]);
 
   // After full sync, fetch and store current historyId
   try {
@@ -67,12 +72,12 @@ export async function syncInbox(account: Account, onProgress?: (n: number) => vo
 
 const MAX_SYNC_PAGES = 10;
 
-async function syncFull(account: Account, accountId: string, onProgress?: (n: number) => void): Promise<void> {
+async function syncFull(account: Account, accountId: string, label: string = 'INBOX', onProgress?: (n: number) => void): Promise<void> {
   let pageToken: string | undefined;
   let total = 0;
   let page = 0;
   do {
-    const params = new URLSearchParams({ labelIds: 'INBOX', maxResults: '100' });
+    const params = new URLSearchParams({ labelIds: label, maxResults: '100' });
     if (pageToken) params.set('pageToken', pageToken);
     const res = await gmailGet(account, `/users/me/threads?${params}`);
     const data = res as { threads?: Array<{ id: string }>; nextPageToken?: string };
@@ -81,14 +86,14 @@ async function syncFull(account: Account, accountId: string, onProgress?: (n: nu
     const threadIds = data.threads.map((t: { id: string }) => t.id);
     const BATCH = 10;
     for (let i = 0; i < threadIds.length; i += BATCH) {
-      await Promise.all(threadIds.slice(i, i + BATCH).map((id: string) => syncThread(account, id, accountId)));
+      await Promise.all(threadIds.slice(i, i + BATCH).map((id: string) => syncThread(account, id, accountId, label)));
       total += Math.min(BATCH, threadIds.length - i);
       onProgress?.(total);
     }
     pageToken = data.nextPageToken;
     page++;
     if (page >= MAX_SYNC_PAGES) {
-      console.log('syncFull: hit MAX_SYNC_PAGES, stopping');
+      console.log(`syncFull(${label}): hit MAX_SYNC_PAGES, stopping`);
       break;
     }
   } while (pageToken);
@@ -182,7 +187,7 @@ function hasAttachment(message: any): boolean {
   return checkParts(parts);
 }
 
-async function syncThread(account: Account, gmailThreadId: string, accountId: string): Promise<void> {
+async function syncThread(account: Account, gmailThreadId: string, accountId: string, label: string = 'INBOX'): Promise<void> {
   const db = await getDb();
   const data = await gmailGet(account, `/users/me/threads/${gmailThreadId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`) as {
     id: string;
@@ -227,8 +232,8 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 
   await db.execute(
     `INSERT INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, message_count, snoozed_until, snooze_label)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, label, message_count, snoozed_until, snooze_label)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id    = excluded.account_id,
        subject       = excluded.subject,
@@ -240,66 +245,107 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
        is_starred    = excluded.is_starred,
        gmail_thread_id = excluded.gmail_thread_id,
        has_attachment = excluded.has_attachment,
+       label          = excluded.label,
        message_count  = excluded.message_count,
        snoozed_until  = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snoozed_until, excluded.snoozed_until) END,
        snooze_label   = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snooze_label, excluded.snooze_label) END`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, newMessageCount, snoozedUntil, snoozeLabel]
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, label, newMessageCount, snoozedUntil, snoozeLabel]
   );
 }
 
 // ── Load inbox from DB ────────────────────────────────────
-export async function loadThreads(accountId: string, search?: string): Promise<Thread[]> {
+export async function loadThreads(accountId: string, labelOrSearch?: string, search?: string): Promise<Thread[]> {
   const db = await getDb();
+
+  // Overload: loadThreads(accountId, label, search?) — label is one of INBOX/SENT/DRAFT/STARRED
+  // Backwards-compat: loadThreads(accountId, search) — old call site passes search string as 2nd arg
+  let activeLabel: string;
+  let activeSearch: string | undefined;
+
+  const KNOWN_LABELS = ['INBOX', 'SENT', 'DRAFT', 'STARRED'];
+  if (labelOrSearch && KNOWN_LABELS.includes(labelOrSearch)) {
+    activeLabel = labelOrSearch;
+    activeSearch = search;
+  } else {
+    activeLabel = 'INBOX';
+    activeSearch = labelOrSearch; // backwards-compat
+  }
+
   const nowMs = Date.now();
 
-  if (search) {
+  if (activeSearch) {
     // Try FTS5 first for fast ranked search; fall back to LIKE on any error
-    // (FTS5 may be unavailable on older SQLite builds or the virtual table may not exist yet)
     try {
-      // Wrap bare query in double-quotes so FTS5 treats it as a phrase; strip quotes the
-      // user may have typed to avoid injection into the FTS MATCH expression.
-      const ftsQuery = `"${search.replace(/"/g, '')}"`;
-      const ftsSql = `
-        SELECT t.*
-        FROM threads t
-        JOIN threads_fts fts ON t.rowid = fts.rowid
-        WHERE threads_fts MATCH ?
-          AND t.account_id = ?
-          AND t.is_archived = 0
-          AND t.is_blocked = 0
-          AND (t.snoozed_until IS NULL OR t.snoozed_until <= ?)
-        ORDER BY t.received_at DESC
-        LIMIT 500
-      `;
-      const rows = await db.select<Array<Record<string, unknown>>>(ftsSql, [ftsQuery, accountId, nowMs]);
+      const ftsQuery = `"${activeSearch.replace(/"/g, '')}"`;
+      let ftsSql: string;
+      let ftsParams: (string | number)[];
+      if (activeLabel === 'STARRED') {
+        ftsSql = `
+          SELECT t.*
+          FROM threads t
+          JOIN threads_fts fts ON t.rowid = fts.rowid
+          WHERE threads_fts MATCH ?
+            AND t.account_id = ?
+            AND t.is_starred = 1
+            AND t.is_archived = 0
+            AND t.is_blocked = 0
+            AND (t.snoozed_until IS NULL OR t.snoozed_until <= ?)
+          ORDER BY t.received_at DESC
+          LIMIT 500
+        `;
+        ftsParams = [ftsQuery, accountId, nowMs];
+      } else {
+        ftsSql = `
+          SELECT t.*
+          FROM threads t
+          JOIN threads_fts fts ON t.rowid = fts.rowid
+          WHERE threads_fts MATCH ?
+            AND t.account_id = ?
+            AND t.label = ?
+            AND t.is_archived = 0
+            AND t.is_blocked = 0
+            AND (t.snoozed_until IS NULL OR t.snoozed_until <= ?)
+          ORDER BY t.received_at DESC
+          LIMIT 500
+        `;
+        ftsParams = [ftsQuery, accountId, activeLabel, nowMs];
+      }
+      const rows = await db.select<Array<Record<string, unknown>>>(ftsSql, ftsParams);
       return rows.map(rowToThread);
     } catch {
-      // FTS5 unavailable or query error — fall back to LIKE
-      const likeSql = `
-        SELECT * FROM threads
-        WHERE account_id = ?
-          AND is_archived = 0
-          AND is_blocked = 0
-          AND (snoozed_until IS NULL OR snoozed_until <= ?)
-          AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?)
-        ORDER BY received_at DESC
-        LIMIT 500
-      `;
-      const q = `%${search}%`;
-      const rows = await db.select<Array<Record<string, unknown>>>(likeSql, [accountId, nowMs, q, q, q, q]);
+      // FTS5 unavailable — fall back to LIKE
+      let likeSql: string;
+      const likeParams: (string | number)[] = [accountId];
+      if (activeLabel === 'STARRED') {
+        likeSql = `SELECT * FROM threads WHERE account_id = ? AND is_starred = 1 AND is_archived = 0 AND is_blocked = 0
+                   AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+        likeParams.push(nowMs);
+      } else {
+        likeSql = `SELECT * FROM threads WHERE account_id = ? AND label = ? AND is_archived = 0 AND is_blocked = 0
+                   AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+        likeParams.push(activeLabel, nowMs);
+      }
+      likeSql += ` AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?) ORDER BY received_at DESC LIMIT 500`;
+      const q = `%${activeSearch}%`;
+      likeParams.push(q, q, q, q);
+      const rows = await db.select<Array<Record<string, unknown>>>(likeSql, likeParams);
       return rows.map(rowToThread);
     }
   }
 
-  // No search — plain inbox query, excluding snoozed threads
-  const sql = `
-    SELECT * FROM threads
-    WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0
-      AND (snoozed_until IS NULL OR snoozed_until <= ?)
-    ORDER BY received_at DESC
-    LIMIT 500
-  `;
-  const rows = await db.select<Array<Record<string, unknown>>>(sql, [accountId, nowMs]);
+  // No search — label-aware query
+  let sql: string;
+  const params: (string | number)[] = [accountId];
+  if (activeLabel === 'STARRED') {
+    sql = `SELECT * FROM threads WHERE account_id = ? AND is_starred = 1 AND is_archived = 0 AND is_blocked = 0
+           AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
+    params.push(nowMs);
+  } else {
+    sql = `SELECT * FROM threads WHERE account_id = ? AND label = ? AND is_archived = 0 AND is_blocked = 0
+           AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
+    params.push(activeLabel, nowMs);
+  }
+  const rows = await db.select<Array<Record<string, unknown>>>(sql, params);
   return rows.map(rowToThread);
 }
 
@@ -346,6 +392,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     snoozedUntil: (r.snoozed_until as number | null) ?? null,
     snoozeLabel: (r.snooze_label as string | null) ?? null,
     messageCount: (r.message_count as number | null) ?? null,
+    label: (r.label as string) ?? 'INBOX',
   };
 }
 
