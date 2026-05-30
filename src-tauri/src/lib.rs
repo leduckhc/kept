@@ -34,7 +34,9 @@ fn update_unread_badge(app: tauri::AppHandle, count: u32) {
         } else {
             Some(count.to_string())
         };
-        let _ = app.set_badge_label(badge.as_deref());
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.set_badge_label(badge);
+        }
     }
 }
 
