@@ -1,8 +1,9 @@
 // main.ts — Kept inbox UI
 import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadSenderEmails, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadSenderEmails, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, hasSyncedBefore } from './gmail';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 
 // ── State ─────────────────────────────────────────────────
 let account: Account | null = null;      // active account
@@ -247,6 +248,9 @@ async function refreshAll() {
   threads = await loadThreads(account.id);
   renderInbox();
 
+  // Request notification permission early (non-blocking)
+  ensureNotificationPermission().catch(() => {});
+
   // Parallel sync — one per account, errors are non-fatal per account
   const allAccts = await getAllAccounts();
   const syncPromises = allAccts.map(acct =>
@@ -272,10 +276,28 @@ async function syncAndRender() {
   const btn = document.getElementById('btn-sync');
   if (btn) btn.style.opacity = '0.4';
   try {
+    // Capture thread IDs known before sync to detect new arrivals
+    const preSync = await loadThreads(account.id);
+    const knownIds = new Set(preSync.map(t => t.id));
+    // Gate: only send notifications on second+ sync (historyId already set)
+    const isSubsequentSync = await hasSyncedBefore(account.id);
+
     await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
     threads = await loadThreads(account.id);
     renderInbox();
     setStatus(`Synced — ${threads.length} threads`);
+
+    // Fire notifications for newly-arrived threads (not first sync)
+    if (isSubsequentSync) {
+      const newThreads = threads.filter(t => !knownIds.has(t.id));
+      if (newThreads.length > 0) {
+        notifyNewThreads(newThreads.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
+      }
+    }
+
+    // Update tray badge / dock badge with total unread count
+    const unreadCount = threads.filter(t => t.isUnread).length;
+    updateBadge(unreadCount).catch(() => {});
   } catch (e) {
     console.error('Sync error:', e);
     const msg = e instanceof Error ? e.message : String(e);
