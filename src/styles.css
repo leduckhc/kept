@@ -337,6 +337,9 @@ body {
   object-fit: cover;
   border-radius: 50%;
 }
+.avatar .avatar-gravatar {
+  z-index: 1;
+}
 
 /* Middle column */
 .thread-mid { min-width: 0; }
