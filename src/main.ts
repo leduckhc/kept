@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, markRead, markUnread, archiveThread, unarchiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, loadRepliedToSenders, markRead, markUnread, archiveThread, unarchiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore } from './gmail';
 import { sanitizeEmailHtml } from './sanitize';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
@@ -14,6 +14,7 @@ let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+let knownSenders = new Set<string>();   // KPT-038: replied-to sender cache
 type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred';
 let currentView: ViewName = 'Inbox';
 let selectedThreadId: string | null = null;
@@ -30,6 +31,12 @@ const VIEWS: Array<{ name: ViewName; icon: string }> = [
 function setAccount(a: Account) {
   account = a;
   setActiveAccountId(a.id);
+}
+
+async function refreshKnownSenders() {
+  if (!accounts.length) return;
+  const allEmails = await Promise.all(accounts.map(a => loadRepliedToSenders(a.id).catch(() => [] as string[])));
+  knownSenders = new Set(allEmails.flat().map(e => e.toLowerCase()));
 }
 
 // KPT-037: resolve the Account for a thread action (unified mode uses t.accountId)
@@ -60,6 +67,7 @@ async function boot() {
     account = await resolveActiveAccount();
     if (account) {
       showShell();
+      refreshKnownSenders().catch(() => {});
       await refreshAll();
       setupSnoozeResurface();
     }
@@ -167,6 +175,19 @@ function showShell() {
               </button>
             </div>
           </div>
+          <div class="settings-divider"></div>
+          <div class="settings-section">
+            <div class="settings-section-label">Notifications</div>
+            <div class="settings-row" id="settings-smartnotif-row">
+              <div class="settings-row-text">
+                <div class="settings-row-label">Smart Notifications</div>
+                <div class="settings-row-sub" id="settings-smartnotif-sub">Only notify for known senders</div>
+              </div>
+              <button class="settings-toggle" id="settings-smartnotif-toggle" role="switch" aria-checked="true">
+                <span class="settings-toggle-thumb"></span>
+              </button>
+            </div>
+          </div>
           <div class="settings-footer">
             <button class="settings-signout" id="settings-signout">Sign out</button>
           </div>
@@ -269,8 +290,29 @@ function openSettings() {
   }
   if (sub) sub.textContent = isDark ? 'Currently using dark theme' : 'Switch to dark theme';
 
+  // Sync smart notifications toggle state
+  const smartNotifToggle = document.getElementById('settings-smartnotif-toggle') as HTMLButtonElement;
+  const smartNotifSub = document.getElementById('settings-smartnotif-sub');
+  const smartOn = localStorage.getItem('smartNotifications') !== 'false';
+  if (smartNotifToggle) {
+    smartNotifToggle.setAttribute('aria-checked', String(smartOn));
+    smartNotifToggle.classList.toggle('on', smartOn);
+  }
+  if (smartNotifSub) smartNotifSub.textContent = smartOn ? 'Only notify for known senders' : 'Notify for all new threads';
+
   // Wire back button
   document.getElementById('settings-back')!.addEventListener('click', closeSettings, { once: true });
+
+  // Wire smart notifications toggle
+  smartNotifToggle?.addEventListener('click', () => {
+    const nowOn = localStorage.getItem('smartNotifications') !== 'false';
+    const next = !nowOn;
+    localStorage.setItem('smartNotifications', String(next));
+    smartNotifToggle.setAttribute('aria-checked', String(next));
+    smartNotifToggle.classList.toggle('on', next);
+    const subEl = document.getElementById('settings-smartnotif-sub');
+    if (subEl) subEl.textContent = next ? 'Only notify for known senders' : 'Notify for all new threads';
+  }, { once: true });
 
   // Wire dark mode toggle (once: true prevents listener accumulation on repeated open/close)
   toggle?.addEventListener('click', () => {
@@ -505,11 +547,20 @@ async function syncAndRender() {
       renderInbox();
       setStatus(`Synced — ${threads.length} threads`);
 
+      // Refresh known-senders after sync (SENT folder may have grown)
+      refreshKnownSenders().catch(() => {});
+
       // Fire notifications for newly-arrived threads (not first sync)
       if (isSubsequentSync) {
         const newThreads = threads.filter(t => !knownIds.has(t.id));
         if (newThreads.length > 0) {
-          notifyNewThreads(newThreads.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
+          const smartNotifs = localStorage.getItem('smartNotifications') !== 'false';
+          const toNotify = smartNotifs
+            ? newThreads.filter(t => knownSenders.has(t.senderEmail.toLowerCase()))
+            : newThreads;
+          if (toNotify.length > 0) {
+            notifyNewThreads(toNotify.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
+          }
         }
       }
     }

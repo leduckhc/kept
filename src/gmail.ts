@@ -190,7 +190,7 @@ function hasAttachment(message: any): boolean {
 
 async function syncThread(account: Account, gmailThreadId: string, accountId: string, label: string = 'INBOX'): Promise<void> {
   const db = await getDb();
-  const data = await gmailGet(account, `/users/me/threads/${gmailThreadId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`) as {
+  const data = await gmailGet(account, `/users/me/threads/${gmailThreadId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`) as {
     id: string;
     messages: Array<{
       id: string;
@@ -354,6 +354,16 @@ export async function loadSenderEmails(accountId: string): Promise<string[]> {
   const db = await getDb();
   const rows = await db.select<Array<{ sender_email: string }>>(
     'SELECT DISTINCT sender_email FROM threads WHERE account_id = ? AND is_blocked = 0 ORDER BY received_at DESC LIMIT 200',
+    [accountId]
+  );
+  return rows.map(r => r.sender_email);
+}
+
+/** Returns unique emails the user has sent to (people we replied to = "known senders"). */
+export async function loadRepliedToSenders(accountId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ sender_email: string }>>(
+    `SELECT DISTINCT sender_email FROM threads WHERE account_id = ? AND label = 'SENT'`,
     [accountId]
   );
   return rows.map(r => r.sender_email);
