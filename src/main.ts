@@ -1,9 +1,9 @@
 // main.ts — Kept inbox UI
 import { type Account, getAccount, startOAuth } from './auth';
+import { setActive, getActive, addAccount, removeAccount } from './accountContext';
 import { type Thread, syncInbox, loadThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
 
 // ── State ─────────────────────────────────────────────────
-let account: Account | null = null;
 let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
@@ -17,7 +17,7 @@ const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Drafts',  icon: '✏' },
   { name: 'Starred', icon: '★' },
 ];
-function setAccount(a: Account) { account = a; }
+function setAccount(a: Account) { addAccount(a); setActive(a.id); }
 
 
 // ── Boot ──────────────────────────────────────────────────
@@ -35,8 +35,9 @@ async function boot() {
   }
 
   try {
-    account = await getAccount();
-    if (account) {
+    const acct = await getAccount();
+    if (acct) {
+      setActive(acct);
       showShell();
       await refresh();
     }
@@ -69,7 +70,8 @@ function showAuth() {
     const originalHTML = btn.innerHTML;
     btn.textContent = 'Opening browser…';
     try {
-      account = await startOAuth();
+      const oauthAcct = await startOAuth();
+      setActive(oauthAcct);
       showShell();
       await refresh();
     } catch (e) {
@@ -105,7 +107,7 @@ function showShell() {
       </div>
       <div class="inbox" id="inbox"></div>
       <div class="statusbar">
-        <span id="status-left">${account?.email ?? ''}</span>
+        <span id="status-left">${getActive()?.email ?? ''}</span>
         <span id="status-right"></span>
       </div>
     </div>
@@ -163,15 +165,15 @@ function showShell() {
   document.getElementById('btn-signout')!.addEventListener('click', async () => {
     try {
       const db = await import('./db').then(m => m.getDb());
-      const acctId = account?.id;
-      await db.execute('DELETE FROM accounts WHERE 1=1');
+      const acctId = getActive()?.id;
       if (acctId != null) {
+        await db.execute('DELETE FROM accounts WHERE id = ?', [acctId]);
         await db.execute('DELETE FROM threads WHERE account_id = ?', [acctId]);
         await db.execute('DELETE FROM messages WHERE account_id = ?', [acctId]);
         await db.execute('DELETE FROM blocked_senders WHERE account_id = ?', [acctId]);
         await db.execute('DELETE FROM settings WHERE account_id = ?', [acctId]);
+        removeAccount(acctId);
       }
-      account = null;
       threads = [];
       syncing = false;
       showAuth();
@@ -185,8 +187,8 @@ function showShell() {
     searchQuery = searchEl.value;
     if (searchDebounce !== null) clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
-      if (!account) return;
-      threads = await loadThreads(account.id, searchQuery);
+      if (!getActive()) return;
+      threads = await loadThreads(getActive()!.id, searchQuery);
       renderInbox();
     }, 200);
   });
@@ -228,22 +230,22 @@ function renderViewPlaceholder(view: ViewName) {
 
 // ── Sync ──────────────────────────────────────────────────
 async function refresh() {
-  if (!account) return;
-  threads = await loadThreads(account.id);
+  if (!getActive()) return;
+  threads = await loadThreads(getActive()!.id);
   renderInbox();
   // Always sync on boot to get fresh data
   syncAndRender();
 }
 
 async function syncAndRender() {
-  if (syncing || !account) return;
+  if (syncing || !getActive()) return;
   syncing = true;
   setStatus('Syncing…');
   const btn = document.getElementById('btn-sync');
   if (btn) btn.style.opacity = '0.4';
   try {
-    await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
-    threads = await loadThreads(account.id);
+    await syncInbox(getActive()!, n => setStatus(`Syncing… ${n} threads`));
+    threads = await loadThreads(getActive()!.id);
     renderInbox();
     setStatus(`Synced — ${threads.length} threads`);
   } catch (e) {
@@ -363,9 +365,9 @@ function threadRow(t: Thread): string {
 
 // ── Row actions ───────────────────────────────────────────
 async function doMarkRead(t: Thread, row: HTMLElement) {
-  if (!account) return;
+  if (!getActive()) return;
   try {
-    await markRead(account, t);
+    await markRead(getActive()!, t);
     const fresh = await getAccount();
     if (fresh) setAccount(fresh);
     t.isUnread = false;
@@ -380,9 +382,9 @@ async function doMarkRead(t: Thread, row: HTMLElement) {
 }
 
 async function doArchive(t: Thread, row: HTMLElement) {
-  if (!account) return;
+  if (!getActive()) return;
   try {
-    await archiveThread(account, t);
+    await archiveThread(getActive()!, t);
     const fresh = await getAccount();
     if (fresh) setAccount(fresh);
     row.remove();
@@ -395,9 +397,9 @@ async function doArchive(t: Thread, row: HTMLElement) {
 }
 
 async function doBlock(t: Thread, _row: HTMLElement) {
-  if (!account) return;
+  if (!getActive()) return;
   if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
-  await blockSender(account, t);
+  await blockSender(getActive()!, t);
   const fresh = await getAccount();
   if (fresh) setAccount(fresh);
   // Remove all rows from this sender
@@ -407,21 +409,21 @@ async function doBlock(t: Thread, _row: HTMLElement) {
 
 // ── Thread reader ─────────────────────────────────────────
 async function openThread(t: Thread) {
-  if (!account) return;
+  if (!getActive()) return;
   // track open thread for future reply/forward (see openThread)
   // Mark read — optimistic DOM update, revert on failure
   if (t.isUnread) {
     t.isUnread = false;
     document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.remove('unread');
-    markRead(account, t).catch(() => {
+    markRead(getActive()!, t).catch(() => {
       // Revert if API call failed
       t.isUnread = true;
       document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.add('unread');
     });
   }
 
-  // Draft persistence
-  const draftKey = 'draft-' + t.gmailThreadId;
+  // Draft persistence — namespaced by accountId to prevent cross-account collisions
+  const draftKey = `draft-${getActive()!.id}-${t.gmailThreadId}`;
   const savedDraft = localStorage.getItem(draftKey);
 
   const overlay = document.createElement('div');
@@ -456,7 +458,7 @@ async function openThread(t: Thread) {
 
   // Load messages
   try {
-    const result = await fetchMessageBody(account, t.gmailThreadId);
+    const result = await fetchMessageBody(getActive()!, t.gmailThreadId);
     const bodies = (result as any).bodies ?? (result as any).messages ?? result;
     lastMessageId = (result as any).lastMessageId ?? null;
     const bodyEl = overlay.querySelector('.reader-body')!;
@@ -518,12 +520,12 @@ async function openThread(t: Thread) {
   });
   document.getElementById('btn-send')!.addEventListener('click', async () => {
     const body = textarea.value.trim();
-    if (!body || !account) return;
+    if (!body || !getActive()) return;
     const btn = document.getElementById('btn-send') as HTMLButtonElement;
     btn.disabled = true;
     btn.textContent = 'Sending…';
     try {
-      await sendEmail(account, {
+      await sendEmail(getActive()!, {
         to: t.senderEmail,
         subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
         body,
@@ -540,8 +542,8 @@ async function openThread(t: Thread) {
   });
 
   document.getElementById('btn-archive-reader')!.addEventListener('click', async () => {
-    if (!account) return;
-    await archiveThread(account, t);
+    if (!getActive()) return;
+    await archiveThread(getActive()!, t);
     const fresh = await getAccount();
     if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.id !== t.id);
@@ -549,9 +551,9 @@ async function openThread(t: Thread) {
     overlay.remove();
   });
   document.getElementById('btn-block-reader')!.addEventListener('click', async () => {
-    if (!account) return;
+    if (!getActive()) return;
     if (!confirm(`Block all email from ${t.senderEmail}?`)) return;
-    await blockSender(account, t);
+    await blockSender(getActive()!, t);
     const fresh = await getAccount();
     if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.senderEmail !== t.senderEmail);
