@@ -248,17 +248,55 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 export async function loadThreads(accountId: string, search?: string): Promise<Thread[]> {
   const db = await getDb();
   const nowMs = Date.now();
-  // Exclude snoozed threads (snoozed_until is in the future)
-  let sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0
-             AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
-  const params: (string | number)[] = [accountId, nowMs];
+
   if (search) {
-    sql += ` AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?)`;
-    const q = `%${search}%`;
-    params.push(q, q, q, q);
+    // Try FTS5 first for fast ranked search; fall back to LIKE on any error
+    // (FTS5 may be unavailable on older SQLite builds or the virtual table may not exist yet)
+    try {
+      // Wrap bare query in double-quotes so FTS5 treats it as a phrase; strip quotes the
+      // user may have typed to avoid injection into the FTS MATCH expression.
+      const ftsQuery = `"${search.replace(/"/g, '')}"`;
+      const ftsSql = `
+        SELECT t.*
+        FROM threads t
+        JOIN threads_fts fts ON t.rowid = fts.rowid
+        WHERE threads_fts MATCH ?
+          AND t.account_id = ?
+          AND t.is_archived = 0
+          AND t.is_blocked = 0
+          AND (t.snoozed_until IS NULL OR t.snoozed_until <= ?)
+        ORDER BY t.received_at DESC
+        LIMIT 500
+      `;
+      const rows = await db.select<Array<Record<string, unknown>>>(ftsSql, [ftsQuery, accountId, nowMs]);
+      return rows.map(rowToThread);
+    } catch {
+      // FTS5 unavailable or query error — fall back to LIKE
+      const likeSql = `
+        SELECT * FROM threads
+        WHERE account_id = ?
+          AND is_archived = 0
+          AND is_blocked = 0
+          AND (snoozed_until IS NULL OR snoozed_until <= ?)
+          AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?)
+        ORDER BY received_at DESC
+        LIMIT 500
+      `;
+      const q = `%${search}%`;
+      const rows = await db.select<Array<Record<string, unknown>>>(likeSql, [accountId, nowMs, q, q, q, q]);
+      return rows.map(rowToThread);
+    }
   }
-  sql += ` ORDER BY received_at DESC LIMIT 500`;
-  const rows = await db.select<Array<Record<string, unknown>>>(sql, params);
+
+  // No search — plain inbox query, excluding snoozed threads
+  const sql = `
+    SELECT * FROM threads
+    WHERE account_id = ? AND is_archived = 0 AND is_blocked = 0
+      AND (snoozed_until IS NULL OR snoozed_until <= ?)
+    ORDER BY received_at DESC
+    LIMIT 500
+  `;
+  const rows = await db.select<Array<Record<string, unknown>>>(sql, [accountId, nowMs]);
   return rows.map(rowToThread);
 }
 
