@@ -1,6 +1,6 @@
 // main.ts — Kept inbox UI
 import { type Account, getAccount, startOAuth } from './auth';
-import { type Thread, syncInbox, loadThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread } from './gmail';
 import {
   loadAccountsFromDb, addAccount, removeAccount, getActive, getAccounts, setActive,
   persistActiveChoice, onAccountChange,
@@ -14,11 +14,12 @@ let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
-type ViewName = 'Inbox' | 'Sent' | 'Drafts' | 'Starred';
+type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred';
 let currentView: ViewName = 'Inbox';
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',   icon: '✉' },
+  { name: 'Snoozed', icon: '🕐' },
   { name: 'Sent',    icon: '↗' },
   { name: 'Drafts',  icon: '✏' },
   { name: 'Starred', icon: '★' },
@@ -380,6 +381,8 @@ function switchView(view: ViewName) {
   // Render appropriate content
   if (view === 'Inbox') {
     renderInbox();
+  } else if (view === 'Snoozed') {
+    renderSnoozedView();
   } else {
     renderViewPlaceholder(view);
   }
@@ -388,7 +391,7 @@ function switchView(view: ViewName) {
 function renderViewPlaceholder(view: ViewName) {
   const container = document.getElementById('inbox');
   if (!container) return;
-  const icons: Record<ViewName, string> = { Inbox: '✉', Sent: '↗', Drafts: '✏', Starred: '★' };
+  const icons: Record<ViewName, string> = { Inbox: '✉', Snoozed: '🕐', Sent: '↗', Drafts: '✏', Starred: '★' };
   container.innerHTML = `
     <div class="empty-state">
       <div class="icon" style="color:var(--lavender-accent)">${icons[view]}</div>
@@ -415,7 +418,8 @@ async function syncAndRender() {
   try {
     await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
     threads = await loadThreads(account.id);
-    renderInbox();
+    if (currentView === 'Inbox') renderInbox();
+    else if (currentView === 'Snoozed') await renderSnoozedView();
     setStatus(`Synced — ${threads.length} threads`);
   } catch (e) {
     console.error('Sync error:', e);
@@ -463,24 +467,62 @@ function renderInbox() {
     const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
     return `
     <div class="section-header">${s.label}${badge}</div>
-    ${s.threads.map(threadRow).join('')}
+    ${s.threads.map(t => threadRow(t, false)).join('')}
   `;
   }).join('');
 
   container.innerHTML = html;
 
-  // Wire up row clicks
+  wireThreadRows(container, threads, false);
+}
+
+// ── Render Snoozed view ───────────────────────────────────
+async function renderSnoozedView() {
+  const container = document.getElementById('inbox');
+  if (!container || !account) return;
+
+  const snoozed = await loadSnoozedThreads(account.id);
+
+  if (snoozed.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="icon" style="color:var(--lavender-accent)">🕐</div>
+        <div class="empty-text">No snoozed threads</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Snoozed mail will appear here</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="section-header">Snoozed <span class="section-badge">${snoozed.length}</span></div>
+    ${snoozed.map(t => threadRow(t, true)).join('')}
+  `;
+
+  wireThreadRows(container, snoozed, true);
+}
+
+// ── Wire row events ───────────────────────────────────────
+function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boolean) {
   container.querySelectorAll<HTMLElement>('.thread-row').forEach(row => {
     const id = row.dataset.id!;
-    const t = threads.find(x => x.id === id);
+    const t = list.find(x => x.id === id);
     if (!t) return;
     row.addEventListener('click', e => {
       if ((e.target as HTMLElement).closest('.thread-actions')) return;
       openThread(t);
     });
+    row.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, t, row, isSnoozed);
+    });
     row.querySelector('.btn-read')?.addEventListener('click', e => { e.stopPropagation(); doMarkRead(t, row); });
     row.querySelector('.btn-archive')?.addEventListener('click', e => { e.stopPropagation(); doArchive(t, row); });
     row.querySelector('.btn-block')?.addEventListener('click', e => { e.stopPropagation(); doBlock(t, row); });
+    if (isSnoozed) {
+      row.querySelector('.btn-unsnooze')?.addEventListener('click', e => { e.stopPropagation(); doUnsnooze(t, row); });
+    } else {
+      row.querySelector('.btn-snooze')?.addEventListener('click', e => { e.stopPropagation(); openSnoozePicker(t, row); });
+    }
   });
 }
 
@@ -507,13 +549,31 @@ function avatarHtml(t: Thread): string {
   }</div>`;
 }
 
-function threadRow(t: Thread): string {
+function threadRow(t: Thread, isSnoozed: boolean): string {
   const date = formatDate(t.receivedAt);
   const sender = t.senderName || t.senderEmail;
   const attachment = t.hasAttachment ? `<span class="attachment-icon" title="Has attachment">📎</span>` : '';
   const dot = `<span class="unread-dot${t.isUnread ? ' filled' : ''}"></span>`;
+
+  // Clock indicator for snoozed threads
+  const clockIndicator = t.snoozedUntil
+    ? `<span class="snooze-indicator" title="Snoozed until ${formatDate(t.snoozedUntil)}">🕐 ${formatDate(t.snoozedUntil)}</span>`
+    : '';
+
+  const actionsHtml = isSnoozed
+    ? `<div class="thread-actions">
+         <button class="btn-action btn-unsnooze" title="Wake up now">↑</button>
+         <button class="btn-action btn-archive" title="Archive">⬇</button>
+       </div>`
+    : `<div class="thread-actions">
+         <button class="btn-action btn-snooze" title="Snooze">🕐</button>
+         <button class="btn-action btn-read" title="Mark read">✓</button>
+         <button class="btn-action btn-archive" title="Archive">⬇</button>
+         <button class="btn-action danger btn-block" title="Block sender">⊘</button>
+       </div>`;
+
   return `
-    <div class="thread-row${t.isUnread ? ' unread' : ''}" data-id="${t.id}">
+    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}" data-id="${t.id}">
       ${dot}
       ${avatarHtml(t)}
       <div class="thread-mid${attachment ? ' has-attachment' : ''}">
@@ -522,13 +582,9 @@ function threadRow(t: Thread): string {
           <span class="thread-date">${date}</span>
         </div>
         <div class="thread-subject-line">${esc(t.subject)}</div>
-        <div class="thread-preview-line">${esc(t.snippet)}</div>
+        <div class="thread-preview-line">${clockIndicator || esc(t.snippet)}</div>
       </div>
-      <div class="thread-actions">
-        <button class="btn-action btn-read" title="Mark read">✓</button>
-        <button class="btn-action btn-archive" title="Archive">⬇</button>
-        <button class="btn-action danger btn-block" title="Block sender">⊘</button>
-      </div>
+      ${actionsHtml}
     </div>`;
 }
 
@@ -574,6 +630,205 @@ async function doBlock(t: Thread, _row: HTMLElement) {
   // Remove all rows from this sender
   threads = threads.filter(x => x.senderEmail !== t.senderEmail);
   renderInbox();
+}
+
+async function doUnsnooze(t: Thread, row: HTMLElement) {
+  await unsnoozeThread(t);
+  t.snoozedUntil = null;
+  row.remove();
+  threads = threads.filter(x => x.id !== t.id);
+  // Refresh inbox count
+  if (account) {
+    threads = await loadThreads(account.id);
+  }
+}
+
+// ── Context menu ──────────────────────────────────────────
+function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSnoozed: boolean) {
+  // Remove any existing context menus
+  document.getElementById('kept-ctx-menu')?.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'kept-ctx-menu';
+  menu.className = 'ctx-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  const items: Array<{ label: string; action: () => void }> = [];
+
+  if (!isSnoozed) {
+    items.push({ label: '🕐  Snooze…', action: () => { menu.remove(); openSnoozePicker(t, row); } });
+  } else {
+    items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row); } });
+  }
+  items.push({ label: '✓  Mark as read', action: () => { menu.remove(); doMarkRead(t, row); } });
+  items.push({ label: '⬇  Archive', action: () => { menu.remove(); doArchive(t, row); } });
+  items.push({ label: '⊘  Block sender', action: () => { menu.remove(); doBlock(t, row); } });
+
+  menu.innerHTML = items.map((item, i) =>
+    `<button class="ctx-menu-item" data-idx="${i}">${item.label}</button>`
+  ).join('');
+
+  menu.querySelectorAll<HTMLButtonElement>('.ctx-menu-item').forEach(btn => {
+    btn.addEventListener('click', () => items[parseInt(btn.dataset.idx!)]?.action());
+  });
+
+  document.body.appendChild(menu);
+
+  // Ensure menu stays within viewport
+  requestAnimationFrame(() => {
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 8}px`;
+    if (rect.bottom > window.innerHeight) menu.style.top = `${y - rect.height}px`;
+  });
+
+  // Dismiss on outside click or Escape
+  function dismiss(e: MouseEvent | KeyboardEvent) {
+    if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+    if (e instanceof MouseEvent && menu.contains(e.target as Node)) return;
+    menu.remove();
+    document.removeEventListener('click', dismiss as EventListener);
+    document.removeEventListener('keydown', dismiss as EventListener);
+  }
+  setTimeout(() => {
+    document.addEventListener('click', dismiss as EventListener);
+    document.addEventListener('keydown', dismiss as EventListener);
+  }, 0);
+}
+
+// ── Snooze picker ─────────────────────────────────────────
+function snoozePresets(): Array<{ label: string; untilMs: () => number }> {
+  const now = new Date();
+
+  // +3h
+  const plus3h = () => Date.now() + 3 * 60 * 60 * 1000;
+
+  // Next day 9am
+  const nextDay9am = () => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0, 0, 0);
+    return d.getTime();
+  };
+
+  // Next Saturday 9am
+  const nextSat9am = () => {
+    const d = new Date(now);
+    const daysUntilSat = (6 - d.getDay() + 7) % 7 || 7; // always future Saturday
+    d.setDate(d.getDate() + daysUntilSat);
+    d.setHours(9, 0, 0, 0);
+    return d.getTime();
+  };
+
+  // Next Monday 9am
+  const nextMon9am = () => {
+    const d = new Date(now);
+    const daysUntilMon = (1 - d.getDay() + 7) % 7 || 7; // always future Monday
+    d.setDate(d.getDate() + daysUntilMon);
+    d.setHours(9, 0, 0, 0);
+    return d.getTime();
+  };
+
+  return [
+    { label: 'In 3 hours', untilMs: plus3h },
+    { label: 'Tomorrow 9am', untilMs: nextDay9am },
+    { label: 'Saturday 9am', untilMs: nextSat9am },
+    { label: 'Monday 9am', untilMs: nextMon9am },
+  ];
+}
+
+function openSnoozePicker(t: Thread, row: HTMLElement) {
+  // Remove existing picker
+  document.getElementById('snooze-picker')?.remove();
+
+  const presets = snoozePresets();
+  const now = new Date();
+  // Default custom datetime = tomorrow 9am
+  const defaultDt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+  const dtLocal = toDatetimeLocal(defaultDt);
+
+  const picker = document.createElement('div');
+  picker.id = 'snooze-picker';
+  picker.className = 'snooze-picker';
+  picker.innerHTML = `
+    <div class="snooze-picker-header">
+      <span>Snooze until…</span>
+      <button class="btn-icon snooze-picker-close" aria-label="Close">✕</button>
+    </div>
+    <div class="snooze-presets">
+      ${presets.map((p, i) => `
+        <button class="snooze-preset-btn" data-idx="${i}">
+          <span class="snooze-preset-label">${p.label}</span>
+          <span class="snooze-preset-time">${formatDate(p.untilMs())}</span>
+        </button>`).join('')}
+    </div>
+    <div class="snooze-custom">
+      <label class="snooze-custom-label">Custom date &amp; time</label>
+      <input type="datetime-local" id="snooze-dt" class="snooze-dt-input" value="${dtLocal}" />
+      <div id="snooze-dt-error" class="snooze-dt-error" style="display:none">Pick a future time</div>
+      <button class="btn-primary snooze-confirm-btn" id="snooze-confirm">Snooze</button>
+    </div>
+  `;
+
+  document.body.appendChild(picker);
+
+  // Position near the row
+  const rowRect = row.getBoundingClientRect();
+  picker.style.top = `${Math.min(rowRect.bottom + 4, window.innerHeight - 320)}px`;
+  picker.style.left = `${Math.max(8, Math.min(rowRect.left, window.innerWidth - 280))}px`;
+
+  picker.querySelector('.snooze-picker-close')!.addEventListener('click', () => picker.remove());
+
+  // Preset buttons
+  picker.querySelectorAll<HTMLButtonElement>('.snooze-preset-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.idx!);
+      const untilMs = presets[idx].untilMs();
+      await doSnooze(t, row, untilMs);
+      picker.remove();
+    });
+  });
+
+  // Custom datetime confirm
+  document.getElementById('snooze-confirm')!.addEventListener('click', async () => {
+    const input = document.getElementById('snooze-dt') as HTMLInputElement;
+    const errorEl = document.getElementById('snooze-dt-error')!;
+    const val = input.value;
+    if (!val) { errorEl.style.display = ''; return; }
+    const chosen = new Date(val).getTime();
+    if (chosen <= Date.now()) {
+      errorEl.style.display = '';
+      errorEl.textContent = 'Pick a future time';
+      return;
+    }
+    errorEl.style.display = 'none';
+    await doSnooze(t, row, chosen);
+    picker.remove();
+  });
+
+  // Dismiss on outside click or Escape
+  function dismiss(e: MouseEvent | KeyboardEvent) {
+    if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+    if (e instanceof MouseEvent && picker.contains(e.target as Node)) return;
+    picker.remove();
+    document.removeEventListener('click', dismiss as EventListener);
+    document.removeEventListener('keydown', dismiss as EventListener);
+  }
+  setTimeout(() => {
+    document.addEventListener('click', dismiss as EventListener);
+    document.addEventListener('keydown', dismiss as EventListener);
+  }, 0);
+}
+
+async function doSnooze(t: Thread, row: HTMLElement, untilMs: number) {
+  await snoozeThread(t, untilMs);
+  t.snoozedUntil = untilMs;
+  // Remove from inbox immediately
+  row.classList.add('snoozing-out');
+  setTimeout(() => {
+    row.remove();
+    threads = threads.filter(x => x.id !== t.id);
+  }, 250);
+  setStatus(`Snoozed until ${formatDate(untilMs)}`);
+  setTimeout(() => setStatus(''), 4000);
 }
 
 // ── Thread reader ─────────────────────────────────────────
@@ -755,6 +1010,12 @@ function formatDate(ms: number): string {
   if (d >= yesterday) return 'Yesterday';
   if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/** Convert Date to "YYYY-MM-DDTHH:MM" string for datetime-local input */
+function toDatetimeLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // ── Start ─────────────────────────────────────────────────

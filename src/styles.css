@@ -539,6 +539,144 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Snoozed row indicator ──────────────────────────────── */
+.snoozed-row { opacity: 0.8; }
+.snooze-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--lavender-accent);
+  font-weight: 500;
+}
+
+/* Snooze-out animation (thread disappears from inbox) */
+@keyframes snooze-fade-out {
+  from { opacity: 1; transform: translateX(0); max-height: 80px; }
+  to   { opacity: 0; transform: translateX(12px); max-height: 0; padding: 0; border: none; }
+}
+.snoozing-out {
+  animation: snooze-fade-out 0.25s ease forwards;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ── Context menu ───────────────────────────────────────── */
+.ctx-menu {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  min-width: 180px;
+  padding: 4px 0;
+}
+
+.ctx-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-family: var(--font);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.08s;
+}
+.ctx-menu-item:hover { background: var(--surface); }
+
+/* ── Snooze picker ──────────────────────────────────────── */
+.snooze-picker {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg);
+  border: 1px solid var(--lavender-border);
+  border-radius: 8px;
+  box-shadow: 0 6px 28px rgba(124,111,212,0.14);
+  width: 268px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.snooze-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lavender-text);
+}
+
+.snooze-presets { padding: 6px 0; }
+
+.snooze-preset-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.08s;
+  gap: 8px;
+}
+.snooze-preset-btn:hover { background: var(--lavender-tint); }
+
+.snooze-preset-label { flex: 1; }
+.snooze-preset-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.snooze-custom {
+  border-top: 1px solid var(--border);
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.snooze-custom-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.snooze-dt-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+.snooze-dt-input:focus { border-color: var(--lavender-accent); }
+
+.snooze-dt-error {
+  font-size: 11px;
+  color: #c0392b;
+}
+
+.snooze-confirm-btn {
+  align-self: flex-end;
+}
+
 /* ── Status bar ─────────────────────────────────────────── */
 .statusbar {
   height: 18px;
