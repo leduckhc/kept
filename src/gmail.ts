@@ -20,6 +20,7 @@ export interface Thread {
   snoozeLabel: string | null;
   messageCount: number | null;
   label: string;      // KPT-023: 'INBOX' | 'SENT' | 'DRAFT' | 'STARRED'
+  accountId: string;  // KPT-037: which account this thread belongs to
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -393,6 +394,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     snoozeLabel: (r.snooze_label as string | null) ?? null,
     messageCount: (r.message_count as number | null) ?? null,
     label: (r.label as string) ?? 'INBOX',
+    accountId: (r.account_id as string) ?? '',
   };
 }
 
