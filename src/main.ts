@@ -1,6 +1,7 @@
 // main.ts — Kept inbox UI
 import { type Account, getAccount, startOAuth } from './auth';
-import { type Thread, syncInbox, loadThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
+import { type Thread, syncInbox, loadThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, hasSyncedBefore } from './gmail';
+import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 
 // ── State ─────────────────────────────────────────────────
 let account: Account | null = null;
@@ -135,6 +136,8 @@ async function refresh() {
   if (!account) return;
   threads = await loadThreads(account.id);
   renderInbox();
+  // Request notification permission early (non-blocking)
+  ensureNotificationPermission().catch(() => {});
   // Always sync on boot to get fresh data
   syncAndRender();
 }
@@ -146,10 +149,28 @@ async function syncAndRender() {
   const btn = document.getElementById('btn-sync');
   if (btn) btn.style.opacity = '0.4';
   try {
+    // Capture thread IDs known before sync to detect new arrivals
+    const preSync = await loadThreads(account.id);
+    const knownIds = new Set(preSync.map(t => t.id));
+    // Gate: only send notifications on second+ sync (historyId already set)
+    const isSubsequentSync = await hasSyncedBefore(account.id);
+
     await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
     threads = await loadThreads(account.id);
     renderInbox();
     setStatus(`Synced — ${threads.length} threads`);
+
+    // Fire notifications for newly-arrived threads (not first sync)
+    if (isSubsequentSync) {
+      const newThreads = threads.filter(t => !knownIds.has(t.id));
+      if (newThreads.length > 0) {
+        notifyNewThreads(newThreads.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
+      }
+    }
+
+    // Update tray badge / dock badge with total unread count
+    const unreadCount = threads.filter(t => t.isUnread).length;
+    updateBadge(unreadCount).catch(() => {});
   } catch (e) {
     console.error('Sync error:', e);
     const msg = e instanceof Error ? e.message : String(e);

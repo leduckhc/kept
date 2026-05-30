@@ -504,3 +504,10 @@ function startOf(unit: 'day' | 'week' | 'month', d: Date): Date {
   if (unit === 'month') r.setDate(1);
   return r;
 }
+
+/** Returns true if this account has completed at least one sync (historyId is set).
+ * Used to gate notifications: on the very first sync we don't spam. */
+export async function hasSyncedBefore(accountId: string): Promise<boolean> {
+  const historyId = await getSetting(accountId, 'historyId');
+  return historyId !== null;
+}
