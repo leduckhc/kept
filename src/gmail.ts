@@ -21,6 +21,7 @@ export interface Thread {
   messageCount: number | null;
   label: string;      // KPT-023: 'INBOX' | 'SENT' | 'DRAFT' | 'STARRED'
   accountId: string;  // KPT-037: which account this thread belongs to
+  isMuted: boolean;   // KPT-040: suppressed from inbox permanently
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -216,9 +217,9 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   const isStarred = last.labelIds.includes('STARRED') ? 1 : 0;
   const newMessageCount = msgs.length;
 
-  // Check existing snooze state and message count so we can auto-unsnooze on new messages
-  const existing = await db.select<Array<{ snoozed_until: number | null; snooze_label: string | null; message_count: number | null }>>(
-    'SELECT snoozed_until, snooze_label, message_count FROM threads WHERE id = ?',
+  // Check existing snooze/mute state and message count so we can auto-unsnooze on new messages
+  const existing = await db.select<Array<{ snoozed_until: number | null; snooze_label: string | null; message_count: number | null; is_muted: number | null }>>(
+    'SELECT snoozed_until, snooze_label, message_count, is_muted FROM threads WHERE id = ?',
     [gmailThreadId]
   );
   const row = existing[0] ?? null;
@@ -230,11 +231,12 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   }
   const snoozedUntil = clearSnooze ? null : (row?.snoozed_until ?? null);
   const snoozeLabel = clearSnooze ? null : (row?.snooze_label ?? null);
+  const isMuted = row?.is_muted ?? 0;
 
   await db.execute(
     `INSERT INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, label, message_count, snoozed_until, snooze_label)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, label, message_count, snoozed_until, snooze_label, is_muted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id    = excluded.account_id,
        subject       = excluded.subject,
@@ -249,8 +251,9 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
        label          = excluded.label,
        message_count  = excluded.message_count,
        snoozed_until  = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snoozed_until, excluded.snoozed_until) END,
-       snooze_label   = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snooze_label, excluded.snooze_label) END`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, label, newMessageCount, snoozedUntil, snoozeLabel]
+       snooze_label   = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snooze_label, excluded.snooze_label) END,
+       is_muted       = COALESCE(threads.is_muted, excluded.is_muted)`,
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, label, newMessageCount, snoozedUntil, snoozeLabel, isMuted]
   );
 }
 
@@ -290,6 +293,7 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
             AND t.is_starred = 1
             AND t.is_archived = 0
             AND t.is_blocked = 0
+            AND (t.is_muted IS NULL OR t.is_muted = 0)
             AND (t.snoozed_until IS NULL OR t.snoozed_until <= ?)
           ORDER BY t.received_at DESC
           LIMIT 500
@@ -305,6 +309,7 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
             AND t.label = ?
             AND t.is_archived = 0
             AND t.is_blocked = 0
+            AND (t.is_muted IS NULL OR t.is_muted = 0)
             AND (t.snoozed_until IS NULL OR t.snoozed_until <= ?)
           ORDER BY t.received_at DESC
           LIMIT 500
@@ -319,11 +324,11 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
       const likeParams: (string | number)[] = [accountId];
       if (activeLabel === 'STARRED') {
         likeSql = `SELECT * FROM threads WHERE account_id = ? AND is_starred = 1 AND is_archived = 0 AND is_blocked = 0
-                   AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+                   AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
         likeParams.push(nowMs);
       } else {
         likeSql = `SELECT * FROM threads WHERE account_id = ? AND label = ? AND is_archived = 0 AND is_blocked = 0
-                   AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+                   AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
         likeParams.push(activeLabel, nowMs);
       }
       likeSql += ` AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?) ORDER BY received_at DESC LIMIT 500`;
@@ -339,11 +344,11 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
   const params: (string | number)[] = [accountId];
   if (activeLabel === 'STARRED') {
     sql = `SELECT * FROM threads WHERE account_id = ? AND is_starred = 1 AND is_archived = 0 AND is_blocked = 0
-           AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
+           AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
     params.push(nowMs);
   } else {
     sql = `SELECT * FROM threads WHERE account_id = ? AND label = ? AND is_archived = 0 AND is_blocked = 0
-           AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
+           AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
     params.push(activeLabel, nowMs);
   }
   const rows = await db.select<Array<Record<string, unknown>>>(sql, params);
@@ -405,6 +410,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     messageCount: (r.message_count as number | null) ?? null,
     label: (r.label as string) ?? 'INBOX',
     accountId: (r.account_id as string) ?? '',
+    isMuted: (r.is_muted as number) === 1,
   };
 }
 
@@ -492,6 +498,18 @@ export async function unsnoozeThread(thread: Thread): Promise<void> {
     'UPDATE threads SET snoozed_until = NULL, snooze_label = NULL WHERE id = ?',
     [thread.id]
   );
+}
+
+export async function muteThread(account: Account, thread: Thread): Promise<void> {
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] });
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_muted = 1 WHERE id = ?', [thread.id]);
+}
+
+export async function unmuteThread(thread: Thread): Promise<void> {
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_muted = 0 WHERE id = ?', [thread.id]);
 }
 
 async function ensureLabel(account: Account, name: string): Promise<string> {

@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, loadRepliedToSenders, markRead, markUnread, archiveThread, unarchiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, loadRepliedToSenders, markRead, markUnread, archiveThread, unarchiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore, muteThread, unmuteThread } from './gmail';
 import { sanitizeEmailHtml } from './sanitize';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
@@ -793,6 +793,7 @@ function showCheatSheet() {
         <tr><td class="kb-key">e</td><td>Archive thread</td></tr>
         <tr><td class="kb-key">s</td><td>Star / unstar thread</td></tr>
         <tr><td class="kb-key">Shift+U</td><td>Mark as unread</td></tr>
+        <tr><td class="kb-key">m</td><td>Mute thread</td></tr>
         <tr><td class="kb-key">r</td><td>Reply</td></tr>
         <tr><td class="kb-key">u</td><td>Back to inbox</td></tr>
         <tr><td class="kb-key">?</td><td>Show/hide shortcuts</td></tr>
@@ -870,6 +871,19 @@ function registerKeyboardShortcuts() {
         if (!t) break;
         const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
         if (row) await doMarkUnread(t, row);
+        break;
+      }
+
+      case 'm': {
+        if (!selectedThreadId || !account) break;
+        const t = threads.find(x => x.id === selectedThreadId);
+        if (!t) break;
+        const ids = getVisibleThreadIds();
+        const idx = ids.indexOf(selectedThreadId);
+        const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        if (row) await doMute(t, row);
+        selectThread(nextId);
         break;
       }
 
@@ -1395,6 +1409,30 @@ async function doUnsnooze(t: Thread, row: HTMLElement) {
   }
 }
 
+async function doMute(t: Thread, row: HTMLElement) {
+  const acct = accountFor(t);
+  if (!acct) return;
+  try {
+    await muteThread(acct, t);
+    t.isMuted = true;
+    row.remove();
+    threads = threads.filter(x => x.id !== t.id);
+    showUndoToast('Thread muted', async () => {
+      await unmuteThread(t);
+      t.isMuted = false;
+      if (unifiedMode) {
+        threads = await loadUnifiedThreads();
+      } else {
+        threads = await loadThreads(acct.id);
+      }
+      renderInbox();
+    });
+  } catch (e) {
+    console.error('Mute failed:', e);
+    setStatus('Mute failed');
+  }
+}
+
 // ── Context menu ──────────────────────────────────────────
 function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSnoozed: boolean) {
   document.getElementById('kept-ctx-menu')?.remove();
@@ -1418,6 +1456,17 @@ function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSn
   items.push('divider');
   items.push({ label: '📂  Archive', action: () => { menu.remove(); doArchive(t, row); } });
   items.push({ label: '✓  Mark read', action: () => { menu.remove(); doMarkRead(t, row); } });
+  items.push({ label: t.isMuted ? '🔔  Unmute thread' : '🔇  Mute thread', action: () => {
+    menu.remove();
+    if (t.isMuted) {
+      unmuteThread(t).then(() => {
+        t.isMuted = false;
+        renderInbox();
+      }).catch(() => setStatus('Unmute failed'));
+    } else {
+      doMute(t, row);
+    }
+  }});
   items.push('divider');
   items.push({ label: '🚫  Block sender', action: () => { menu.remove(); doBlock(t, row); }, cls: 'ctx-menu-item--danger' });
 

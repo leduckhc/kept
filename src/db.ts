@@ -132,4 +132,7 @@ async function migrate(db: Database): Promise<void> {
 
   // KPT-029: star toggle
   await db.execute(`ALTER TABLE threads ADD COLUMN is_starred INTEGER DEFAULT 0`).catch(() => {});
+
+  // KPT-040: thread mute
+  await db.execute(`ALTER TABLE threads ADD COLUMN is_muted INTEGER DEFAULT 0`).catch(() => {});
 }
