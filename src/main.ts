@@ -973,7 +973,7 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
           <span class="thread-sender">${esc(sender)}</span>
           <span class="thread-date">${date}</span>
         </div>
-        <div class="thread-subject-line">${esc(t.subject)}</div>
+        <div class="thread-subject-line">${esc(t.subject)}${t.messageCount && t.messageCount > 1 ? `<span class="thread-count">${t.messageCount}</span>` : ''}</div>
         <div class="thread-preview-line">${clockIndicator || esc(t.snippet)}</div>
       </div>
       ${actionsHtml}
@@ -1632,19 +1632,41 @@ async function openThread(t: Thread) {
     lastMessageId = (result as any).lastMessageId ?? null;
     const bodyEl = reader.querySelector('.reader-body')!;
     bodyEl.innerHTML = '';
-    (bodies as any[]).forEach((m: any, idx: number) => {
-      if (idx > 0) {
-        const hr = document.createElement('hr');
-        hr.style.cssText = 'border:none; border-top:1px solid var(--border); margin:12px 0;';
-        bodyEl.appendChild(hr);
+    const msgs = bodies as any[];
+    const isThread = msgs.length > 1;
+
+    msgs.forEach((m: any, idx: number) => {
+      const isLast = idx === msgs.length - 1;
+      const msgContainer = document.createElement('div');
+      msgContainer.className = 'thread-message' + (!isLast && isThread ? ' thread-message-collapsed' : '');
+
+      // Parse sender name from "From" header
+      const senderName = m.from.replace(/<.*>/, '').trim() || m.from;
+
+      // Collapsed header bar (always present for non-last messages in threads)
+      if (isThread && !isLast) {
+        const headerBar = document.createElement('div');
+        headerBar.className = 'thread-message-header';
+        const preview = (m.body || '').slice(0, 80).replace(/\n/g, ' ');
+        headerBar.innerHTML = `
+          <span class="thread-msg-sender">${esc(senderName)}</span>
+          <span class="thread-msg-preview">${esc(preview)}</span>
+          <span class="thread-msg-date">${formatDate(m.receivedAt)}</span>
+          <span class="thread-msg-chevron">›</span>`;
+        headerBar.addEventListener('click', () => {
+          msgContainer.classList.toggle('thread-message-collapsed');
+        });
+        msgContainer.appendChild(headerBar);
       }
-      const msgDiv = document.createElement('div');
-      msgDiv.style.marginBottom = '20px';
+
+      // Message content wrapper
+      const contentWrap = document.createElement('div');
+      contentWrap.className = 'thread-message-content';
 
       const metaDiv = document.createElement('div');
-      metaDiv.style.cssText = 'font-size:12px; color:var(--text-muted); margin-bottom:6px;';
+      metaDiv.className = 'thread-msg-meta';
       metaDiv.textContent = `${m.from} · ${formatDate(m.receivedAt)}`;
-      msgDiv.appendChild(metaDiv);
+      contentWrap.appendChild(metaDiv);
 
       const rawHtml: string | null = (m as any).htmlBody ?? null;
       const sanitized = rawHtml ? sanitizeEmailHtml(rawHtml) : '';
@@ -1692,14 +1714,14 @@ async function openThread(t: Thread) {
           if (blocked && blocked.length > 0) loadImgBtn.style.display = 'inline-block';
         });
 
-        msgDiv.appendChild(iframe);
-        msgDiv.appendChild(loadImgBtn);
+        contentWrap.appendChild(iframe);
+        contentWrap.appendChild(loadImgBtn);
       } else {
         // Fallback: plain text (no HTML, or HTML exceeded 200 KB cap)
         const bodyDiv = document.createElement('div');
         bodyDiv.style.cssText = 'white-space:pre-wrap; font-size:14px;';
         bodyDiv.textContent = m.body.slice(0, 20000);
-        msgDiv.appendChild(bodyDiv);
+        contentWrap.appendChild(bodyDiv);
 
         if (m.body.length > 20000) {
           const showMore = document.createElement('button');
@@ -1709,12 +1731,16 @@ async function openThread(t: Thread) {
             bodyDiv.textContent = m.body;
             showMore.remove();
           });
-          msgDiv.appendChild(showMore);
+          contentWrap.appendChild(showMore);
         }
       }
 
-      bodyEl.appendChild(msgDiv);
+      msgContainer.appendChild(contentWrap);
+      bodyEl.appendChild(msgContainer);
     });
+
+    // Auto-scroll to bottom to show latest message
+    bodyEl.scrollTop = bodyEl.scrollHeight;
   } catch {
     reader.querySelector('.reader-body')!.innerHTML = '<p style="color:var(--text-muted)">Could not load messages.</p>';
   }

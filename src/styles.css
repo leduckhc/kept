@@ -481,6 +481,86 @@ body {
   gap: 8px;
 }
 
+/* ── Thread conversation view ──────────────────────────────── */
+.thread-message {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.thread-message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 150ms;
+}
+.thread-message-header:hover {
+  background: var(--hover, rgba(0,0,0,0.03));
+}
+.thread-msg-sender {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.thread-msg-preview {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.thread-msg-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.thread-msg-chevron {
+  font-size: 16px;
+  color: var(--text-muted);
+  transition: transform 200ms;
+  flex-shrink: 0;
+}
+.thread-message-collapsed .thread-msg-chevron {
+  transform: rotate(0deg);
+}
+.thread-message:not(.thread-message-collapsed) .thread-msg-chevron {
+  transform: rotate(90deg);
+}
+.thread-message-content {
+  padding: 12px 16px;
+  transition: max-height 200ms ease, opacity 150ms ease, padding 150ms ease;
+  overflow: hidden;
+}
+.thread-message-collapsed .thread-message-content {
+  max-height: 0;
+  opacity: 0;
+  padding: 0 16px;
+}
+.thread-msg-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+/* Message count badge in inbox rows */
+.thread-count {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--border);
+  border-radius: 8px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* ── Show more button ───────────────────────────────────── */
 .btn-show-more {
   display: block;
