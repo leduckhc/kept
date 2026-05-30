@@ -8,7 +8,15 @@ let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+type ViewName = 'Inbox' | 'Sent' | 'Drafts' | 'Starred';
+let currentView: ViewName = 'Inbox';
 
+const VIEWS: Array<{ name: ViewName; icon: string }> = [
+  { name: 'Inbox',   icon: '✉' },
+  { name: 'Sent',    icon: '↗' },
+  { name: 'Drafts',  icon: '✏' },
+  { name: 'Starred', icon: '★' },
+];
 function setAccount(a: Account) { account = a; }
 
 
@@ -77,11 +85,23 @@ function showShell() {
   document.getElementById('app')!.innerHTML = `
     <div id="app-shell">
       <div class="toolbar">
-        <span class="toolbar-title">Kept</span>
+        <button class="title-nav" id="title-nav" aria-haspopup="listbox" aria-expanded="false">
+          <span class="title-nav-label">${currentView}</span>
+          <span class="title-nav-chevron">&#x25BE;</span>
+        </button>
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
         <button class="btn-icon" id="btn-theme" title="Toggle theme">◑</button>
         <button class="btn-icon" id="btn-signout" title="Sign out" style="font-size:13px">Sign out</button>
+      </div>
+      <div class="nav-tray-wrapper">
+        <div class="nav-tray" id="nav-tray" role="listbox">
+          ${VIEWS.map(v => `
+            <button class="nav-tray-item${v.name === currentView ? ' active' : ''}" data-view="${v.name}" role="option" aria-selected="${v.name === currentView}">
+              <span class="nav-tray-icon">${v.icon}</span>
+              <span class="nav-tray-label">${v.name}</span>
+            </button>`).join('')}
+        </div>
       </div>
       <div class="inbox" id="inbox"></div>
       <div class="statusbar">
@@ -90,6 +110,50 @@ function showShell() {
       </div>
     </div>
   `;
+
+  // Title-nav toggle
+  const titleNavBtn = document.getElementById('title-nav') as HTMLButtonElement;
+  const navTray = document.getElementById('nav-tray') as HTMLElement;
+
+  function openTray() {
+    titleNavBtn.classList.add('open');
+    navTray.classList.add('open');
+    titleNavBtn.setAttribute('aria-expanded', 'true');
+    // backdrop
+    const backdrop = document.createElement('div');
+    backdrop.className = 'nav-tray-backdrop';
+    backdrop.id = 'nav-tray-backdrop';
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('click', closeTray);
+  }
+
+  function closeTray() {
+    titleNavBtn.classList.remove('open');
+    navTray.classList.remove('open');
+    titleNavBtn.setAttribute('aria-expanded', 'false');
+    document.getElementById('nav-tray-backdrop')?.remove();
+  }
+
+  titleNavBtn.addEventListener('click', () => {
+    if (navTray.classList.contains('open')) closeTray();
+    else openTray();
+  });
+
+  // Tray item selection
+  navTray.querySelectorAll<HTMLButtonElement>('.nav-tray-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const view = item.dataset.view as ViewName;
+      closeTray();
+      switchView(view);
+    });
+  });
+
+  // Swipe-up to dismiss tray
+  let touchStartY = 0;
+  navTray.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  navTray.addEventListener('touchmove', e => {
+    if (e.touches[0].clientY - touchStartY < -30) closeTray();
+  }, { passive: true });
 
   document.getElementById('btn-sync')!.addEventListener('click', () => syncAndRender());
   document.getElementById('btn-theme')!.addEventListener('click', () => {
@@ -128,6 +192,38 @@ function showShell() {
   });
   searchEl.addEventListener('focus', () => searchEl.classList.add('expanded'));
   searchEl.addEventListener('blur', () => { if (!searchEl.value) searchEl.classList.remove('expanded'); });
+}
+
+// ── View switching ────────────────────────────────────────
+function switchView(view: ViewName) {
+  currentView = view;
+  // Update title label
+  const label = document.querySelector('.title-nav-label');
+  if (label) label.textContent = view;
+  // Update tray items
+  document.querySelectorAll<HTMLButtonElement>('.nav-tray-item').forEach(item => {
+    const isActive = item.dataset.view === view;
+    item.classList.toggle('active', isActive);
+    item.setAttribute('aria-selected', String(isActive));
+  });
+  // Render appropriate content
+  if (view === 'Inbox') {
+    renderInbox();
+  } else {
+    renderViewPlaceholder(view);
+  }
+}
+
+function renderViewPlaceholder(view: ViewName) {
+  const container = document.getElementById('inbox');
+  if (!container) return;
+  const icons: Record<ViewName, string> = { Inbox: '✉', Sent: '↗', Drafts: '✏', Starred: '★' };
+  container.innerHTML = `
+    <div class="empty-state">
+      <div class="icon" style="color:var(--lavender-accent)">${icons[view]}</div>
+      <div class="empty-text">${view}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Coming soon</div>
+    </div>`;
 }
 
 // ── Sync ──────────────────────────────────────────────────
