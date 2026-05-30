@@ -771,8 +771,11 @@ function registerKeyboardShortcuts() {
       }
 
       case 'u': {
-        const overlay = document.querySelector<HTMLElement>('.reader-overlay');
-        if (overlay) overlay.remove();
+        const readerEl = document.querySelector<HTMLElement>('.reader-fullpage');
+        if (readerEl) {
+          readerEl.remove();
+          document.getElementById('app-shell')?.classList.remove('reader-open');
+        }
         break;
       }
 
@@ -785,8 +788,11 @@ function registerKeyboardShortcuts() {
       case 'Escape': {
         const sheet = document.getElementById('kb-cheatsheet');
         if (sheet) { sheet.remove(); break; }
-        const overlay = document.querySelector<HTMLElement>('.reader-overlay');
-        if (overlay) overlay.remove();
+        const readerEl = document.querySelector<HTMLElement>('.reader-fullpage');
+        if (readerEl) {
+          readerEl.remove();
+          document.getElementById('app-shell')?.classList.remove('reader-open');
+        }
         break;
       }
     }
@@ -1575,32 +1581,46 @@ async function openThread(t: Thread) {
   const draftKey = 'draft-' + t.gmailThreadId;
   const savedDraft = localStorage.getItem(draftKey);
 
-  const overlay = document.createElement('div');
-  overlay.className = 'reader-overlay';
-  overlay.innerHTML = `
-    <div class="reader-panel">
-      <div class="reader-header">
-        <div class="reader-subject">${esc(t.subject)}</div>
-        <button class="btn-icon" id="reader-close">✕</button>
+  // Full-page reader — hide inbox, show reader inside shell
+  const shell = document.getElementById('app-shell')!;
+  shell.classList.add('reader-open');
+
+  const reader = document.createElement('div');
+  reader.className = 'reader-fullpage';
+  reader.innerHTML = `
+    <div class="reader-header">
+      <button class="btn-icon reader-back" id="reader-back" title="Back to inbox">←</button>
+      <div class="reader-subject">${esc(t.subject)}</div>
+      <div class="reader-actions-header">
+        <button class="btn-icon" id="btn-archive-reader" title="Archive">🗑</button>
       </div>
-      <div class="reader-body"><div class="spinner"></div></div>
-      <div class="reader-footer">
-        <button class="btn-primary" id="btn-reply"${savedDraft ? ' style="display:none"' : ''}>Reply</button>
-        <button class="btn-secondary" id="btn-archive-reader">Archive</button>
-        <button class="btn-secondary danger" id="btn-block-reader">Block sender</button>
-        <div class="compose-area" id="compose" style="display:${savedDraft ? 'flex' : 'none'}; flex:1; flex-direction:column; gap:8px;">
-          <textarea class="compose-textarea" id="compose-body" placeholder="Write your reply…">${savedDraft ? esc(savedDraft) : ''}</textarea>
-          <div style="display:flex; gap:8px;">
-            <button class="btn-primary" id="btn-send">Send</button>
-            <button class="btn-secondary" id="btn-cancel-compose">Cancel</button>
-          </div>
+    </div>
+    <div class="reader-body"><div class="spinner"></div></div>
+    <div class="reader-footer">
+      <button class="btn-primary" id="btn-reply"${savedDraft ? ' style="display:none"' : ''}>Reply</button>
+      <button class="btn-secondary danger" id="btn-block-reader">Block sender</button>
+      <div class="compose-area" id="compose" style="display:${savedDraft ? 'flex' : 'none'}; flex:1; flex-direction:column; gap:8px;">
+        <textarea class="compose-textarea" id="compose-body" placeholder="Write your reply…">${savedDraft ? esc(savedDraft) : ''}</textarea>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-primary" id="btn-send">Send</button>
+          <button class="btn-secondary" id="btn-cancel-compose">Cancel</button>
         </div>
       </div>
     </div>`;
-  document.body.appendChild(overlay);
+  shell.appendChild(reader);
 
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  document.getElementById('reader-close')!.addEventListener('click', () => overlay.remove());
+  function closeReader() {
+    reader.remove();
+    shell.classList.remove('reader-open');
+  }
+
+  document.getElementById('reader-back')!.addEventListener('click', closeReader);
+
+  // Escape key closes reader
+  function handleEsc(e: KeyboardEvent) {
+    if (e.key === 'Escape') { closeReader(); document.removeEventListener('keydown', handleEsc); }
+  }
+  document.addEventListener('keydown', handleEsc);
 
   // lastMessageId for In-Reply-To header
   let lastMessageId: string | null = null;
@@ -1610,7 +1630,7 @@ async function openThread(t: Thread) {
     const result = await fetchMessageBody(account, t.gmailThreadId);
     const bodies = (result as any).bodies ?? (result as any).messages ?? result;
     lastMessageId = (result as any).lastMessageId ?? null;
-    const bodyEl = overlay.querySelector('.reader-body')!;
+    const bodyEl = reader.querySelector('.reader-body')!;
     bodyEl.innerHTML = '';
     (bodies as any[]).forEach((m: any, idx: number) => {
       if (idx > 0) {
@@ -1696,11 +1716,11 @@ async function openThread(t: Thread) {
       bodyEl.appendChild(msgDiv);
     });
   } catch {
-    overlay.querySelector('.reader-body')!.innerHTML = '<p style="color:var(--text-muted)">Could not load messages.</p>';
+    reader.querySelector('.reader-body')!.innerHTML = '<p style="color:var(--text-muted)">Could not load messages.</p>';
   }
 
   // Wire compose textarea draft auto-save
-  const textarea = overlay.querySelector<HTMLTextAreaElement>('#compose-body')!;
+  const textarea = reader.querySelector<HTMLTextAreaElement>('#compose-body')!;
   textarea.addEventListener('input', () => {
     localStorage.setItem(draftKey, textarea.value);
   });
@@ -1733,7 +1753,7 @@ async function openThread(t: Thread) {
         inReplyTo: lastMessageId ?? undefined,
       });
       localStorage.removeItem(draftKey);
-      overlay.remove();
+      closeReader();
     } catch (e) {
       // Show inline error in reply footer — no alert() per KPT-025Q spec
       const errDiv = document.getElementById('reply-send-error') ?? (() => {
@@ -1756,7 +1776,7 @@ async function openThread(t: Thread) {
     if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.id !== t.id);
     renderInbox();
-    overlay.remove();
+    closeReader();
   });
   document.getElementById('btn-block-reader')!.addEventListener('click', async () => {
     if (!account) return;
@@ -1766,7 +1786,7 @@ async function openThread(t: Thread) {
     if (fresh) setAccount(fresh);
     threads = threads.filter(x => x.senderEmail !== t.senderEmail);
     renderInbox();
-    overlay.remove();
+    closeReader();
   });
 }
 
