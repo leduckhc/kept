@@ -2,6 +2,7 @@
 import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
 import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, markRead, markUnread, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore } from './gmail';
+import { sanitizeEmailHtml } from './sanitize';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 
@@ -1625,20 +1626,71 @@ async function openThread(t: Thread) {
       metaDiv.textContent = `${m.from} · ${formatDate(m.receivedAt)}`;
       msgDiv.appendChild(metaDiv);
 
-      const bodyDiv = document.createElement('div');
-      bodyDiv.style.cssText = 'white-space:pre-wrap; font-size:14px;';
-      bodyDiv.textContent = m.body.slice(0, 20000);
-      msgDiv.appendChild(bodyDiv);
+      const rawHtml: string | null = (m as any).htmlBody ?? null;
+      const sanitized = rawHtml ? sanitizeEmailHtml(rawHtml) : '';
 
-      if (m.body.length > 20000) {
-        const showMore = document.createElement('button');
-        showMore.className = 'btn-show-more';
-        showMore.textContent = 'Show full email';
-        showMore.addEventListener('click', () => {
-          bodyDiv.textContent = m.body;
-          showMore.remove();
+      if (sanitized) {
+        // Render sanitized HTML in sandboxed iframe
+        const iframe = document.createElement('iframe');
+        iframe.setAttribute('sandbox', 'allow-popups-to-escape-sandbox');
+        iframe.style.cssText = 'width:100%; border:none; overflow:hidden; min-height:60px;';
+        iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+          body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:#222;margin:0;padding:0;line-height:1.5;word-break:break-word;}
+          a{color:#5B4EDB;}
+          img[data-original-src]{background:#f0f0f0;min-height:20px;border-radius:4px;}
+          blockquote{border-left:3px solid #ddd;margin:8px 0;padding-left:12px;color:#666;}
+          table{border-collapse:collapse;max-width:100%;}
+          td,th{padding:4px 8px;border:1px solid #eee;}
+          pre{background:#f5f5f5;padding:8px;border-radius:4px;overflow-x:auto;}
+          img{max-width:100%;height:auto;}
+        </style></head><body>${sanitized}</body></html>`;
+
+        // Auto-resize iframe to content height
+        const resizeIframe = () => {
+          const h = iframe.contentDocument?.body?.scrollHeight;
+          if (h) iframe.style.height = h + 4 + 'px';
+        };
+
+        // Load images button (shown only if images were blocked)
+        const loadImgBtn = document.createElement('button');
+        loadImgBtn.className = 'btn-load-images';
+        loadImgBtn.textContent = '🖼 Load images';
+        loadImgBtn.style.cssText = 'display:none; margin-top:6px; font-size:12px;';
+        loadImgBtn.addEventListener('click', () => {
+          const imgs = iframe.contentDocument?.querySelectorAll<HTMLImageElement>('img[data-original-src]');
+          imgs?.forEach(img => {
+            const orig = img.getAttribute('data-original-src')!;
+            img.setAttribute('src', orig);
+            img.removeAttribute('data-original-src');
+          });
+          loadImgBtn.remove();
+          resizeIframe();
         });
-        msgDiv.appendChild(showMore);
+        iframe.addEventListener('load', () => {
+          resizeIframe();
+          const blocked = iframe.contentDocument?.querySelectorAll('img[data-original-src]');
+          if (blocked && blocked.length > 0) loadImgBtn.style.display = 'inline-block';
+        });
+
+        msgDiv.appendChild(iframe);
+        msgDiv.appendChild(loadImgBtn);
+      } else {
+        // Fallback: plain text (no HTML, or HTML exceeded 200 KB cap)
+        const bodyDiv = document.createElement('div');
+        bodyDiv.style.cssText = 'white-space:pre-wrap; font-size:14px;';
+        bodyDiv.textContent = m.body.slice(0, 20000);
+        msgDiv.appendChild(bodyDiv);
+
+        if (m.body.length > 20000) {
+          const showMore = document.createElement('button');
+          showMore.className = 'btn-show-more';
+          showMore.textContent = 'Show full email';
+          showMore.addEventListener('click', () => {
+            bodyDiv.textContent = m.body;
+            showMore.remove();
+          });
+          msgDiv.appendChild(showMore);
+        }
       }
 
       bodyEl.appendChild(msgDiv);

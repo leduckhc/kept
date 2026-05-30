@@ -524,7 +524,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
 
 // ── Fetch full message body ───────────────────────────────
 export async function fetchMessageBody(account: Account, gmailThreadId: string): Promise<{
-  messages: Array<{ from: string; body: string; receivedAt: number; gmailMessageId: string }>;
+  messages: Array<{ from: string; body: string; htmlBody: string | null; receivedAt: number; gmailMessageId: string }>;
   lastMessageId: string | null;
 }> {
   const a = await ensureFreshToken(account);
@@ -543,14 +543,15 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
     messages: msgs.map(msg => {
       const getH = (n: string) => msg.payload.headers.find(h => h.name.toLowerCase() === n)?.value ?? '';
       const body = extractTextBody(msg.payload);
-      return { from: getH('from'), body, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
+      const htmlBody = extractHtmlBody(msg.payload);
+      return { from: getH('from'), body, htmlBody, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
     }),
     lastMessageId,
   };
 }
 
 // Recursive MIME part type (supports arbitrary nesting)
-interface MimePart {
+export interface MimePart {
   mimeType: string;
   body?: { data?: string };
   parts?: MimePart[];
@@ -618,6 +619,43 @@ function extractTextBody(payload: MimePart, depth = 0): string {
   }
 
   return '';
+}
+
+/**
+ * Extract the HTML body from a MIME message, preferring text/html in multipart/alternative.
+ * Returns null if no HTML part is found.
+ */
+export function extractHtmlBody(payload: MimePart, depth = 0): string | null {
+  if (depth > 8) return null;
+
+  // Leaf node with HTML content
+  if (payload.body?.data && payload.mimeType === 'text/html') {
+    return decodeBase64(payload.body.data);
+  }
+
+  const parts = payload.parts ?? [];
+
+  // multipart/alternative: prefer text/html over text/plain
+  if (payload.mimeType === 'multipart/alternative') {
+    const html = parts.find(p => p.mimeType === 'text/html');
+    if (html?.body?.data) return decodeBase64(html.body.data);
+    // Recurse into nested multipart
+    for (const p of parts) {
+      const result = extractHtmlBody(p, depth + 1);
+      if (result) return result;
+    }
+    return null;
+  }
+
+  // multipart/mixed, multipart/related: recurse into first HTML-bearing part
+  if (payload.mimeType.startsWith('multipart/')) {
+    for (const p of parts) {
+      const result = extractHtmlBody(p, depth + 1);
+      if (result) return result;
+    }
+  }
+
+  return null;
 }
 
 // ── HTTP helpers ──────────────────────────────────────────
