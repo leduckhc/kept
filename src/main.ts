@@ -96,7 +96,7 @@ function showShell() {
   document.getElementById('app')!.innerHTML = `
     <div id="app-shell">
       <div class="toolbar">
-        <button class="btn-icon btn-compose" id="btn-compose" title="Compose new email (C)">✏</button>
+        <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">✏</button>
         <button class="title-nav" id="title-nav" aria-haspopup="listbox" aria-expanded="false">
           <span class="title-nav-label">${currentView}</span>
           <span class="title-nav-chevron">&#x25BE;</span>
@@ -821,8 +821,33 @@ function setupSnoozeResurface() {
 }
 
 // ── Compose new email ─────────────────────────────────────
+function showToast(msg: string, durationMs = 2000) {
+  const existing = document.getElementById('kept-toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'kept-toast';
+  toast.className = 'kept-toast';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  // Animate in next frame
+  requestAnimationFrame(() => { toast.classList.add('kept-toast-visible'); });
+  setTimeout(() => {
+    toast.classList.remove('kept-toast-visible');
+    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+  }, durationMs);
+}
+
+// Deterministic avatar color from string
+function avatarColor(s: string): string {
+  const colors = ['#7c6fd4','#4a90d9','#e67e22','#27ae60','#c0392b','#8e44ad','#16a085','#d35400'];
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return colors[Math.abs(h) % colors.length];
+}
+
 async function openComposeNew() {
   if (!account) return;
+  if (document.getElementById('compose-new-panel')) return; // prevent double-open
 
   // Load known sender emails for autocomplete (best-effort)
   let knownEmails: string[] = [];
@@ -830,42 +855,51 @@ async function openComposeNew() {
     knownEmails = await loadSenderEmails(account.id);
   } catch { /* non-fatal */ }
 
-  const listId = 'compose-to-list';
   const overlay = document.createElement('div');
   overlay.className = 'reader-overlay compose-new-overlay';
+
+  const panelId = 'compose-new-panel';
+  const titleId = 'compose-new-title';
   overlay.innerHTML = `
-    <div class="reader-panel compose-new-panel">
-      <div class="reader-header">
-        <div class="reader-subject">New Message</div>
-        <button class="btn-icon" id="compose-new-close">✕</button>
+    <div class="compose-new-panel" id="${panelId}" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
+      <div class="compose-new-header">
+        <span class="compose-new-title" id="${titleId}">New Message</span>
+        <button class="btn-icon compose-new-close-btn" id="compose-new-close" aria-label="Close">✕</button>
       </div>
-      <div class="compose-new-fields">
-        <div class="compose-field-row">
+      <div class="compose-new-body-area">
+        <div class="compose-field-group" style="position:relative">
           <label class="compose-field-label" for="compose-new-to">To</label>
-          <input class="compose-field-input" id="compose-new-to" type="email" placeholder="recipient@example.com" autocomplete="off" list="${listId}" />
-          <datalist id="${listId}">${knownEmails.map(e => `<option value="${esc(e)}">`).join('')}</datalist>
+          <input class="compose-field-input" id="compose-new-to" type="text"
+            placeholder="name@example.com, another@example.com"
+            autocomplete="off" aria-autocomplete="list" aria-controls="compose-ac-list" />
+          <ul class="compose-ac-list" id="compose-ac-list" role="listbox" aria-label="Suggestions" style="display:none"></ul>
         </div>
-        <div class="compose-field-row">
+        <div class="compose-field-group">
           <label class="compose-field-label" for="compose-new-subject">Subject</label>
           <input class="compose-field-input" id="compose-new-subject" type="text" placeholder="Subject" />
         </div>
-        <textarea class="compose-textarea compose-new-body" id="compose-new-body" placeholder="Write your message…"></textarea>
-        <div id="compose-new-error" class="compose-new-error" style="display:none"></div>
+        <div class="compose-field-group" style="flex:1;display:flex;flex-direction:column">
+          <label class="compose-field-label" for="compose-new-body-ta">Body</label>
+          <textarea class="compose-field-input compose-new-body-ta" id="compose-new-body-ta"
+            placeholder="Write your message…" style="flex:1;min-height:120px;resize:vertical"></textarea>
+        </div>
+        <div id="compose-new-error" class="compose-new-error-banner" style="display:none"></div>
       </div>
-      <div class="reader-footer">
-        <button class="btn-primary" id="compose-new-send" disabled>Send</button>
-        <button class="btn-secondary" id="compose-new-discard">Discard</button>
+      <div class="compose-new-footer">
+        <button class="compose-send-btn" id="compose-new-send" disabled>Send</button>
+        <button class="compose-discard-btn" id="compose-new-discard">Discard</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
 
+  const panelEl = overlay.querySelector<HTMLElement>('#compose-new-panel')!;
   const toEl = overlay.querySelector<HTMLInputElement>('#compose-new-to')!;
   const subjectEl = overlay.querySelector<HTMLInputElement>('#compose-new-subject')!;
-  const bodyEl = overlay.querySelector<HTMLTextAreaElement>('#compose-new-body')!;
+  const bodyEl = overlay.querySelector<HTMLTextAreaElement>('#compose-new-body-ta')!;
   const sendBtn = overlay.querySelector<HTMLButtonElement>('#compose-new-send')!;
   const errorEl = overlay.querySelector<HTMLElement>('#compose-new-error')!;
+  const acList = overlay.querySelector<HTMLUListElement>('#compose-ac-list')!;
 
-  // Simple email validation: contains @ and some chars around it
   function isValidEmail(s: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
   }
@@ -873,55 +907,170 @@ async function openComposeNew() {
   function updateSendState() {
     const toList = toEl.value.split(',').map(s => s.trim()).filter(Boolean);
     const allValid = toList.length > 0 && toList.every(isValidEmail);
-    sendBtn.disabled = !(allValid && bodyEl.value.trim().length > 0);
+    const ok = allValid && bodyEl.value.trim().length > 0;
+    sendBtn.disabled = !ok;
+    (sendBtn as HTMLButtonElement).style.opacity = ok ? '1' : '0.35';
+    (sendBtn as HTMLButtonElement).style.cursor = ok ? 'pointer' : 'default';
   }
 
-  toEl.addEventListener('input', updateSendState);
-  bodyEl.addEventListener('input', updateSendState);
+  // ── Autocomplete ────────────────────────────────────────
+  let acIndex = -1;
 
+  function closeAc() {
+    acList.style.display = 'none';
+    acList.innerHTML = '';
+    acIndex = -1;
+  }
+
+  function renderAc(items: string[]) {
+    if (items.length === 0) { closeAc(); return; }
+    acList.innerHTML = items.slice(0, 6).map((email, i) => {
+      const initials = email[0].toUpperCase();
+      const bg = avatarColor(email);
+      return `<li class="compose-ac-item" role="option" data-email="${esc(email)}" data-idx="${i}">
+        <span class="compose-ac-avatar" style="background:${bg}">${initials}</span>
+        <span class="compose-ac-email">${esc(email)}</span>
+      </li>`;
+    }).join('');
+    acList.style.display = 'block';
+    acIndex = -1;
+  }
+
+  function selectAcItem(email: string) {
+    // Replace the last token in To field with selected email
+    const parts = toEl.value.split(',');
+    parts[parts.length - 1] = email;
+    toEl.value = parts.join(', ') + ', ';
+    closeAc();
+    updateSendState();
+    toEl.focus();
+  }
+
+  toEl.addEventListener('input', () => {
+    updateSendState();
+    const parts = toEl.value.split(',');
+    const query = parts[parts.length - 1].trim();
+    if (query.length === 0) { closeAc(); return; }
+    const q = query.toLowerCase();
+    const matches = knownEmails.filter(e => e.toLowerCase().startsWith(q));
+    renderAc(matches);
+  });
+
+  acList.addEventListener('mousedown', e => {
+    const li = (e.target as Element).closest<HTMLElement>('.compose-ac-item');
+    if (li) { e.preventDefault(); selectAcItem(li.dataset.email!); }
+  });
+
+  // ── Keyboard nav for autocomplete ───────────────────────
+  function onToKeyDown(e: KeyboardEvent) {
+    const items = acList.querySelectorAll<HTMLElement>('.compose-ac-item');
+    if (acList.style.display !== 'none' && items.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        acIndex = Math.min(acIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('compose-ac-item--active', i === acIndex));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        acIndex = Math.max(acIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('compose-ac-item--active', i === acIndex));
+        return;
+      }
+      if (e.key === 'Enter' && acIndex >= 0) {
+        e.preventDefault();
+        selectAcItem(items[acIndex].dataset.email!);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeAc();
+        return;
+      }
+    }
+  }
+  toEl.addEventListener('keydown', onToKeyDown);
+  toEl.addEventListener('blur', () => setTimeout(closeAc, 150));
+
+  bodyEl.addEventListener('input', updateSendState);
+  updateSendState();
   toEl.focus();
 
+  // ── Close / discard ─────────────────────────────────────
   function closeSafe() {
+    document.removeEventListener('keydown', onDocKeyDown);
     overlay.remove();
+  }
+
+  function showDiscardConfirm() {
+    // In-panel overlay confirm — no alert() or browser confirm()
+    const confirmEl = document.createElement('div');
+    confirmEl.className = 'compose-discard-confirm';
+    confirmEl.innerHTML = `
+      <div class="compose-discard-box">
+        <p class="compose-discard-msg">Discard this draft?</p>
+        <div class="compose-discard-actions">
+          <button class="compose-discard-yes">Discard draft</button>
+          <button class="compose-discard-no">Keep editing</button>
+        </div>
+      </div>`;
+    panelEl.appendChild(confirmEl);
+    confirmEl.querySelector('.compose-discard-yes')!.addEventListener('click', () => closeSafe());
+    confirmEl.querySelector('.compose-discard-no')!.addEventListener('click', () => confirmEl.remove());
   }
 
   function discardWithPrompt() {
     if (bodyEl.value.trim().length > 0) {
-      if (!confirm('Discard this message?')) return;
+      showDiscardConfirm();
+    } else {
+      closeSafe();
     }
-    closeSafe();
   }
 
-  overlay.addEventListener('click', e => { if (e.target === overlay) discardWithPrompt(); });
+  // Backdrop click does NOT close (per Stark Mono spec — prevents accidental loss)
+  overlay.addEventListener('click', e => { if (e.target === overlay) e.stopPropagation(); });
+
   document.getElementById('compose-new-close')!.addEventListener('click', discardWithPrompt);
   document.getElementById('compose-new-discard')!.addEventListener('click', discardWithPrompt);
 
-  // Escape key discards
-  function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') { discardWithPrompt(); document.removeEventListener('keydown', onKeyDown); } }
-  document.addEventListener('keydown', onKeyDown);
-  overlay.addEventListener('remove', () => document.removeEventListener('keydown', onKeyDown));
+  function onDocKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      if (acList.style.display !== 'none') { closeAc(); return; }
+      discardWithPrompt();
+    }
+  }
+  document.addEventListener('keydown', onDocKeyDown);
 
+  // Tab order hint: To → Subject → Body → Send → Discard (natural DOM order)
+
+  // ── Send ────────────────────────────────────────────────
   sendBtn.addEventListener('click', async () => {
+    if (sendBtn.disabled) return;
     const toList = toEl.value.split(',').map(s => s.trim()).filter(Boolean);
     const subject = subjectEl.value.trim();
     const body = bodyEl.value.trim();
     if (!account) return;
 
     sendBtn.disabled = true;
-    sendBtn.textContent = 'Sending…';
+    sendBtn.innerHTML = '<span class="compose-spinner"></span> Sending…';
     errorEl.style.display = 'none';
+    toEl.disabled = true;
+    subjectEl.disabled = true;
+    bodyEl.disabled = true;
 
     try {
-      // Send to each recipient (comma-separated To field)
       await sendEmail(account, { to: toList.join(', '), subject: subject || '(no subject)', body });
-      document.removeEventListener('keydown', onKeyDown);
       closeSafe();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      showToast('Message sent');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       errorEl.textContent = `Send failed: ${msg}`;
       errorEl.style.display = 'block';
       sendBtn.disabled = false;
-      sendBtn.textContent = 'Send';
+      sendBtn.innerHTML = 'Send';
+      toEl.disabled = false;
+      subjectEl.disabled = false;
+      bodyEl.disabled = false;
       updateSendState();
     }
   });
