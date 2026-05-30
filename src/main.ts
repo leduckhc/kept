@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, markRead, markUnread, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, markRead, markUnread, archiveThread, unarchiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore } from './gmail';
 import { sanitizeEmailHtml } from './sanitize';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
@@ -1037,6 +1037,13 @@ async function doArchive(t: Thread, row: HTMLElement) {
     if (fresh) setAccount(fresh);
     row.remove();
     threads = threads.filter(x => x.id !== t.id);
+    const acct = account;
+    showUndoToast('Archived', async () => {
+      if (!acct) return;
+      await unarchiveThread(acct, t);
+      threads = await loadThreads(acct.id);
+      renderInbox();
+    });
   } catch (e) {
     console.error('Archive failed:', e);
     setStatus('Archive failed');
@@ -1053,6 +1060,12 @@ async function doBlock(t: Thread, _row: HTMLElement) {
   // Remove all rows from this sender
   threads = threads.filter(x => x.senderEmail !== t.senderEmail);
   renderInbox();
+  const acct = account;
+  showUndoToast(`Blocked ${t.senderEmail}`, async () => {
+    if (!acct) return;
+    threads = await loadThreads(acct.id);
+    renderInbox();
+  });
 }
 
 async function doUnsnooze(t: Thread, row: HTMLElement) {
@@ -1278,7 +1291,15 @@ async function doSnooze(t: Thread, row: HTMLElement, untilMs: number) {
     row.remove();
     threads = threads.filter(x => x.id !== t.id);
   }, 250);
-  showToast(`Snoozed until ${formatDate(untilMs)}`, 3000);
+  const acct = account;
+  showUndoToast(`Snoozed until ${formatDate(untilMs)}`, async () => {
+    await unsnoozeThread(t);
+    t.snoozedUntil = null;
+    if (acct) {
+      threads = await loadThreads(acct.id);
+      renderInbox();
+    }
+  });
 }
 
 function setupSnoozeResurface() {
@@ -1321,6 +1342,41 @@ function showToast(msg: string, durationMs = 2000) {
     toast.classList.remove('kept-toast-visible');
     toast.addEventListener('transitionend', () => toast.remove(), { once: true });
   }, durationMs);
+}
+
+let _undoToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showUndoToast(msg: string, undoFn: () => Promise<void> | void) {
+  // Dismiss any existing undo toast
+  const existing = document.getElementById('kept-undo-toast');
+  if (existing) {
+    existing.remove();
+    if (_undoToastTimer !== null) { clearTimeout(_undoToastTimer); _undoToastTimer = null; }
+  }
+
+  const toast = document.createElement('div');
+  toast.id = 'kept-undo-toast';
+  toast.className = 'undo-toast';
+  toast.innerHTML = `
+    <span class="undo-toast-msg">${msg}</span>
+    <button class="undo-toast-btn">Undo</button>
+    <div class="undo-toast-progress"></div>
+  `;
+  document.body.appendChild(toast);
+
+  const DURATION = 5000;
+
+  function dismiss() {
+    if (_undoToastTimer !== null) { clearTimeout(_undoToastTimer); _undoToastTimer = null; }
+    toast.remove();
+  }
+
+  toast.querySelector('.undo-toast-btn')!.addEventListener('click', async () => {
+    dismiss();
+    await undoFn();
+  });
+
+  _undoToastTimer = setTimeout(dismiss, DURATION);
 }
 
 // Deterministic avatar color from string

@@ -431,6 +431,13 @@ export async function archiveThread(account: Account, thread: Thread): Promise<v
   await db.execute('UPDATE threads SET is_archived = 1 WHERE id = ?', [thread.id]);
 }
 
+export async function unarchiveThread(account: Account, thread: Thread): Promise<void> {
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] });
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_archived = 0 WHERE id = ?', [thread.id]);
+}
+
 export async function blockSender(account: Account, thread: Thread): Promise<void> {
   const a = await ensureFreshToken(account);
   const db = await getDb();
