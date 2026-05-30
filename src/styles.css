@@ -414,6 +414,10 @@ body {
 }
 .btn-action:hover { color: var(--text); background: var(--border); }
 .btn-action.danger:hover { color: #c0392b; background: #fde8e6; }
+.btn-action.btn-star { color: var(--text-muted); }
+.btn-action.btn-star.starred { color: #f59e0b; }
+.btn-action.btn-star.starred:hover { color: #d97706; background: var(--border); }
+.thread-row.is-starred .unread-dot { border-color: #f59e0b; }
 
 /* ── Thread reader ──────────────────────────────────────── */
 .reader-overlay {

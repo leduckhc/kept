@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadSenderEmails, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, hasSyncedBefore } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, markRead, markUnread, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore } from './gmail';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 
@@ -224,6 +224,8 @@ function switchView(view: ViewName) {
     renderInbox();
   } else if (view === 'Snoozed') {
     renderSnoozedView();
+  } else if (view === 'Starred') {
+    renderStarredView();
   } else {
     renderViewPlaceholder(view);
   }
@@ -501,6 +503,8 @@ function showCheatSheet() {
         <tr><td class="kb-key">k / ↑</td><td>Previous thread</td></tr>
         <tr><td class="kb-key">Enter / o</td><td>Open thread</td></tr>
         <tr><td class="kb-key">e</td><td>Archive thread</td></tr>
+        <tr><td class="kb-key">s</td><td>Star / unstar thread</td></tr>
+        <tr><td class="kb-key">Shift+U</td><td>Mark as unread</td></tr>
         <tr><td class="kb-key">r</td><td>Reply</td></tr>
         <tr><td class="kb-key">u</td><td>Back to inbox</td></tr>
         <tr><td class="kb-key">?</td><td>Show/hide shortcuts</td></tr>
@@ -558,6 +562,26 @@ function registerKeyboardShortcuts() {
         const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
         if (row) await doArchive(t, row);
         selectThread(nextId);
+        break;
+      }
+
+      case 's': {
+        if (!selectedThreadId || !account) break;
+        const t = threads.find(x => x.id === selectedThreadId);
+        if (!t) break;
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        if (row) await doToggleStar(t, row);
+        break;
+      }
+
+      case 'U': {
+        // Shift+U — mark unread
+        if (!e.shiftKey) break;
+        if (!selectedThreadId || !account) break;
+        const t = threads.find(x => x.id === selectedThreadId);
+        if (!t) break;
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        if (row) await doMarkUnread(t, row);
         break;
       }
 
@@ -654,6 +678,30 @@ async function renderSnoozedView() {
   wireThreadRows(container, snoozed, true);
 }
 
+async function renderStarredView() {
+  const container = document.getElementById('inbox');
+  if (!container || !account) return;
+
+  const starred = await loadStarredThreads(account.id);
+
+  if (starred.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="icon" style="color:var(--lavender-accent)">★</div>
+        <div class="empty-text">No starred threads</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Star a thread with s or ☆ to save it here</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="section-header">Starred <span class="section-badge">${starred.length}</span></div>
+    ${starred.map(t => threadRow(t, false)).join('')}
+  `;
+
+  wireThreadRows(container, starred, false);
+}
+
 // ── Wire row events ───────────────────────────────────────
 function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boolean) {
   container.querySelectorAll<HTMLElement>('.thread-row').forEach(row => {
@@ -669,6 +717,8 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
       showContextMenu(e.clientX, e.clientY, t, row, isSnoozed);
     });
     row.querySelector('.btn-read')?.addEventListener('click', e => { e.stopPropagation(); doMarkRead(t, row); });
+    row.querySelector('.btn-mark-unread')?.addEventListener('click', e => { e.stopPropagation(); doMarkUnread(t, row); });
+    row.querySelector('.btn-star')?.addEventListener('click', e => { e.stopPropagation(); doToggleStar(t, row); });
     row.querySelector('.btn-archive')?.addEventListener('click', e => { e.stopPropagation(); doArchive(t, row); });
     row.querySelector('.btn-block')?.addEventListener('click', e => { e.stopPropagation(); doBlock(t, row); });
     if (isSnoozed) {
@@ -713,20 +763,25 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
     ? `<span class="snooze-indicator" title="Snoozed until ${formatDate(t.snoozedUntil)}">🕐 ${formatDate(t.snoozedUntil)}</span>`
     : '';
 
+  const starIcon = t.isStarred ? '★' : '☆';
+  const starClass = t.isStarred ? 'btn-star starred' : 'btn-star';
+
   const actionsHtml = isSnoozed
     ? `<div class="thread-actions">
          <button class="btn-action btn-unsnooze" title="Wake up now">↑</button>
          <button class="btn-action btn-archive" title="Archive">⬇</button>
        </div>`
     : `<div class="thread-actions">
+         <button class="btn-action ${starClass}" title="${t.isStarred ? 'Unstar' : 'Star'}">${starIcon}</button>
          <button class="btn-action btn-snooze" title="Snooze">🕐</button>
          <button class="btn-action btn-read" title="Mark read">✓</button>
+         <button class="btn-action btn-mark-unread" title="Mark unread">✉</button>
          <button class="btn-action btn-archive" title="Archive">⬇</button>
          <button class="btn-action danger btn-block" title="Block sender">⊘</button>
        </div>`;
 
   return `
-    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}" data-id="${t.id}">
+    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}" data-id="${t.id}">
       ${dot}
       ${avatarHtml(t)}
       <div class="thread-mid${attachment ? ' has-attachment' : ''}">
@@ -756,6 +811,37 @@ async function doMarkRead(t: Thread, row: HTMLElement) {
     setStatus('Mark read failed');
     t.isUnread = true;
     renderInbox();
+  }
+}
+
+async function doMarkUnread(t: Thread, row: HTMLElement) {
+  if (!account) return;
+  try {
+    await markUnread(account, t);
+    t.isUnread = true;
+    row.classList.add('unread');
+    row.querySelector<HTMLElement>('.unread-dot')?.classList.add('filled');
+  } catch (e) {
+    console.error('Mark unread failed:', e);
+    setStatus('Mark unread failed');
+  }
+}
+
+async function doToggleStar(t: Thread, row: HTMLElement) {
+  if (!account) return;
+  try {
+    const nowStarred = await toggleStar(account, t);
+    t.isStarred = nowStarred;
+    const btn = row.querySelector<HTMLButtonElement>('.btn-star');
+    if (btn) {
+      btn.textContent = nowStarred ? '★' : '☆';
+      btn.title = nowStarred ? 'Unstar' : 'Star';
+      btn.classList.toggle('starred', nowStarred);
+    }
+    row.classList.toggle('is-starred', nowStarred);
+  } catch (e) {
+    console.error('Toggle star failed:', e);
+    setStatus('Star toggle failed');
   }
 }
 
@@ -813,6 +899,8 @@ function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSn
   } else {
     items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row); } });
   }
+  items.push({ label: `${t.isStarred ? '★  Unstar' : '☆  Star'}`, action: () => { menu.remove(); doToggleStar(t, row); } });
+  items.push({ label: '✉  Mark as unread', action: () => { menu.remove(); doMarkUnread(t, row); } });
   items.push({ label: '✓  Mark as read', action: () => { menu.remove(); doMarkRead(t, row); } });
   items.push({ label: '⬇  Archive', action: () => { menu.remove(); doArchive(t, row); } });
   items.push({ label: '⊘  Block sender', action: () => { menu.remove(); doBlock(t, row); } });

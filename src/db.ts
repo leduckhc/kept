@@ -88,4 +88,5 @@ async function migrate(db: Database): Promise<void> {
   await db.execute(`ALTER TABLE threads ADD COLUMN snooze_label TEXT NULL`).catch(() => {});
   await db.execute(`ALTER TABLE threads ADD COLUMN message_count INTEGER NULL`).catch(() => {});
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_threads_snooze ON threads(snoozed_until)`).catch(() => {});
+  await db.execute(`ALTER TABLE threads ADD COLUMN is_starred INTEGER DEFAULT 0`).catch(() => {});
 }
