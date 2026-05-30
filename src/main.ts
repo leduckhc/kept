@@ -1,6 +1,6 @@
 // main.ts — Kept inbox UI
 import { type Account, getAccount, startOAuth } from './auth';
-import { type Thread, syncInbox, loadThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSenderEmails, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
 
 // ── State ─────────────────────────────────────────────────
 let account: Account | null = null;
@@ -85,6 +85,7 @@ function showShell() {
   document.getElementById('app')!.innerHTML = `
     <div id="app-shell">
       <div class="toolbar">
+        <button class="btn-icon btn-compose" id="btn-compose" title="Compose new email (C)">✏</button>
         <button class="title-nav" id="title-nav" aria-haspopup="listbox" aria-expanded="false">
           <span class="title-nav-label">${currentView}</span>
           <span class="title-nav-chevron">&#x25BE;</span>
@@ -155,6 +156,8 @@ function showShell() {
     if (e.touches[0].clientY - touchStartY < -30) closeTray();
   }, { passive: true });
 
+  document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
+
   document.getElementById('btn-sync')!.addEventListener('click', () => syncAndRender());
   document.getElementById('btn-theme')!.addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -192,6 +195,17 @@ function showShell() {
   });
   searchEl.addEventListener('focus', () => searchEl.classList.add('expanded'));
   searchEl.addEventListener('blur', () => { if (!searchEl.value) searchEl.classList.remove('expanded'); });
+
+  // Keyboard shortcuts (skip when focus is in an input/textarea)
+  function handleKey(e: KeyboardEvent) {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+    if (e.key === 'c' && !e.metaKey && !e.ctrlKey) openComposeNew();
+  }
+  document.addEventListener('keydown', handleKey);
+  // Clean up when shell is replaced
+  const cleanupKey = () => { document.removeEventListener('keydown', handleKey); };
+  document.getElementById('btn-signout')!.addEventListener('click', cleanupKey, { once: true });
 }
 
 // ── View switching ────────────────────────────────────────
@@ -403,6 +417,113 @@ async function doBlock(t: Thread, _row: HTMLElement) {
   // Remove all rows from this sender
   threads = threads.filter(x => x.senderEmail !== t.senderEmail);
   renderInbox();
+}
+
+// ── Compose new email ─────────────────────────────────────
+async function openComposeNew() {
+  if (!account) return;
+
+  // Load known sender emails for autocomplete (best-effort)
+  let knownEmails: string[] = [];
+  try {
+    knownEmails = await loadSenderEmails(account.id);
+  } catch { /* non-fatal */ }
+
+  const listId = 'compose-to-list';
+  const overlay = document.createElement('div');
+  overlay.className = 'reader-overlay compose-new-overlay';
+  overlay.innerHTML = `
+    <div class="reader-panel compose-new-panel">
+      <div class="reader-header">
+        <div class="reader-subject">New Message</div>
+        <button class="btn-icon" id="compose-new-close">✕</button>
+      </div>
+      <div class="compose-new-fields">
+        <div class="compose-field-row">
+          <label class="compose-field-label" for="compose-new-to">To</label>
+          <input class="compose-field-input" id="compose-new-to" type="email" placeholder="recipient@example.com" autocomplete="off" list="${listId}" />
+          <datalist id="${listId}">${knownEmails.map(e => `<option value="${esc(e)}">`).join('')}</datalist>
+        </div>
+        <div class="compose-field-row">
+          <label class="compose-field-label" for="compose-new-subject">Subject</label>
+          <input class="compose-field-input" id="compose-new-subject" type="text" placeholder="Subject" />
+        </div>
+        <textarea class="compose-textarea compose-new-body" id="compose-new-body" placeholder="Write your message…"></textarea>
+        <div id="compose-new-error" class="compose-new-error" style="display:none"></div>
+      </div>
+      <div class="reader-footer">
+        <button class="btn-primary" id="compose-new-send" disabled>Send</button>
+        <button class="btn-secondary" id="compose-new-discard">Discard</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const toEl = overlay.querySelector<HTMLInputElement>('#compose-new-to')!;
+  const subjectEl = overlay.querySelector<HTMLInputElement>('#compose-new-subject')!;
+  const bodyEl = overlay.querySelector<HTMLTextAreaElement>('#compose-new-body')!;
+  const sendBtn = overlay.querySelector<HTMLButtonElement>('#compose-new-send')!;
+  const errorEl = overlay.querySelector<HTMLElement>('#compose-new-error')!;
+
+  // Simple email validation: contains @ and some chars around it
+  function isValidEmail(s: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+  }
+
+  function updateSendState() {
+    const toList = toEl.value.split(',').map(s => s.trim()).filter(Boolean);
+    const allValid = toList.length > 0 && toList.every(isValidEmail);
+    sendBtn.disabled = !(allValid && bodyEl.value.trim().length > 0);
+  }
+
+  toEl.addEventListener('input', updateSendState);
+  bodyEl.addEventListener('input', updateSendState);
+
+  toEl.focus();
+
+  function closeSafe() {
+    overlay.remove();
+  }
+
+  function discardWithPrompt() {
+    if (bodyEl.value.trim().length > 0) {
+      if (!confirm('Discard this message?')) return;
+    }
+    closeSafe();
+  }
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) discardWithPrompt(); });
+  document.getElementById('compose-new-close')!.addEventListener('click', discardWithPrompt);
+  document.getElementById('compose-new-discard')!.addEventListener('click', discardWithPrompt);
+
+  // Escape key discards
+  function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') { discardWithPrompt(); document.removeEventListener('keydown', onKeyDown); } }
+  document.addEventListener('keydown', onKeyDown);
+  overlay.addEventListener('remove', () => document.removeEventListener('keydown', onKeyDown));
+
+  sendBtn.addEventListener('click', async () => {
+    const toList = toEl.value.split(',').map(s => s.trim()).filter(Boolean);
+    const subject = subjectEl.value.trim();
+    const body = bodyEl.value.trim();
+    if (!account) return;
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending…';
+    errorEl.style.display = 'none';
+
+    try {
+      // Send to each recipient (comma-separated To field)
+      await sendEmail(account, { to: toList.join(', '), subject: subject || '(no subject)', body });
+      document.removeEventListener('keydown', onKeyDown);
+      closeSafe();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      errorEl.textContent = `Send failed: ${msg}`;
+      errorEl.style.display = 'block';
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send';
+      updateSendState();
+    }
+  });
 }
 
 // ── Thread reader ─────────────────────────────────────────

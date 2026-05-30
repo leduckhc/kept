@@ -227,6 +227,15 @@ export async function loadThreads(accountId: string, search?: string): Promise<T
   return rows.map(rowToThread);
 }
 
+export async function loadSenderEmails(accountId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ sender_email: string }>>(
+    'SELECT DISTINCT sender_email FROM threads WHERE account_id = ? AND is_blocked = 0 ORDER BY received_at DESC LIMIT 200',
+    [accountId]
+  );
+  return rows.map(r => r.sender_email);
+}
+
 function rowToThread(r: Record<string, unknown>): Thread {
   return {
     id: r.id as string,
@@ -325,7 +334,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
     '',
     opts.body,
   ].filter(Boolean);
-  const raw = btoa(lines.join('\r\n')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  const raw = btoa(unescape(encodeURIComponent(lines.join('\r\n')))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   const payload: Record<string, string> = { raw };
   if (opts.threadId) payload.threadId = opts.threadId;
   await gmailPost(a, '/users/me/messages/send', payload);
