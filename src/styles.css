@@ -1825,3 +1825,82 @@ body {
   color: var(--danger, #dc2626);
 }
 
+/* ── Bulk select ─────────────────────────────────────────── */
+.thread-row.bulk-mode {
+  grid-template-columns: 22px 8px 40px 1fr auto;
+}
+
+.bulk-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--lavender-accent);
+  flex-shrink: 0;
+  justify-self: center;
+}
+
+.thread-row.bulk-selected {
+  background: var(--lavender-tint);
+}
+[data-theme="dark"] .thread-row.bulk-selected {
+  background: #2d2640;
+}
+
+.btn-bulk-select.active {
+  background: var(--lavender-tint);
+  color: var(--lavender-text);
+}
+
+.bulk-bar {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  font-size: 13px;
+  white-space: nowrap;
+}
+[data-theme="dark"] .bulk-bar {
+  background: #2a2a3e;
+}
+
+.bulk-count {
+  font-weight: 600;
+  margin-right: 4px;
+  color: rgba(255,255,255,0.75);
+}
+
+.bulk-action-btn {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.bulk-action-btn:hover { background: rgba(255,255,255,0.22); }
+
+.bulk-cancel-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.75);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.1s;
+  margin-left: 4px;
+}
+.bulk-cancel-btn:hover { background: rgba(255,255,255,0.08); }
