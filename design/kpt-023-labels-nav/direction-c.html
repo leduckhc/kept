@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>Kept — Direction C: Contextual View Slide</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff;
+  --surface: #f7f7fb;
+  --border: #e8e8ef;
+  --text: #111111;
+  --text-muted: #888899;
+  --accent: #7c6fcd;
+  --accent-soft: #ede8ff;
+  --accent-hover: #6256b8;
+  --radius: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+body {
+  font-family: var(--font);
+  background: #e9e9f0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+.phone-frame {
+  width: 390px;
+  height: 844px;
+  background: var(--bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 40px rgba(0,0,0,0.18);
+  position: relative;
+}
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+.toolbar-title {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  flex: 1;
+}
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+  transition: color 0.1s, background 0.1s;
+}
+.btn-icon:hover { color: var(--text); background: var(--surface); }
+
+/* === DIRECTION C: Press-and-hold on title → swipe switcher emerges === */
+/* Normal: title is just "Inbox" (or current view name), tappable */
+/* Tap title → inline horizontal strip animates down from header, auto-dismisses after pick */
+
+.view-name-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  flex: 1;
+  font-family: var(--font);
+}
+.view-name-btn .chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+.view-name-btn.open .chevron { transform: rotate(180deg); }
+
+/* Dropdown tray */
+.view-tray {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border-bottom: 1.5px solid var(--accent-soft);
+  z-index: 10;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.22s ease, border-color 0.22s;
+}
+.view-tray.open {
+  max-height: 64px;
+}
+.view-tray-inner {
+  display: flex;
+  padding: 8px 12px 10px;
+  gap: 8px;
+}
+.tray-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 4px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.tray-option:hover { background: var(--accent-soft); }
+.tray-option.active { background: var(--accent-soft); }
+.tray-option .tray-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.tray-option .tray-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.tray-option.active .tray-label { color: var(--accent); }
+.tray-option .tray-badge {
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 4px;
+  min-width: 14px;
+  text-align: center;
+}
+
+/* Inbox */
+.inbox { flex: 1; overflow-y: auto; padding: 0; }
+.section-header {
+  padding: 6px 16px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.thread-row {
+  display: grid;
+  grid-template-columns: 8px 40px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.08s;
+  position: relative;
+}
+.thread-row:hover { background: var(--surface); }
+.unread-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  flex-shrink: 0; justify-self: center;
+}
+.unread-dot.filled { background: var(--accent); border-color: var(--accent); }
+.avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: #fff;
+  flex-shrink: 0;
+}
+.thread-mid { min-width: 0; }
+.thread-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.thread-sender {
+  font-size: 13px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  color: var(--text-muted); font-weight: 400;
+  flex: 1; min-width: 0;
+}
+.thread-row.unread .thread-sender { font-weight: 700; color: var(--text); }
+.thread-date { font-size: 11px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+.thread-subject-line {
+  font-size: 13px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; color: var(--text-muted);
+}
+.thread-row.unread .thread-subject-line { color: var(--text); font-weight: 500; }
+.thread-preview-line {
+  font-size: 12px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.attachment-icon { font-size: 11px; color: var(--text-muted); }
+
+/* Hint text */
+.c-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 10px 16px 6px;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.c-hint span { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="phone-frame">
+  <!-- Toolbar — title IS the navigator -->
+  <div class="toolbar">
+    <button class="view-name-btn" id="view-name-btn" onclick="toggleTray()">
+      <span id="current-view-name">Inbox</span>
+      <span class="chevron" id="chevron">▾</span>
+    </button>
+    <button class="btn-icon" title="Search">🔍</button>
+    <button class="btn-icon" title="Compose">✏️</button>
+    <button class="btn-icon" title="Settings">⚙️</button>
+  </div>
+
+  <!-- Slide-down tray (hidden by default) -->
+  <div class="view-tray" id="view-tray">
+    <div class="view-tray-inner">
+      <div class="tray-option active" id="tray-inbox" onclick="selectView('inbox','Inbox')">
+        <span class="tray-icon">📥</span>
+        <span class="tray-label">Inbox</span>
+        <span class="tray-badge">3</span>
+      </div>
+      <div class="tray-option" id="tray-sent" onclick="selectView('sent','Sent')">
+        <span class="tray-icon">↑</span>
+        <span class="tray-label">Sent</span>
+      </div>
+      <div class="tray-option" id="tray-drafts" onclick="selectView('drafts','Drafts')">
+        <span class="tray-icon">📝</span>
+        <span class="tray-label">Drafts</span>
+        <span class="tray-badge" style="background:#888">2</span>
+      </div>
+      <div class="tray-option" id="tray-starred" onclick="selectView('starred','Starred')">
+        <span class="tray-icon">★</span>
+        <span class="tray-label">Starred</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subtle hint -->
+  <div class="c-hint">Tap <span>Inbox ▾</span> to switch views</div>
+
+  <!-- Inbox view -->
+  <div class="inbox" id="view-inbox">
+    <div class="section-header">New senders <span class="section-badge">1</span></div>
+    <div class="thread-row unread" onclick="this.classList.remove('unread')">
+      <div class="unread-dot filled"></div>
+      <div class="avatar" style="background:#7c6fcd">S</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">Substack</span>
+          <span class="thread-date">9:41</span>
+        </div>
+        <div class="thread-subject-line">Your weekly digest is ready</div>
+        <div class="thread-preview-line">New posts from writers you follow — Lenny's Newsletter…</div>
+      </div>
+      <div></div>
+    </div>
+    <div class="section-header">Today <span class="section-badge">2</span></div>
+    <div class="thread-row unread" onclick="this.classList.remove('unread')">
+      <div class="unread-dot filled"></div>
+      <div class="avatar" style="background:#5b9e7c">A</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">Aisha Patel</span>
+          <span class="thread-date">8:12</span>
+        </div>
+        <div class="thread-subject-line">Re: Q3 offsite agenda</div>
+        <div class="thread-preview-line">+3 · Confirmed for Thursday — I'll bring the slides</div>
+      </div>
+      <div></div>
+    </div>
+    <div class="thread-row unread" onclick="this.classList.remove('unread')">
+      <div class="unread-dot filled"></div>
+      <div class="avatar" style="background:#c47a3b">M</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">Milan</span>
+          <span class="thread-date">7:55</span>
+        </div>
+        <div class="thread-subject-line">Design review notes — KPT-022</div>
+        <div class="thread-preview-line">Quick thoughts on the notification flow before standup</div>
+      </div>
+      <div></div>
+    </div>
+    <div class="section-header">Yesterday</div>
+    <div class="thread-row">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#3b7ec4">G</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">GitHub</span>
+          <span class="thread-date">Thu</span>
+        </div>
+        <div class="thread-subject-line">[kept] PR #47 merged by harry</div>
+        <div class="thread-preview-line">feat: FTS5 full-text search across body and subject</div>
+      </div>
+      <div class="attachment-icon">📎</div>
+    </div>
+    <div class="thread-row">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#b53f3f">L</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">Linear</span>
+          <span class="thread-date">Thu</span>
+        </div>
+        <div class="thread-subject-line">Issue assigned: KPT-023 Labels nav</div>
+        <div class="thread-preview-line">Denisa has been assigned this issue. Priority: High</div>
+      </div>
+      <div></div>
+    </div>
+    <div class="section-header">This week</div>
+    <div class="thread-row">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#4aa87e">S</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">Stripe</span>
+          <span class="thread-date">Wed</span>
+        </div>
+        <div class="thread-subject-line">Invoice — May 2026 · $49.00</div>
+        <div class="thread-preview-line">Your payment was processed successfully</div>
+      </div>
+      <div></div>
+    </div>
+    <div class="thread-row">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#9a3f6b">J</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">Jessica Kim</span>
+          <span class="thread-date">Tue</span>
+        </div>
+        <div class="thread-subject-line">Feedback on the alpha build</div>
+        <div class="thread-preview-line">Love the inbox sections idea. One thing — starred feels buried</div>
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <!-- Sent view -->
+  <div class="inbox" id="view-sent" style="display:none">
+    <div class="section-header">Sent today</div>
+    <div class="thread-row">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#7c6fcd">A</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">To: Aisha Patel</span>
+          <span class="thread-date">10:02</span>
+        </div>
+        <div class="thread-subject-line">Re: Q3 offsite agenda</div>
+        <div class="thread-preview-line">Sounds great, I'll prepare the design walkthrough slides</div>
+      </div>
+      <div></div>
+    </div>
+    <div class="thread-row">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#7c6fcd">M</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">To: Milan</span>
+          <span class="thread-date">8:30</span>
+        </div>
+        <div class="thread-subject-line">Direction C mockup — tray switcher</div>
+        <div class="thread-preview-line">Title-as-navigator: tap Inbox ▾ to reveal all views</div>
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <!-- Drafts view -->
+  <div class="inbox" id="view-drafts" style="display:none">
+    <div class="section-header">Drafts <span class="section-badge" style="background:#888">2</span></div>
+    <div class="thread-row" style="opacity:0.65">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#c0bbd8">J</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">To: John</span>
+          <span class="thread-date">Draft</span>
+        </div>
+        <div class="thread-subject-line">QA checklist for labels nav</div>
+        <div class="thread-preview-line">Hey John — here are the acceptance criteria…</div>
+      </div>
+      <div></div>
+    </div>
+    <div class="thread-row" style="opacity:0.65">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#c0bbd8">T</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">To: Team</span>
+          <span class="thread-date">Draft</span>
+        </div>
+        <div class="thread-subject-line">Weekly design roundup</div>
+        <div class="thread-preview-line">[unfinished] This week we shipped…</div>
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <!-- Starred view -->
+  <div class="inbox" id="view-starred" style="display:none">
+    <div class="section-header">Starred</div>
+    <div class="thread-row">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#9a3f6b">J</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">Jessica Kim</span>
+          <span class="thread-date">Tue</span>
+        </div>
+        <div class="thread-subject-line">Feedback on the alpha build</div>
+        <div class="thread-preview-line">Love the inbox sections idea. One thing — starred feels buried</div>
+      </div>
+      <div>⭐</div>
+    </div>
+    <div class="thread-row">
+      <div class="unread-dot"></div>
+      <div class="avatar" style="background:#c47a3b">M</div>
+      <div class="thread-mid">
+        <div class="thread-top">
+          <span class="thread-sender">Milan</span>
+          <span class="thread-date">Mon</span>
+        </div>
+        <div class="thread-subject-line">Product vision doc v2</div>
+        <div class="thread-preview-line">Updated the north star goals for Q3 based on user feedback</div>
+      </div>
+      <div>⭐</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var trayOpen = false;
+
+function toggleTray() {
+  trayOpen = !trayOpen;
+  var tray = document.getElementById('view-tray');
+  var btn = document.getElementById('view-name-btn');
+  var chevron = document.getElementById('chevron');
+  if (trayOpen) {
+    tray.classList.add('open');
+    btn.classList.add('open');
+  } else {
+    tray.classList.remove('open');
+    btn.classList.remove('open');
+  }
+}
+
+function selectView(view, label) {
+  // close tray
+  trayOpen = false;
+  document.getElementById('view-tray').classList.remove('open');
+  document.getElementById('view-name-btn').classList.remove('open');
+  // update title
+  document.getElementById('current-view-name').textContent = label;
+  // update tray active state
+  ['inbox','sent','drafts','starred'].forEach(function(v) {
+    var el = document.getElementById('tray-'+v);
+    if (el) el.classList.remove('active');
+  });
+  var active = document.getElementById('tray-'+view);
+  if (active) active.classList.add('active');
+  // switch view
+  ['inbox','sent','drafts','starred'].forEach(function(v) {
+    document.getElementById('view-'+v).style.display = 'none';
+  });
+  document.getElementById('view-'+view).style.display = 'block';
+}
+</script>
+</body>
+</html>

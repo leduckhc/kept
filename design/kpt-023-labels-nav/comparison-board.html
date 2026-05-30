@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kept KPT-023 — Labels Nav: Design Comparison</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f4f3f8;
+  --card-bg: #ffffff;
+  --border: #e0dff0;
+  --text: #111;
+  --text-muted: #888899;
+  --accent: #7c6fcd;
+  --accent-soft: #ede8ff;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  padding: 40px 24px 60px;
+  min-height: 100vh;
+}
+h1 {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+.subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 36px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 28px;
+  margin-bottom: 48px;
+}
+.card {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.card-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.card-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.card-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  margin-bottom: 2px;
+}
+.card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.card-iframe-wrap {
+  width: 100%;
+  height: 480px;
+  overflow: hidden;
+  background: #e9e9f0;
+  position: relative;
+}
+.card-iframe-wrap iframe {
+  width: 390px;
+  height: 844px;
+  border: none;
+  transform-origin: top left;
+  transform: scale(0.85);
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  margin-left: -166px;
+}
+.card-meta {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.meta-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.meta-label {
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  min-width: 72px;
+}
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.card-open-link {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+  text-decoration: none;
+}
+.card-open-link:hover { background: var(--accent-soft); }
+
+/* Table */
+.table-wrap {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 36px;
+}
+.table-title {
+  padding: 16px 20px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+th {
+  padding: 8px 14px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  line-height: 1.4;
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+.pos { color: #4aa87e; font-weight: 600; }
+.neg { color: #b53f3f; }
+
+/* Recommendation box */
+.reco-box {
+  background: var(--accent-soft);
+  border: 1.5px solid var(--accent);
+  border-radius: 16px;
+  padding: 24px 24px 20px;
+  margin-bottom: 24px;
+}
+.reco-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.reco-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  margin-bottom: 10px;
+}
+.reco-bullets {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.reco-bullets li {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  padding-left: 20px;
+  position: relative;
+}
+.reco-bullets li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+.reco-question {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--accent);
+}
+</style>
+</head>
+<body>
+  <h1>KPT-023 — Labels Nav: 3 Design Directions</h1>
+  <p class="subtitle">Kept · May 2026 · Milan, please pick A, B, or C</p>
+
+  <div class="grid">
+    <!-- Direction A -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-label">Direction A</div>
+        <div class="card-title">Top Tab Bar</div>
+        <div class="card-desc">Horizontal compact tab strip below the toolbar — Inbox | Sent | Drafts | Starred. Active tab highlighted with lavender underline. Badge counts inline.</div>
+      </div>
+      <div class="card-iframe-wrap">
+        <iframe src="direction-a.html" title="Direction A"></iframe>
+      </div>
+      <div class="card-meta">
+        <div class="meta-row"><span class="meta-label">Discoverability</span> Highest — all 4 views always visible</div>
+        <div class="meta-row"><span class="meta-label">Screen real estate</span> Costs 38px permanently</div>
+        <div class="meta-row"><span class="meta-label">Tap target</span> Each tab ~95px wide — thumb-friendly</div>
+        <div class="meta-row"><span class="meta-label">Precedent</span> <span class="meta-pill">Superhuman</span> <span class="meta-pill">Hey</span></div>
+      </div>
+      <a class="card-open-link" href="direction-a.html" target="_blank">Open full-size ↗</a>
+    </div>
+
+    <!-- Direction B -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-label">Direction B</div>
+        <div class="card-title">Icon Pill Switcher</div>
+        <div class="card-desc">A compact pill of 4 icon buttons lives in the top-right corner of the toolbar. Active view is the only element highlighted. View name appears as a small label chip below the toolbar.</div>
+      </div>
+      <div class="card-iframe-wrap">
+        <iframe src="direction-b.html" title="Direction B"></iframe>
+      </div>
+      <div class="card-meta">
+        <div class="meta-row"><span class="meta-label">Discoverability</span> Medium — icons visible but no labels by default</div>
+        <div class="meta-row"><span class="meta-label">Screen real estate</span> Minimal — uses existing toolbar row</div>
+        <div class="meta-row"><span class="meta-label">Tap target</span> 28px each — small, but familiar pattern</div>
+        <div class="meta-row"><span class="meta-label">Precedent</span> <span class="meta-pill">Notion mobile</span> <span class="meta-pill">Bear</span></div>
+      </div>
+      <a class="card-open-link" href="direction-b.html" target="_blank">Open full-size ↗</a>
+    </div>
+
+    <!-- Direction C -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-label">Direction C</div>
+        <div class="card-title">Title-as-Navigator</div>
+        <div class="card-desc">The toolbar title IS the navigation control. "Inbox ▾" is tappable — it slides down a compact tray with all 4 views as icon + label cells. Zero extra chrome; zero permanent real estate cost.</div>
+      </div>
+      <div class="card-iframe-wrap">
+        <iframe src="direction-c.html" title="Direction C"></iframe>
+      </div>
+      <div class="card-meta">
+        <div class="meta-row"><span class="meta-label">Discoverability</span> Lower — requires knowing the chevron is interactive</div>
+        <div class="meta-row"><span class="meta-label">Screen real estate</span> Zero cost when tray closed</div>
+        <div class="meta-row"><span class="meta-label">Tap target</span> Full toolbar title width — easy to hit</div>
+        <div class="meta-row"><span class="meta-label">Precedent</span> <span class="meta-pill">Maps (iOS)</span> <span class="meta-pill">Craft</span></div>
+      </div>
+      <a class="card-open-link" href="direction-c.html" target="_blank">Open full-size ↗</a>
+    </div>
+  </div>
+
+  <!-- Comparison table -->
+  <div class="table-wrap">
+    <div class="table-title">Head-to-head comparison</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>A — Top Tabs</th>
+          <th>B — Icon Pill</th>
+          <th>C — Title Tray</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Discoverability</strong></td>
+          <td class="pos">Immediate — no learning</td>
+          <td>Medium — icons hint</td>
+          <td class="neg">Low — chevron needed</td>
+        </tr>
+        <tr>
+          <td><strong>Screen real estate</strong></td>
+          <td class="neg">–38px always</td>
+          <td class="pos">0 extra rows</td>
+          <td class="pos">0 extra rows</td>
+        </tr>
+        <tr>
+          <td><strong>Visual noise</strong></td>
+          <td>Moderate</td>
+          <td class="pos">Low</td>
+          <td class="pos">Lowest</td>
+        </tr>
+        <tr>
+          <td><strong>Mobile thumb reach</strong></td>
+          <td class="pos">Good (top row)</td>
+          <td>Okay (top-right)</td>
+          <td class="pos">Good (full title)</td>
+        </tr>
+        <tr>
+          <td><strong>Unread badge clarity</strong></td>
+          <td class="pos">Inline per tab</td>
+          <td>Dot on icon</td>
+          <td>In tray only</td>
+        </tr>
+        <tr>
+          <td><strong>Fits ultra-minimal taste</strong></td>
+          <td>Moderate — visible bar</td>
+          <td class="pos">Good</td>
+          <td class="pos">Best</td>
+        </tr>
+        <tr>
+          <td><strong>Implementation complexity</strong></td>
+          <td class="pos">Low</td>
+          <td class="pos">Low</td>
+          <td>Medium (tray animation)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Recommendation -->
+  <div class="reco-box">
+    <div class="reco-tag">Denisa's recommendation</div>
+    <div class="reco-title">Direction C — Title-as-Navigator</div>
+    <ul class="reco-bullets">
+      <li>Zero chrome cost: the toolbar title becomes the navigator — inbox real estate is untouched, which is what Kept's ultra-minimal taste demands.</li>
+      <li>Discoverable enough at alpha stage: "Inbox ▾" chevron is a legible affordance for the small engaged user base; can add onboarding tooltip once in beta.</li>
+      <li>Tray interaction scales: if Kept adds Labels or Filters later, the same tray expands naturally — whereas the tab bar would overflow at 5+ items.</li>
+    </ul>
+    <div class="reco-question">Milan: which direction should Harry build? A, B, or C?</div>
+  </div>
+</body>
+</html>
