@@ -1,8 +1,14 @@
 // main.ts — Kept inbox UI
 import { type Account, getAccount, startOAuth } from './auth';
 import { type Thread, syncInbox, loadThreads, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection } from './gmail';
+import {
+  loadAccountsFromDb, addAccount, removeAccount, getActive, getAccounts, setActive,
+  persistActiveChoice, onAccountChange,
+} from './accountContext';
 
 // ── State ─────────────────────────────────────────────────
+// `account` is a derived alias for getActive() — kept for backwards compat
+// within action handlers that haven't been refactored yet.
 let account: Account | null = null;
 let threads: Thread[] = [];
 let searchQuery = '';
@@ -35,8 +41,19 @@ async function boot() {
   }
 
   try {
-    account = await getAccount();
+    await loadAccountsFromDb();
+    account = getActive();
     if (account) {
+      // Subscribe: re-render whenever the active account changes
+      onAccountChange(() => {
+        account = getActive();
+        if (account) {
+          updateAccountAvatar();
+          threads = [];
+          renderInbox();
+          refresh();
+        }
+      });
       showShell();
       await refresh();
     }
@@ -69,7 +86,20 @@ function showAuth() {
     const originalHTML = btn.innerHTML;
     btn.textContent = 'Opening browser…';
     try {
-      account = await startOAuth();
+      const newAccount = await startOAuth();
+      addAccount(newAccount);
+      setActive(newAccount.id);
+      persistActiveChoice();
+      account = newAccount;
+      onAccountChange(() => {
+        account = getActive();
+        if (account) {
+          updateAccountAvatar();
+          threads = [];
+          renderInbox();
+          refresh();
+        }
+      });
       showShell();
       await refresh();
     } catch (e) {
@@ -77,6 +107,158 @@ function showAuth() {
       btn.innerHTML = originalHTML;
       alert(`Login failed: ${e}`);
     }
+  });
+}
+
+// ── Account avatar & switcher ─────────────────────────────
+const ACCOUNT_COLORS = [
+  '#7c3aed', '#0891b2', '#16a34a', '#d97706',
+  '#dc2626', '#db2777', '#2563eb', '#65a30d',
+];
+
+function accountInitial(email: string): string {
+  return (email[0] ?? '?').toUpperCase();
+}
+
+function accountColor(email: string): string {
+  let h = 0;
+  for (let i = 0; i < email.length; i++) h = (Math.imul(31, h) + email.charCodeAt(i)) | 0;
+  return ACCOUNT_COLORS[Math.abs(h) % ACCOUNT_COLORS.length];
+}
+
+function accountAvatarHtml(): string {
+  const a = getActive();
+  if (!a) return '<span class="account-initials">?</span>';
+  const initial = accountInitial(a.email);
+  const color = accountColor(a.email);
+  const entry = getAccounts().find(e => e.account.id === a.id);
+  const errorBadge = entry?.error ? '<span class="account-error-badge" title="Account error">!</span>' : '';
+  return `<span class="account-initials" style="background:${color}">${initial}</span>${errorBadge}`;
+}
+
+function accountDropdownContent(): string {
+  const entries = getAccounts();
+  const active = getActive();
+  // Max 5 shown; overflow scrolls via CSS
+  const items = entries.map(e => {
+    const a = e.account;
+    const isActive = a.id === active?.id;
+    const errorLabel = e.error === 'token-expired'
+      ? '<span class="acct-error-tag">Token expired</span>'
+      : e.error === 'sync-failing'
+        ? '<span class="acct-error-tag">Sync failing</span>'
+        : '';
+    return `
+      <button class="account-item${isActive ? ' active' : ''}" data-acctid="${a.id}">
+        <span class="account-item-avatar" style="background:${accountColor(a.email)}">${accountInitial(a.email)}</span>
+        <span class="account-item-email">${esc(a.email)}</span>
+        ${errorLabel}
+        ${isActive ? '<span class="account-item-check">✓</span>' : ''}
+      </button>`;
+  }).join('');
+
+  const signOutLabel = entries.length === 1 ? 'Sign out' : 'Sign out this account';
+  return `
+    <div class="account-list">${items}</div>
+    <div class="account-dropdown-divider"></div>
+    <button class="account-dropdown-action" id="btn-add-account">+ Add account</button>
+    <button class="account-dropdown-action danger" id="btn-signout">${signOutLabel}</button>
+  `;
+}
+
+function updateAccountAvatar() {
+  const btn = document.getElementById('btn-account-menu');
+  if (btn) btn.innerHTML = accountAvatarHtml();
+}
+
+function wireAccountMenu() {
+  const menuBtn = document.getElementById('btn-account-menu') as HTMLButtonElement;
+  const dropdown = document.getElementById('account-dropdown') as HTMLElement;
+
+  function openMenu() {
+    dropdown.innerHTML = accountDropdownContent();
+    dropdown.hidden = false;
+    menuBtn.setAttribute('aria-expanded', 'true');
+
+    // backdrop
+    const backdrop = document.createElement('div');
+    backdrop.className = 'account-dropdown-backdrop';
+    backdrop.id = 'account-dropdown-backdrop';
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('click', closeMenu);
+
+    // Wire account switches
+    dropdown.querySelectorAll<HTMLButtonElement>('.account-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.acctid!;
+        setActive(id);
+        persistActiveChoice();
+        closeMenu();
+      });
+    });
+
+    // Add account
+    document.getElementById('btn-add-account')?.addEventListener('click', async () => {
+      closeMenu();
+      try {
+        const newAccount = await startOAuth();
+        addAccount(newAccount);
+        setActive(newAccount.id);
+        persistActiveChoice();
+        account = newAccount;
+        updateAccountAvatar();
+        threads = [];
+        renderInbox();
+        await refresh();
+      } catch (e) {
+        console.error('Add account failed:', e);
+        alert(`Add account failed: ${e}`);
+      }
+    });
+
+    // Sign out
+    document.getElementById('btn-signout')?.addEventListener('click', async () => {
+      closeMenu();
+      if (!account) return;
+      try {
+        const db = await import('./db').then(m => m.getDb());
+        const acctId = account.id;
+        await db.execute('DELETE FROM accounts WHERE id = ?', [acctId]);
+        await db.execute('DELETE FROM threads WHERE account_id = ?', [acctId]);
+        await db.execute('DELETE FROM messages WHERE account_id = ?', [acctId]);
+        await db.execute('DELETE FROM blocked_senders WHERE account_id = ?', [acctId]);
+        await db.execute('DELETE FROM settings WHERE account_id = ?', [acctId]);
+
+        removeAccount(acctId);
+
+        const next = getActive();
+        if (next) {
+          account = next;
+          updateAccountAvatar();
+          threads = [];
+          renderInbox();
+          await refresh();
+        } else {
+          account = null;
+          threads = [];
+          syncing = false;
+          showAuth();
+        }
+      } catch (e) {
+        console.error('Sign out error:', e);
+      }
+    });
+  }
+
+  function closeMenu() {
+    dropdown.hidden = true;
+    menuBtn.setAttribute('aria-expanded', 'false');
+    document.getElementById('account-dropdown-backdrop')?.remove();
+  }
+
+  menuBtn.addEventListener('click', () => {
+    if (!dropdown.hidden) closeMenu();
+    else openMenu();
   });
 }
 
@@ -92,7 +274,12 @@ function showShell() {
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
         <button class="btn-icon" id="btn-theme" title="Toggle theme">◑</button>
-        <button class="btn-icon" id="btn-signout" title="Sign out" style="font-size:13px">Sign out</button>
+        <button class="account-avatar-btn" id="btn-account-menu" title="Switch account" aria-haspopup="true" aria-expanded="false">
+          ${accountAvatarHtml()}
+        </button>
+      </div>
+      <div class="account-dropdown" id="account-dropdown" hidden>
+        ${accountDropdownContent()}
       </div>
       <div class="nav-tray-wrapper">
         <div class="nav-tray" id="nav-tray" role="listbox">
@@ -160,25 +347,9 @@ function showShell() {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     applyTheme(next);
   });
-  document.getElementById('btn-signout')!.addEventListener('click', async () => {
-    try {
-      const db = await import('./db').then(m => m.getDb());
-      const acctId = account?.id;
-      await db.execute('DELETE FROM accounts WHERE 1=1');
-      if (acctId != null) {
-        await db.execute('DELETE FROM threads WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM messages WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM blocked_senders WHERE account_id = ?', [acctId]);
-        await db.execute('DELETE FROM settings WHERE account_id = ?', [acctId]);
-      }
-      account = null;
-      threads = [];
-      syncing = false;
-      showAuth();
-    } catch (e) {
-      console.error('Sign out error:', e);
-    }
-  });
+
+  // Account menu
+  wireAccountMenu();
 
   const searchEl = document.getElementById('search') as HTMLInputElement;
   searchEl.addEventListener('input', () => {

@@ -21,14 +21,9 @@ export interface Account {
   tokenExpiry: number;
 }
 
-export async function getAccount(): Promise<Account | null> {
-  const db = await getDb();
-  const rows = await db.select<Array<{
-    id: string; email: string; access_token: string;
-    refresh_token: string; token_expiry: number;
-  }>>('SELECT * FROM accounts LIMIT 1');
-  if (!rows.length) return null;
-  const r = rows[0];
+type AccountRow = { id: string; email: string; access_token: string; refresh_token: string; token_expiry: number };
+
+function rowToAccount(r: AccountRow): Account {
   return {
     id: r.id,
     email: r.email,
@@ -36,6 +31,19 @@ export async function getAccount(): Promise<Account | null> {
     refreshToken: r.refresh_token,
     tokenExpiry: r.token_expiry,
   };
+}
+
+export async function getAccount(): Promise<Account | null> {
+  const db = await getDb();
+  const rows = await db.select<AccountRow[]>('SELECT * FROM accounts LIMIT 1');
+  if (!rows.length) return null;
+  return rowToAccount(rows[0]);
+}
+
+export async function getAllAccounts(): Promise<Account[]> {
+  const db = await getDb();
+  const rows = await db.select<AccountRow[]>('SELECT * FROM accounts ORDER BY created_at ASC');
+  return rows.map(rowToAccount);
 }
 
 export async function saveAccount(account: Account): Promise<void> {
