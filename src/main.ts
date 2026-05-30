@@ -17,6 +17,7 @@ type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred';
 let currentView: ViewName = 'Inbox';
 let selectedThreadId: string | null = null;
 let kbRegistered = false;
+let currentInlineReply: HTMLElement | null = null;
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',   icon: '✉' },
@@ -905,6 +906,7 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
     row.querySelector('.btn-star')?.addEventListener('click', e => { e.stopPropagation(); doToggleStar(t, row); });
     row.querySelector('.btn-archive')?.addEventListener('click', e => { e.stopPropagation(); doArchive(t, row); });
     row.querySelector('.btn-block')?.addEventListener('click', e => { e.stopPropagation(); doBlock(t, row); });
+    row.querySelector('.btn-reply')?.addEventListener('click', e => { e.stopPropagation(); openInlineReply(t, row); });
     if (isSnoozed) {
       row.querySelector('.btn-unsnooze')?.addEventListener('click', e => { e.stopPropagation(); doUnsnooze(t, row); });
     } else {
@@ -1034,6 +1036,7 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
          <button class="btn-action btn-archive" title="Archive">⬇</button>
        </div>`
     : `<div class="thread-actions">
+         <button class="btn-action btn-reply" title="Quick reply">↩</button>
          <button class="btn-action ${starClass}" title="${t.isStarred ? 'Unstar' : 'Star'}">${starIcon}</button>
          <button class="btn-action btn-snooze" title="Snooze">🕐</button>
          <button class="btn-action btn-read" title="Mark read">✓</button>
@@ -1056,6 +1059,73 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
       </div>
       ${actionsHtml}
     </div>`;
+}
+
+// ── Inline reply ──────────────────────────────────────────
+function openInlineReply(t: Thread, row: HTMLElement) {
+  // Close any existing inline reply
+  if (currentInlineReply) {
+    currentInlineReply.remove();
+    currentInlineReply = null;
+  }
+
+  const replyEl = document.createElement('div');
+  replyEl.className = 'inline-reply';
+  replyEl.innerHTML = `
+    <textarea class="inline-reply-textarea" placeholder="Write your reply…" rows="3"></textarea>
+    <div class="inline-reply-actions">
+      <button class="btn-secondary inline-reply-cancel">Cancel</button>
+      <button class="btn-primary inline-reply-send">Send</button>
+    </div>`;
+
+  row.insertAdjacentElement('afterend', replyEl);
+  currentInlineReply = replyEl;
+
+  const textarea = replyEl.querySelector<HTMLTextAreaElement>('.inline-reply-textarea')!;
+  const sendBtn = replyEl.querySelector<HTMLButtonElement>('.inline-reply-send')!;
+  const cancelBtn = replyEl.querySelector<HTMLButtonElement>('.inline-reply-cancel')!;
+
+  textarea.focus();
+
+  function collapse() {
+    replyEl.remove();
+    if (currentInlineReply === replyEl) currentInlineReply = null;
+  }
+
+  cancelBtn.addEventListener('click', collapse);
+
+  sendBtn.addEventListener('click', async () => {
+    const body = textarea.value.trim();
+    if (!body || !account) return;
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending…';
+    try {
+      await sendEmail(account, {
+        to: t.senderEmail,
+        subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
+        body,
+        threadId: t.gmailThreadId,
+      });
+      collapse();
+      showToast('Reply sent');
+      if (t.isUnread) {
+        t.isUnread = false;
+        row.classList.remove('unread');
+        row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
+        markRead(account, t).catch(() => {});
+      }
+    } catch (e) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send';
+      const errEl = replyEl.querySelector('.inline-reply-error') ?? (() => {
+        const d = document.createElement('div');
+        d.className = 'inline-reply-error';
+        replyEl.querySelector('.inline-reply-actions')!.insertAdjacentElement('beforebegin', d);
+        return d;
+      })();
+      (errEl as HTMLElement).textContent = `Send failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  });
 }
 
 // ── Row actions ───────────────────────────────────────────

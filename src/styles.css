@@ -1782,3 +1782,41 @@ body {
   to   { width: 0%; }
 }
 
+/* ── Inline reply ───────────────────────────────────────── */
+.inline-reply {
+  border-top: 1px solid var(--border);
+  padding: 10px 16px 12px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inline-reply-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  resize: vertical;
+  outline: none;
+  rows: 3;
+}
+.inline-reply-textarea:focus { border-color: var(--text-muted); }
+
+.inline-reply-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.inline-reply-error {
+  font-size: 12px;
+  color: var(--danger, #dc2626);
+}
+
