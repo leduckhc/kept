@@ -13,6 +13,8 @@ let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred';
 let currentView: ViewName = 'Inbox';
+let selectedThreadId: string | null = null;
+let kbRegistered = false;
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',   icon: '✉' },
@@ -198,6 +200,7 @@ function showShell() {
     if (e.key === 'c' && !e.metaKey && !e.ctrlKey) openComposeNew();
   }
   document.addEventListener('keydown', handleKey);
+  registerKeyboardShortcuts();
   // Clean up when shell is replaced
   const cleanupKey = () => { document.removeEventListener('keydown', handleKey); };
   document.getElementById('btn-signout')!.addEventListener('click', cleanupKey, { once: true });
@@ -422,6 +425,150 @@ function showAccountMenu() {
   });
 }
 
+// ── Keyboard shortcuts ────────────────────────────────────
+function isInputFocused(): boolean {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = (el as HTMLElement).tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable;
+}
+
+function getVisibleThreadIds(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('.thread-row'))
+    .map(r => r.dataset.id!)
+    .filter(Boolean);
+}
+
+function selectThread(id: string | null) {
+  document.querySelectorAll<HTMLElement>('.thread-row.is-selected')
+    .forEach(r => r.classList.remove('is-selected'));
+  selectedThreadId = id;
+  if (!id) return;
+  const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+  if (row) {
+    row.classList.add('is-selected');
+    row.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function moveSelection(direction: 1 | -1) {
+  const ids = getVisibleThreadIds();
+  if (ids.length === 0) return;
+  const cur = selectedThreadId ? ids.indexOf(selectedThreadId) : -1;
+  let next: number;
+  if (direction === 1) {
+    next = cur < ids.length - 1 ? cur + 1 : cur === -1 ? 0 : cur;
+  } else {
+    next = cur > 0 ? cur - 1 : 0;
+  }
+  selectThread(ids[next]);
+}
+
+function showCheatSheet() {
+  if (document.getElementById('kb-cheatsheet')) {
+    document.getElementById('kb-cheatsheet')!.remove();
+    return;
+  }
+  const modal = document.createElement('div');
+  modal.id = 'kb-cheatsheet';
+  modal.innerHTML = `
+    <div class="kb-modal">
+      <div class="kb-modal-header">Keyboard shortcuts</div>
+      <table class="kb-table">
+        <tr><td class="kb-key">j / ↓</td><td>Next thread</td></tr>
+        <tr><td class="kb-key">k / ↑</td><td>Previous thread</td></tr>
+        <tr><td class="kb-key">Enter / o</td><td>Open thread</td></tr>
+        <tr><td class="kb-key">e</td><td>Archive thread</td></tr>
+        <tr><td class="kb-key">r</td><td>Reply</td></tr>
+        <tr><td class="kb-key">u</td><td>Back to inbox</td></tr>
+        <tr><td class="kb-key">?</td><td>Show/hide shortcuts</td></tr>
+        <tr><td class="kb-key">Esc</td><td>Dismiss</td></tr>
+      </table>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+function openThreadWithReply(t: Thread) {
+  openThread(t).then(() => {
+    setTimeout(() => {
+      const btn = document.getElementById('btn-reply') as HTMLButtonElement | null;
+      if (btn && btn.style.display !== 'none') btn.click();
+    }, 50);
+  });
+}
+
+function registerKeyboardShortcuts() {
+  if (kbRegistered) return;
+  kbRegistered = true;
+
+  document.addEventListener('keydown', async (e: KeyboardEvent) => {
+    if (isInputFocused()) return;
+
+    switch (e.key) {
+      case 'j':
+      case 'ArrowDown':
+        e.preventDefault();
+        moveSelection(1);
+        break;
+
+      case 'k':
+      case 'ArrowUp':
+        e.preventDefault();
+        moveSelection(-1);
+        break;
+
+      case 'Enter':
+      case 'o': {
+        if (!selectedThreadId) break;
+        const t = threads.find(x => x.id === selectedThreadId);
+        if (t) openThread(t);
+        break;
+      }
+
+      case 'e': {
+        if (!selectedThreadId || !account) break;
+        const t = threads.find(x => x.id === selectedThreadId);
+        if (!t) break;
+        const ids = getVisibleThreadIds();
+        const idx = ids.indexOf(selectedThreadId);
+        const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        if (row) await doArchive(t, row);
+        selectThread(nextId);
+        break;
+      }
+
+      case 'r': {
+        if (!selectedThreadId) break;
+        const t = threads.find(x => x.id === selectedThreadId);
+        if (t) openThreadWithReply(t);
+        break;
+      }
+
+      case 'u': {
+        const overlay = document.querySelector<HTMLElement>('.reader-overlay');
+        if (overlay) overlay.remove();
+        break;
+      }
+
+      case '?': {
+        e.preventDefault();
+        showCheatSheet();
+        break;
+      }
+
+      case 'Escape': {
+        const sheet = document.getElementById('kb-cheatsheet');
+        if (sheet) { sheet.remove(); break; }
+        const overlay = document.querySelector<HTMLElement>('.reader-overlay');
+        if (overlay) overlay.remove();
+        break;
+      }
+    }
+  });
+}
+
 // ── Render inbox ──────────────────────────────────────────
 function renderInbox() {
   const container = document.getElementById('inbox');
@@ -453,6 +600,12 @@ function renderInbox() {
 
   container.innerHTML = html;
   wireThreadRows(container, threads, false);
+  // Restore keyboard selection highlight after re-render
+  if (selectedThreadId) {
+    const row = container.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+    if (row) row.classList.add('is-selected');
+    else selectedThreadId = null;
+  }
 }
 
 async function renderSnoozedView() {

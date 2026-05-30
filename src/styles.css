@@ -1191,3 +1191,56 @@ body {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ── Keyboard navigation ─────────────────────────────────── */
+.thread-row.is-selected {
+  background: #ede9fa;
+  outline: none;
+}
+[data-theme="dark"] .thread-row.is-selected {
+  background: #2d2640;
+}
+
+/* ── Keyboard cheat sheet overlay ───────────────────────── */
+#kb-cheatsheet {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+}
+.kb-modal {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  min-width: 280px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.kb-modal-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+}
+.kb-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.kb-table tr { line-height: 2; }
+.kb-table td { font-size: 13px; color: var(--text); }
+.kb-key {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  width: 1%;
+  padding-right: 16px;
+}
