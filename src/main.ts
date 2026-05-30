@@ -106,8 +106,8 @@ function showShell() {
         </button>
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
-        <button class="btn-icon" id="btn-theme" title="Toggle theme">◑</button>
         <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${account?.email?.split('@')[0] ?? '…'} ▾</button>
+        <button class="btn-icon btn-settings" id="btn-settings" title="Settings">⚙</button>
       </div>
       <div class="nav-tray-wrapper">
         <div class="nav-tray" id="nav-tray" role="listbox">
@@ -128,6 +128,38 @@ function showShell() {
       <div class="statusbar">
         <span id="status-left">${account?.email ?? ''}</span>
         <span id="status-right"></span>
+      </div>
+      <div class="settings-panel" id="settings-panel" aria-hidden="true">
+        <div class="settings-topbar">
+          <button class="settings-back" id="settings-back">← Inbox</button>
+          <span class="settings-title">Settings</span>
+        </div>
+        <div class="settings-body">
+          <div class="settings-section">
+            <div class="settings-section-label">Accounts</div>
+            <div id="settings-accounts-list"></div>
+            <button class="settings-add-account" id="settings-add-account">
+              <span class="settings-add-account-icon"></span>
+              + Add account
+            </button>
+          </div>
+          <div class="settings-divider"></div>
+          <div class="settings-section">
+            <div class="settings-section-label">Appearance</div>
+            <div class="settings-row" id="settings-darkmode-row">
+              <div class="settings-row-text">
+                <div class="settings-row-label">Dark mode</div>
+                <div class="settings-row-sub" id="settings-darkmode-sub">Switch to dark theme</div>
+              </div>
+              <button class="settings-toggle" id="settings-darkmode-toggle" role="switch" aria-checked="false">
+                <span class="settings-toggle-thumb"></span>
+              </button>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button class="settings-signout" id="settings-signout">Sign out</button>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -179,10 +211,7 @@ function showShell() {
   document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
 
   document.getElementById('btn-sync')!.addEventListener('click', () => syncAndRender());
-  document.getElementById('btn-theme')!.addEventListener('click', () => {
-    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
-  });
+  document.getElementById('btn-settings')!.addEventListener('click', () => openSettings());
   document.getElementById('btn-account')!.addEventListener('click', () => {
     showAccountMenu();
   });
@@ -208,9 +237,151 @@ function showShell() {
   }
   document.addEventListener('keydown', handleKey);
   registerKeyboardShortcuts();
-  // Clean up when shell is replaced
-  const cleanupKey = () => { document.removeEventListener('keydown', handleKey); };
-  document.getElementById('btn-signout')!.addEventListener('click', cleanupKey, { once: true });
+}
+
+// ── Settings panel ─────────────────────────────────────────
+function openSettings() {
+  const shell = document.getElementById('app-shell');
+  const panel = document.getElementById('settings-panel');
+  if (!shell || !panel) return;
+
+  // Render accounts list
+  renderSettingsAccounts();
+
+  // Sync dark mode toggle state
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const toggle = document.getElementById('settings-darkmode-toggle') as HTMLButtonElement;
+  const sub = document.getElementById('settings-darkmode-sub');
+  if (toggle) {
+    toggle.setAttribute('aria-checked', String(isDark));
+    toggle.classList.toggle('on', isDark);
+  }
+  if (sub) sub.textContent = isDark ? 'Currently using dark theme' : 'Switch to dark theme';
+
+  // Wire back button
+  document.getElementById('settings-back')!.addEventListener('click', closeSettings, { once: true });
+
+  // Wire dark mode toggle
+  toggle?.addEventListener('click', () => {
+    const nowDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const next = nowDark ? 'light' : 'dark';
+    applyTheme(next);
+    toggle.setAttribute('aria-checked', String(!nowDark));
+    toggle.classList.toggle('on', !nowDark);
+    const subEl = document.getElementById('settings-darkmode-sub');
+    if (subEl) subEl.textContent = !nowDark ? 'Currently using dark theme' : 'Switch to dark theme';
+  });
+
+  // Wire sign out
+  const signoutBtn = document.getElementById('settings-signout') as HTMLButtonElement;
+  signoutBtn?.addEventListener('click', async () => {
+    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
+    signoutBtn.disabled = true;
+    signoutBtn.textContent = 'Signing out…';
+    try {
+      for (const a of accounts) {
+        await removeAccount(a).catch(e => console.error('Remove error:', e));
+      }
+    } finally {
+      clearActiveAccountId();
+      account = null;
+      accounts = [];
+      threads = [];
+      syncing = false;
+      showAuth();
+    }
+  });
+
+  // Wire add account
+  document.getElementById('settings-add-account')!.addEventListener('click', async () => {
+    try {
+      const newAcct = await startOAuth();
+      const existing = accounts.find(a => a.id === newAcct.id);
+      if (existing) {
+        const idx = accounts.indexOf(existing);
+        accounts[idx] = newAcct;
+        setStatus(`${newAcct.email} token refreshed`);
+      } else {
+        accounts.push(newAcct);
+        setStatus(`${newAcct.email} added`);
+      }
+      renderSettingsAccounts();
+    } catch (e) {
+      setStatus(`Add account failed: ${e}`);
+    }
+    setTimeout(() => setStatus(''), 5000);
+  });
+
+  // Animate in
+  panel.classList.add('open');
+  panel.setAttribute('aria-hidden', 'false');
+  shell.classList.add('settings-open');
+}
+
+function closeSettings() {
+  const shell = document.getElementById('app-shell');
+  const panel = document.getElementById('settings-panel');
+  if (!shell || !panel) return;
+  panel.classList.remove('open');
+  panel.setAttribute('aria-hidden', 'true');
+  shell.classList.remove('settings-open');
+}
+
+function renderSettingsAccounts() {
+  const list = document.getElementById('settings-accounts-list');
+  if (!list) return;
+  const avatarColors = ['#7c6fa8', '#5b8dd9', '#7cb9a8', '#d97c5b', '#c47cad'];
+  list.innerHTML = accounts.map((a, i) => {
+    const initial = (a.email[0] ?? '?').toUpperCase();
+    const color = avatarColors[i % avatarColors.length];
+    const isOnly = accounts.length === 1;
+    return `
+      <div class="settings-account-row" data-id="${esc(a.id)}">
+        <div class="settings-avatar" style="background:${color}">${initial}</div>
+        <div class="settings-account-info">
+          <div class="settings-account-name">${esc(a.email.split('@')[0])}</div>
+          <div class="settings-account-email">${esc(a.email)}</div>
+        </div>
+        <button class="settings-account-remove" data-id="${esc(a.id)}" title="Remove account"
+          ${isOnly ? 'disabled' : ''} aria-label="Remove ${esc(a.email)}">×</button>
+      </div>`;
+  }).join('');
+
+  // Wire remove buttons
+  list.querySelectorAll<HTMLButtonElement>('.settings-account-remove').forEach(btn => {
+    if (btn.disabled) return;
+    btn.addEventListener('click', async () => {
+      const removeId = btn.dataset.id!;
+      const target = accounts.find(a => a.id === removeId);
+      if (!target) return;
+      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
+      try {
+        await removeAccount(target);
+        accounts = accounts.filter(a => a.id !== removeId);
+        if (account?.id === removeId) {
+          const next = accounts[0] ?? null;
+          if (next) {
+            setAccount(next);
+            threads = await loadThreads(next.id);
+            closeSettings();
+            renderInbox();
+            await refreshAll();
+          } else {
+            clearActiveAccountId();
+            account = null;
+            threads = [];
+            syncing = false;
+            showAuth();
+          }
+        } else {
+          renderSettingsAccounts();
+        }
+      } catch (err) {
+        console.error('Remove account error:', err);
+        setStatus('Failed to remove account');
+      }
+    });
+  });
 }
 
 // ── View switching ────────────────────────────────────────
