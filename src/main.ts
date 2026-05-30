@@ -9,6 +9,7 @@ import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './n
 // ── State ─────────────────────────────────────────────────
 let account: Account | null = null;      // active account
 let accounts: Account[] = [];            // all accounts
+let unifiedMode = false;                 // KPT-037: show all accounts merged
 let threads: Thread[] = [];
 let searchQuery = '';
 let syncing = false;
@@ -29,6 +30,14 @@ const VIEWS: Array<{ name: ViewName; icon: string }> = [
 function setAccount(a: Account) {
   account = a;
   setActiveAccountId(a.id);
+}
+
+// KPT-037: resolve the Account for a thread action (unified mode uses t.accountId)
+function accountFor(t: Thread): Account | null {
+  if (unifiedMode && t.accountId) {
+    return accounts.find(a => a.id === t.accountId) ?? account;
+  }
+  return account;
 }
 
 
@@ -426,7 +435,12 @@ function renderLabelView(view: ViewName) {
 /** On boot: load active account threads, then kick off parallel sync for all accounts. */
 async function refreshAll() {
   if (!account) return;
-  threads = await loadThreads(account.id);
+
+  if (unifiedMode) {
+    threads = await loadUnifiedThreads();
+  } else {
+    threads = await loadThreads(account.id);
+  }
   renderInbox();
 
   // Request notification permission early (non-blocking)
@@ -443,11 +457,23 @@ async function refreshAll() {
   setStatus('Syncing…');
   await Promise.all(syncPromises);
   if (btn) btn.style.opacity = '';
-  // Reload threads for the active account after all syncs complete
-  threads = await loadThreads(account.id);
+  if (unifiedMode) {
+    threads = await loadUnifiedThreads();
+  } else {
+    threads = await loadThreads(account.id);
+  }
   renderInbox();
   setStatus(`Synced — ${threads.length} threads`);
   setTimeout(() => setStatus(''), 5000);
+}
+
+/** KPT-037: Load and merge inbox threads from all accounts, sorted by receivedAt desc. */
+async function loadUnifiedThreads(): Promise<Thread[]> {
+  const allAccts = await getAllAccounts();
+  const perAccount = await Promise.all(allAccts.map(a => loadThreads(a.id).catch(() => [] as Thread[])));
+  const merged = perAccount.flat();
+  merged.sort((a, b) => b.receivedAt - a.receivedAt);
+  return merged;
 }
 
 async function syncAndRender() {
@@ -457,22 +483,34 @@ async function syncAndRender() {
   const btn = document.getElementById('btn-sync');
   if (btn) btn.style.opacity = '0.4';
   try {
-    // Capture thread IDs known before sync to detect new arrivals
-    const preSync = await loadThreads(account.id);
-    const knownIds = new Set(preSync.map(t => t.id));
-    // Gate: only send notifications on second+ sync (historyId already set)
-    const isSubsequentSync = await hasSyncedBefore(account.id);
+    if (unifiedMode) {
+      // Sync all accounts in parallel
+      const allAccts = await getAllAccounts();
+      await Promise.all(allAccts.map(a =>
+        syncInbox(a, a.id === account!.id ? n => setStatus(`Syncing… ${n} threads`) : undefined)
+          .catch(err => console.error(`Sync error for ${a.email}:`, err))
+      ));
+      threads = await loadUnifiedThreads();
+      renderInbox();
+      setStatus(`Synced — ${threads.length} threads`);
+    } else {
+      // Capture thread IDs known before sync to detect new arrivals
+      const preSync = await loadThreads(account.id);
+      const knownIds = new Set(preSync.map(t => t.id));
+      // Gate: only send notifications on second+ sync (historyId already set)
+      const isSubsequentSync = await hasSyncedBefore(account.id);
 
-    await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
-    threads = await loadThreads(account.id);
-    renderInbox();
-    setStatus(`Synced — ${threads.length} threads`);
+      await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
+      threads = await loadThreads(account.id);
+      renderInbox();
+      setStatus(`Synced — ${threads.length} threads`);
 
-    // Fire notifications for newly-arrived threads (not first sync)
-    if (isSubsequentSync) {
-      const newThreads = threads.filter(t => !knownIds.has(t.id));
-      if (newThreads.length > 0) {
-        notifyNewThreads(newThreads.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
+      // Fire notifications for newly-arrived threads (not first sync)
+      if (isSubsequentSync) {
+        const newThreads = threads.filter(t => !knownIds.has(t.id));
+        if (newThreads.length > 0) {
+          notifyNewThreads(newThreads.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
+        }
       }
     }
 
@@ -514,10 +552,16 @@ function showAccountMenu() {
   menu.className = 'account-menu';
   menu.innerHTML = `
     <div class="account-menu-header">Accounts</div>
-    ${accounts.map(a => `
-      <button class="account-menu-item${a.id === account?.id ? ' active' : ''}" data-id="${a.id}">
+    ${accounts.length > 1 ? `
+      <button class="account-menu-item${unifiedMode ? ' active' : ''}" id="btn-all-accounts">
+        <span class="account-email">All Accounts</span>
+        ${unifiedMode ? '<span class="account-active-badge">active</span>' : ''}
+      </button>` : ''}
+    ${accounts.map((a, i) => `
+      <button class="account-menu-item${!unifiedMode && a.id === account?.id ? ' active' : ''}" data-id="${a.id}">
+        <span class="account-badge-dot" style="background:${ACCOUNT_BADGE_COLORS[i % ACCOUNT_BADGE_COLORS.length]}"></span>
         <span class="account-email">${esc(a.email)}</span>
-        ${a.id === account?.id ? '<span class="account-active-badge">active</span>' : ''}
+        ${!unifiedMode && a.id === account?.id ? '<span class="account-active-badge">active</span>' : ''}
         <button class="account-remove-btn" data-remove-id="${a.id}" title="Remove account">×</button>
       </button>`).join('')}
     <button class="account-menu-add" id="btn-add-account">+ Add account</button>
@@ -528,13 +572,27 @@ function showAccountMenu() {
   overlay.appendChild(menu);
   document.body.appendChild(overlay);
 
+  // All Accounts unified mode
+  document.getElementById('btn-all-accounts')?.addEventListener('click', async () => {
+    overlay.remove();
+    unifiedMode = true;
+    const acctBtn = document.getElementById('btn-account');
+    if (acctBtn) acctBtn.textContent = 'All Accounts ▾';
+    const statusLeft = document.getElementById('status-left');
+    if (statusLeft) statusLeft.textContent = 'All Accounts';
+    await refreshAll();
+  });
+
   // Switch account
   menu.querySelectorAll<HTMLButtonElement>('.account-menu-item').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       if ((e.target as HTMLElement).closest('.account-remove-btn')) return;
       const id = btn.dataset.id!;
+      if (!id) return; // "All Accounts" button has no data-id
       const target = accounts.find(a => a.id === id);
-      if (!target || target.id === account?.id) { overlay.remove(); return; }
+      if (!target) { overlay.remove(); return; }
+      if (!unifiedMode && target.id === account?.id) { overlay.remove(); return; }
+      unifiedMode = false;
       setAccount(target);
       threads = await loadThreads(target.id);
       renderInbox();
@@ -999,6 +1057,9 @@ const AVATAR_COLORS = [
   '#dc2626', '#db2777', '#2563eb', '#65a30d',
 ];
 
+// KPT-037: stable per-account badge colors (index into accounts array)
+const ACCOUNT_BADGE_COLORS = ['#7c6fa8', '#5b8dd9', '#7cb9a8', '#d97c5b', '#c47cad'];
+
 function hashStr(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
@@ -1021,6 +1082,12 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
   const sender = t.senderName || t.senderEmail;
   const attachment = t.hasAttachment ? `<span class="attachment-icon" title="Has attachment">📎</span>` : '';
   const dot = `<span class="unread-dot${t.isUnread ? ' filled' : ''}"></span>`;
+
+  // KPT-037: account badge shown in unified mode
+  const acctIdx = unifiedMode ? accounts.findIndex(a => a.id === t.accountId) : -1;
+  const acctBadge = acctIdx >= 0
+    ? `<span class="account-badge" style="background:${ACCOUNT_BADGE_COLORS[acctIdx % ACCOUNT_BADGE_COLORS.length]}" title="${esc(accounts[acctIdx]?.email ?? '')}">${(accounts[acctIdx]?.email[0] ?? '?').toUpperCase()}</span>`
+    : '';
 
   // Clock indicator for snoozed threads
   const clockIndicator = t.snoozedUntil
@@ -1048,7 +1115,10 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
   return `
     <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}" data-id="${t.id}">
       ${dot}
-      ${avatarHtml(t)}
+      <div class="avatar-wrap">
+        ${avatarHtml(t)}
+        ${acctBadge}
+      </div>
       <div class="thread-mid${attachment ? ' has-attachment' : ''}">
         <div class="thread-top">
           <span class="thread-sender">${esc(sender)}</span>
@@ -1130,11 +1200,12 @@ function openInlineReply(t: Thread, row: HTMLElement) {
 
 // ── Row actions ───────────────────────────────────────────
 async function doMarkRead(t: Thread, row: HTMLElement) {
-  if (!account) return;
+  const acct = accountFor(t);
+  if (!acct) return;
   try {
-    await markRead(account, t);
-    const fresh = account ? await getAccountById(account.id) : null;
-    if (fresh) setAccount(fresh);
+    await markRead(acct, t);
+    const fresh = await getAccountById(acct.id);
+    if (fresh && !unifiedMode) setAccount(fresh);
     t.isUnread = false;
     row.classList.remove('unread');
     row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
@@ -1147,9 +1218,10 @@ async function doMarkRead(t: Thread, row: HTMLElement) {
 }
 
 async function doMarkUnread(t: Thread, row: HTMLElement) {
-  if (!account) return;
+  const acct = accountFor(t);
+  if (!acct) return;
   try {
-    await markUnread(account, t);
+    await markUnread(acct, t);
     t.isUnread = true;
     row.classList.add('unread');
     row.querySelector<HTMLElement>('.unread-dot')?.classList.add('filled');
@@ -1160,9 +1232,10 @@ async function doMarkUnread(t: Thread, row: HTMLElement) {
 }
 
 async function doToggleStar(t: Thread, row: HTMLElement) {
-  if (!account) return;
+  const acct = accountFor(t);
+  if (!acct) return;
   try {
-    const nowStarred = await toggleStar(account, t);
+    const nowStarred = await toggleStar(acct, t);
     t.isStarred = nowStarred;
     const btn = row.querySelector<HTMLButtonElement>('.btn-star');
     if (btn) {
@@ -1178,18 +1251,21 @@ async function doToggleStar(t: Thread, row: HTMLElement) {
 }
 
 async function doArchive(t: Thread, row: HTMLElement) {
-  if (!account) return;
+  const acct = accountFor(t);
+  if (!acct) return;
   try {
-    await archiveThread(account, t);
-    const fresh = account ? await getAccountById(account.id) : null;
-    if (fresh) setAccount(fresh);
+    await archiveThread(acct, t);
+    const fresh = await getAccountById(acct.id);
+    if (fresh && !unifiedMode) setAccount(fresh);
     row.remove();
     threads = threads.filter(x => x.id !== t.id);
-    const acct = account;
     showUndoToast('Archived', async () => {
-      if (!acct) return;
       await unarchiveThread(acct, t);
-      threads = await loadThreads(acct.id);
+      if (unifiedMode) {
+        threads = await loadUnifiedThreads();
+      } else {
+        threads = await loadThreads(acct.id);
+      }
       renderInbox();
     });
   } catch (e) {
@@ -1200,31 +1276,33 @@ async function doArchive(t: Thread, row: HTMLElement) {
 }
 
 async function doBlock(t: Thread, _row: HTMLElement) {
-  if (!account) return;
+  const acct = accountFor(t);
+  if (!acct) return;
   if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
-  await blockSender(account, t);
-  const fresh = account ? await getAccountById(account.id) : null;
-  if (fresh) setAccount(fresh);
-  // Remove all rows from this sender
-  threads = threads.filter(x => x.senderEmail !== t.senderEmail);
+  await blockSender(acct, t);
+  const fresh = await getAccountById(acct.id);
+  if (fresh && !unifiedMode) setAccount(fresh);
+  threads = threads.filter(x => !(x.senderEmail === t.senderEmail && x.accountId === t.accountId));
   renderInbox();
-  const acct = account;
   showUndoToast(`Blocked ${t.senderEmail}`, async () => {
-    if (!acct) return;
-    threads = await loadThreads(acct.id);
+    if (unifiedMode) {
+      threads = await loadUnifiedThreads();
+    } else {
+      threads = await loadThreads(acct.id);
+    }
     renderInbox();
   });
 }
 
 async function doUnsnooze(t: Thread, row: HTMLElement) {
+  const acct = accountFor(t);
   await unsnoozeThread(t);
   t.snoozedUntil = null;
   row.remove();
   threads = threads.filter(x => x.id !== t.id);
   showToast('Back in inbox', 3000);
-  // Refresh inbox so it picks up resurfaces thread
-  if (account) {
-    threads = await loadThreads(account.id);
+  if (acct) {
+    threads = unifiedMode ? await loadUnifiedThreads() : await loadThreads(acct.id);
   }
 }
 
