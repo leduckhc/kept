@@ -22,6 +22,8 @@ let kbRegistered = false;
 let currentInlineReply: HTMLElement | null = null;
 let bulkMode = false;
 let selectedIds = new Set<string>();
+let gPending = false;
+let gTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',   icon: '✉' },
@@ -745,27 +747,63 @@ function showCheatSheet() {
     document.getElementById('kb-cheatsheet')!.remove();
     return;
   }
-  const modal = document.createElement('div');
-  modal.id = 'kb-cheatsheet';
-  modal.innerHTML = `
+  const overlay = document.createElement('div');
+  overlay.id = 'kb-cheatsheet';
+  overlay.innerHTML = `
     <div class="kb-modal">
-      <div class="kb-modal-header">Keyboard shortcuts</div>
-      <table class="kb-table">
-        <tr><td class="kb-key">j / ↓</td><td>Next thread</td></tr>
-        <tr><td class="kb-key">k / ↑</td><td>Previous thread</td></tr>
-        <tr><td class="kb-key">Enter / o</td><td>Open thread</td></tr>
-        <tr><td class="kb-key">e</td><td>Archive thread</td></tr>
-        <tr><td class="kb-key">s</td><td>Star / unstar thread</td></tr>
-        <tr><td class="kb-key">Shift+U</td><td>Mark as unread</td></tr>
-        <tr><td class="kb-key">m</td><td>Mute thread</td></tr>
-        <tr><td class="kb-key">r</td><td>Reply</td></tr>
-        <tr><td class="kb-key">u</td><td>Back to inbox</td></tr>
-        <tr><td class="kb-key">?</td><td>Show/hide shortcuts</td></tr>
-        <tr><td class="kb-key">Esc</td><td>Dismiss</td></tr>
-      </table>
+      <div class="kb-modal-header">Keyboard Shortcuts</div>
+      <div class="kb-grid">
+        <div class="kb-category">
+          <div class="kb-cat-title">Navigation</div>
+          <table class="kb-table">
+            <tr><td class="kb-key">j / ↓</td><td>Next thread</td></tr>
+            <tr><td class="kb-key">k / ↑</td><td>Previous thread</td></tr>
+            <tr><td class="kb-key">Enter / o</td><td>Open thread</td></tr>
+            <tr><td class="kb-key">u</td><td>Back to inbox</td></tr>
+            <tr><td class="kb-key">n</td><td>Next message in thread</td></tr>
+            <tr><td class="kb-key">p</td><td>Prev message in thread</td></tr>
+            <tr><td class="kb-key">Space</td><td>Scroll reader down</td></tr>
+            <tr><td class="kb-key">Shift+Space</td><td>Scroll reader up</td></tr>
+            <tr><td class="kb-key">Tab</td><td>Next view</td></tr>
+            <tr><td class="kb-key">Shift+Tab</td><td>Prev view</td></tr>
+            <tr><td class="kb-key">/</td><td>Focus search</td></tr>
+          </table>
+        </div>
+        <div class="kb-category">
+          <div class="kb-cat-title">Thread Actions</div>
+          <table class="kb-table">
+            <tr><td class="kb-key">e</td><td>Archive thread</td></tr>
+            <tr><td class="kb-key">#</td><td>Trash / delete</td></tr>
+            <tr><td class="kb-key">s</td><td>Star / unstar</td></tr>
+            <tr><td class="kb-key">Shift+U</td><td>Mark as unread</td></tr>
+            <tr><td class="kb-key">m</td><td>Mute thread</td></tr>
+            <tr><td class="kb-key">x</td><td>Toggle bulk select</td></tr>
+            <tr><td class="kb-key">Esc</td><td>Dismiss / back</td></tr>
+          </table>
+        </div>
+        <div class="kb-category">
+          <div class="kb-cat-title">Compose</div>
+          <table class="kb-table">
+            <tr><td class="kb-key">c</td><td>Compose new</td></tr>
+            <tr><td class="kb-key">r</td><td>Reply</td></tr>
+            <tr><td class="kb-key">f</td><td>Forward</td></tr>
+          </table>
+          <div class="kb-cat-title" style="margin-top:16px">Go To</div>
+          <table class="kb-table">
+            <tr><td class="kb-key">g i</td><td>Inbox</td></tr>
+            <tr><td class="kb-key">g s</td><td>Starred</td></tr>
+            <tr><td class="kb-key">g d</td><td>Drafts</td></tr>
+          </table>
+          <div class="kb-cat-title" style="margin-top:16px">Other</div>
+          <table class="kb-table">
+            <tr><td class="kb-key">?</td><td>Show this overlay</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="kb-dismiss-hint">Press <span class="kb-key">Esc</span> or <span class="kb-key">?</span> to close</div>
     </div>`;
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  document.body.appendChild(modal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 function openThreadWithReply(t: Thread) {
@@ -783,6 +821,18 @@ function registerKeyboardShortcuts() {
 
   document.addEventListener('keydown', async (e: KeyboardEvent) => {
     if (isInputFocused()) return;
+
+    // g+key two-step navigation
+    if (gPending) {
+      gPending = false;
+      if (gTimeout !== null) { clearTimeout(gTimeout); gTimeout = null; }
+      switch (e.key) {
+        case 'i': e.preventDefault(); switchView('Inbox'); return;
+        case 's': e.preventDefault(); switchView('Starred'); return;
+        case 'd': e.preventDefault(); switchView('Drafts'); return;
+      }
+      // unrecognized second key — fall through to normal handling below
+    }
 
     switch (e.key) {
       case 'j':
@@ -806,6 +856,12 @@ function registerKeyboardShortcuts() {
       }
 
       case 'e': {
+        // If reader is open, archive the current thread from reader
+        const readerEl = document.querySelector<HTMLElement>('.reader-fullpage');
+        if (readerEl) {
+          document.getElementById('btn-archive-reader')?.click();
+          break;
+        }
         if (!selectedThreadId || !account) break;
         const t = threads.find(x => x.id === selectedThreadId);
         if (!t) break;
@@ -815,6 +871,29 @@ function registerKeyboardShortcuts() {
         const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
         if (row) await doArchive(t, row);
         selectThread(nextId);
+        break;
+      }
+
+      case '#': {
+        // Trash = archive (no dedicated trash API yet)
+        if (!selectedThreadId || !account) break;
+        const t = threads.find(x => x.id === selectedThreadId);
+        if (!t) break;
+        const ids = getVisibleThreadIds();
+        const idx = ids.indexOf(selectedThreadId);
+        const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        if (row) await doArchive(t, row);
+        selectThread(nextId);
+        break;
+      }
+
+      case 'x': {
+        // Toggle bulk selection for the currently focused thread
+        if (!selectedThreadId) break;
+        if (!bulkMode) bulkMode = true;
+        toggleBulkSelection(selectedThreadId);
+        if (selectedIds.size === 0) { bulkMode = false; removeBulkBar(); renderInbox(); }
         break;
       }
 
@@ -858,12 +937,70 @@ function registerKeyboardShortcuts() {
         break;
       }
 
+      case 'f': {
+        // Forward — open compose with Fwd: subject if a thread is selected/open
+        const readerSubjectEl = document.querySelector<HTMLElement>('.reader-subject');
+        const readerSubject = readerSubjectEl?.textContent ?? '';
+        const selectedThread = selectedThreadId ? threads.find(x => x.id === selectedThreadId) : null;
+        const baseSubject = readerSubject || selectedThread?.subject || '';
+        const fwdSubject = baseSubject.startsWith('Fwd:') ? baseSubject : baseSubject ? `Fwd: ${baseSubject}` : '';
+        openComposeNew(fwdSubject);
+        break;
+      }
+
       case 'u': {
         const readerEl = document.querySelector<HTMLElement>('.reader-fullpage');
         if (readerEl) {
           readerEl.remove();
           document.getElementById('app-shell')?.classList.remove('reader-open');
         }
+        break;
+      }
+
+      case 'n': {
+        // Next message within open thread
+        scrollReaderMessage(1);
+        break;
+      }
+
+      case 'p': {
+        // Previous message within open thread
+        scrollReaderMessage(-1);
+        break;
+      }
+
+      case ' ': {
+        // Space / Shift+Space — scroll reader body
+        const readerBody = document.querySelector<HTMLElement>('.reader-body');
+        if (!readerBody) break;
+        e.preventDefault();
+        readerBody.scrollBy({ top: e.shiftKey ? -300 : 300, behavior: 'smooth' });
+        break;
+      }
+
+      case 'Tab': {
+        e.preventDefault();
+        const viewOrder: ViewName[] = ['Inbox', 'Snoozed', 'Sent', 'Drafts', 'Starred'];
+        const curIdx = viewOrder.indexOf(currentView);
+        const nextIdx = e.shiftKey
+          ? (curIdx - 1 + viewOrder.length) % viewOrder.length
+          : (curIdx + 1) % viewOrder.length;
+        switchView(viewOrder[nextIdx]);
+        break;
+      }
+
+      case '/': {
+        e.preventDefault();
+        const searchEl = document.getElementById('search') as HTMLInputElement | null;
+        if (searchEl) { searchEl.focus(); searchEl.select(); }
+        break;
+      }
+
+      case 'g': {
+        e.preventDefault();
+        gPending = true;
+        if (gTimeout !== null) clearTimeout(gTimeout);
+        gTimeout = setTimeout(() => { gPending = false; gTimeout = null; }, 1000);
         break;
       }
 
@@ -897,6 +1034,37 @@ function registerKeyboardShortcuts() {
       }
     }
   });
+}
+
+function scrollReaderMessage(direction: 1 | -1) {
+  const readerBody = document.querySelector<HTMLElement>('.reader-body');
+  if (!readerBody) return;
+  const messages = readerBody.querySelectorAll<HTMLElement>('.thread-message');
+  if (messages.length === 0) {
+    // single-message view — scroll body instead
+    readerBody.scrollBy({ top: direction * 300, behavior: 'smooth' });
+    return;
+  }
+  // Find the first message that is fully in view or below viewport
+  const bodyRect = readerBody.getBoundingClientRect();
+  let targetMsg: HTMLElement | null = null;
+  if (direction === 1) {
+    for (const msg of Array.from(messages)) {
+      const r = msg.getBoundingClientRect();
+      if (r.top > bodyRect.top + 8) { targetMsg = msg; break; }
+    }
+  } else {
+    const arr = Array.from(messages).reverse();
+    for (const msg of arr) {
+      const r = msg.getBoundingClientRect();
+      if (r.top < bodyRect.top - 8) { targetMsg = msg; break; }
+    }
+  }
+  if (targetMsg) {
+    targetMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Expand collapsed message if needed
+    targetMsg.classList.remove('thread-message-collapsed');
+  }
 }
 
 // ── Bulk select ───────────────────────────────────────────
@@ -1945,7 +2113,7 @@ function avatarColor(s: string): string {
   return colors[Math.abs(h) % colors.length];
 }
 
-async function openComposeNew() {
+async function openComposeNew(prefillSubject = '') {
   if (!account) return;
   if (document.getElementById('compose-new-panel')) return; // prevent double-open
 
@@ -2091,6 +2259,10 @@ async function openComposeNew() {
   }
   toEl.addEventListener('keydown', onToKeyDown);
   toEl.addEventListener('blur', () => setTimeout(closeAc, 150));
+
+  if (prefillSubject) {
+    subjectEl.value = prefillSubject;
+  }
 
   bodyEl.addEventListener('input', updateSendState);
   updateSendState();
