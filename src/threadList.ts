@@ -9,6 +9,14 @@ import { getActiveReminderThreadIds } from './followupReminders';
 import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
 
+export function renderEmptyState(icon: string, title: string, subtitle: string): string {
+  return `<div class="empty-state">
+    <div class="empty-state-icon">${icon}</div>
+    <div class="empty-state-title">${title}</div>
+    <div class="empty-state-subtitle">${subtitle}</div>
+  </div>`;
+}
+
 export interface ThreadListDeps {
   openThread: (t: Thread) => void;
   openInlineReply: (t: Thread, row: HTMLElement) => void;
@@ -127,19 +135,24 @@ export function renderInbox(deps: ThreadListDeps) {
   </div>`;
 
   if (searchFiltered.length === 0) {
-    const emptyText = isSearchActive() && getSearchQuery().trim()
-      ? 'No results'
-      : state.searchQuery ? 'No results'
-      : state.focusMode ? 'No messages from known senders'
-      : state.activeInboxTab === 'important' ? 'No important emails'
-      : state.activeInboxTab === 'other' ? 'No other emails'
-      : 'All caught up';
-    container.innerHTML = tabBar + `
-      <div class="empty-state">
-        <div class="icon" style="color:var(--text-muted)">✉</div>
-        <div class="empty-text">${emptyText}</div>
-        ${state.focusMode && hiddenCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus</div>` : ''}
-      </div>`;
+    let emptyTitle: string;
+    let emptySubtitle: string;
+    let emptyIcon: string;
+    if (isSearchActive() && getSearchQuery().trim()) {
+      emptyIcon = '🔍'; emptyTitle = 'No results'; emptySubtitle = 'Try a different search term.';
+    } else if (state.searchQuery) {
+      emptyIcon = '🔍'; emptyTitle = 'No results'; emptySubtitle = 'Try a different search term.';
+    } else if (state.focusMode) {
+      emptyIcon = '◎'; emptyTitle = 'No messages from known senders';
+      emptySubtitle = hiddenCount > 0 ? `${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus` : 'Focus mode is on.';
+    } else if (state.activeInboxTab === 'important') {
+      emptyIcon = '⭐'; emptyTitle = 'No important emails'; emptySubtitle = 'Important messages from known senders appear here.';
+    } else if (state.activeInboxTab === 'other') {
+      emptyIcon = '📬'; emptyTitle = 'No other emails'; emptySubtitle = 'Messages from unknown senders appear here.';
+    } else {
+      emptyIcon = '🎉'; emptyTitle = 'All caught up'; emptySubtitle = 'No new messages. Go enjoy your day.';
+    }
+    container.innerHTML = tabBar + renderEmptyState(emptyIcon, emptyTitle, emptySubtitle);
     if (!isSearchActive()) wireInboxTabs(container, deps.renderInbox);
     if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
     return;
@@ -209,12 +222,7 @@ export async function renderSnoozedView(deps: ThreadListDeps) {
   const snoozed = await loadSnoozedThreads(state.account.id);
 
   if (snoozed.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="icon" style="color:var(--lavender-accent)">🕐</div>
-        <div class="empty-text">No snoozed threads</div>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Snoozed mail will appear here</div>
-      </div>`;
+    container.innerHTML = renderEmptyState('💤', 'No snoozed threads', 'Snooze an email to see it later.');
     return;
   }
 
@@ -233,12 +241,7 @@ export async function renderStarredView(deps: ThreadListDeps) {
   const starred = await loadStarredThreads(state.account.id);
 
   if (starred.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="icon" style="color:var(--lavender-accent)">★</div>
-        <div class="empty-text">No starred threads</div>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Star a thread with s or ☆ to save it here</div>
-      </div>`;
+    container.innerHTML = renderEmptyState('⭐', 'No starred messages', 'Star a thread with s or ☆ to save it here.');
     return;
   }
 
@@ -257,12 +260,7 @@ export async function renderScheduledView() {
   const scheduled: ScheduledEmail[] = loadScheduled();
 
   if (scheduled.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="icon" style="color:var(--lavender-accent)">⏰</div>
-        <div class="empty-text">No scheduled sends</div>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Emails you schedule will appear here</div>
-      </div>`;
+    container.innerHTML = renderEmptyState('⏰', 'No scheduled sends', 'Emails you schedule will appear here.');
     return;
   }
 
