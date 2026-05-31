@@ -242,7 +242,7 @@ body {
   padding: 4px 12px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
-  transition: background 40ms ease;
+  transition: background 120ms ease;
   position: relative;
   overflow: hidden;
   isolation: isolate;
@@ -572,9 +572,10 @@ body {
   font-family: var(--font);
   cursor: pointer;
   font-weight: 600;
-  transition: background 0.1s;
+  transition: background 120ms ease, transform 120ms ease;
 }
 .btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:active { transform: scale(0.97); }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-secondary {
@@ -586,9 +587,10 @@ body {
   font-size: 13px;
   font-family: var(--font);
   cursor: pointer;
-  transition: color 0.1s, border-color 0.1s;
+  transition: color 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 .btn-secondary:hover { color: var(--text); border-color: var(--text-muted); }
+.btn-secondary:active { transform: scale(0.97); }
 
 /* ── Empty / loading states ─────────────────────────────── */
 .empty-state {
@@ -1794,7 +1796,7 @@ body {
   font-family: var(--font);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
   white-space: nowrap;
 }
 
@@ -1802,7 +1804,9 @@ body {
   background: var(--surface);
   color: var(--text);
   border-color: var(--text-muted);
+  transform: scale(1.02);
 }
+.reply-chip:active { transform: scale(0.97); }
 
 /* ── Inline reply ───────────────────────────────────────── */
 .inline-reply {
@@ -2078,4 +2082,169 @@ body {
 /* ── Mobile density ──────────────────────────────────────── */
 @media (max-width: 600px) {
   .thread-row { min-height: 40px; }
+}
+
+/* ── Core @keyframes ─────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(8px); }
+}
+@keyframes slideOutLeft {
+  from { opacity: 1; transform: translateX(0); max-height: 80px; }
+  to   { opacity: 0; transform: translateX(-24px); max-height: 0; padding: 0; border: none; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes threadSlideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes toastSlideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Thread list animations ──────────────────────────────── */
+/* Staggered slide-in for thread rows on load */
+.thread-row.animate-in {
+  animation: threadSlideIn 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Archive / delete slide-out */
+.thread-row.removing {
+  animation: slideOutLeft 200ms ease forwards;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ── Overlay / modal animations ──────────────────────────── */
+/* Backdrop fade */
+.reader-overlay,
+.compose-new-overlay {
+  animation: fadeIn 150ms ease both;
+}
+.reader-overlay.closing,
+.compose-new-overlay.closing {
+  animation: fadeOut 120ms ease forwards;
+}
+
+/* Panel scale-in */
+.reader-panel,
+.compose-new-panel {
+  animation: scaleIn 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.reader-panel.closing,
+.compose-new-panel.closing {
+  animation: slideDown 120ms ease forwards;
+}
+
+/* Command palette */
+#cmd-palette-backdrop {
+  animation: fadeIn 150ms ease both;
+}
+#cmd-palette-backdrop.closing {
+  animation: fadeOut 120ms ease forwards;
+}
+#cmd-palette {
+  animation: scaleIn 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+#cmd-palette-backdrop.closing #cmd-palette {
+  animation: slideDown 120ms ease forwards;
+}
+
+/* Keyboard cheatsheet */
+#kb-cheatsheet {
+  animation: fadeIn 150ms ease both;
+}
+#kb-cheatsheet.closing {
+  animation: fadeOut 120ms ease forwards;
+}
+#kb-cheatsheet .kb-modal {
+  animation: scaleIn 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+#kb-cheatsheet.closing .kb-modal {
+  animation: slideDown 120ms ease forwards;
+}
+
+/* ── Full-page reader slide-up ───────────────────────────── */
+.reader-fullpage {
+  animation: slideUp 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.reader-fullpage.closing {
+  animation: slideDown 120ms ease forwards;
+}
+
+/* ── View transition (inbox/starred/snoozed) ─────────────── */
+.inbox.view-out {
+  animation: fadeOut 100ms ease forwards;
+}
+.inbox.view-in {
+  animation: fadeIn 100ms ease both;
+}
+
+/* ── Toast animations ────────────────────────────────────── */
+.kept-toast {
+  /* override the inline transform-based show/hide with animation classes */
+}
+.kept-toast.toast-enter {
+  animation: toastSlideUp 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.kept-toast.toast-exit {
+  animation: fadeOut 150ms ease forwards;
+}
+
+/* Undo toast entrance */
+.undo-toast {
+  animation: toastSlideUp 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.undo-toast.removing {
+  animation: fadeOut 150ms ease forwards;
+  pointer-events: none;
+}
+
+/* Follow-up prompt */
+.followup-prompt.removing {
+  animation: fadeOut 150ms ease forwards;
+  pointer-events: none;
+}
+
+/* ── Button active states ────────────────────────────────── */
+.btn-icon {
+  transition: color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+.btn-icon:active { transform: scale(0.97); }
+
+.btn-action {
+  transition: color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+.btn-action:active { transform: scale(0.97); }
+
+.btn-google {
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.btn-google:active { transform: scale(0.97); }
+
+/* ── Reduced motion ──────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
