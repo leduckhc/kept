@@ -1,6 +1,7 @@
 # Add More Email Accounts to Spark
 
-**Source:** https://sparkmailapp.com/help/add-manage-accounts/add-more-email-accounts-to-spark
+Source: https://sparkmailapp.com/help/add-manage-accounts/add-more-email-accounts-to-spark
+Scraped: 2026-05-31T10:50:12Z
 
 ---
 

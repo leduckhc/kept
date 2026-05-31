@@ -1,6 +1,7 @@
 # Set default browser for opening links
 
-**Source:** https://sparkmailapp.com/help/general/set-default-browser-for-opening-links
+Source: https://sparkmailapp.com/help/general/set-default-browser-for-opening-links
+Scraped: 2026-05-31T10:49:59Z
 
 ---
 

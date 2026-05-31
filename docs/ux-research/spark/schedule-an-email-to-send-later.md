@@ -1,6 +1,7 @@
 # Schedule an email to send later
 
-**Source:** https://sparkmailapp.com/help/sending-emails/schedule-an-email-to-send-later
+Source: https://sparkmailapp.com/help/sending-emails/schedule-an-email-to-send-later
+Scraped: 2026-05-31T10:50:27Z
 
 ---
 

@@ -1,6 +1,7 @@
 # Display the Inbox of each account separately
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/display-the-inbox-of-each-account-separately
+Source: https://sparkmailapp.com/help/manage-your-inbox/display-the-inbox-of-each-account-separately
+Scraped: 2026-05-31T10:50:47Z
 
 ---
 

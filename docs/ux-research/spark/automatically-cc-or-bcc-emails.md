@@ -1,6 +1,7 @@
 # Automatically Cc or Bcc emails
 
-**Source:** https://sparkmailapp.com/help/sending-emails/automatically-cc-or-bcc-emails
+Source: https://sparkmailapp.com/help/sending-emails/automatically-cc-or-bcc-emails
+Scraped: 2026-05-31T10:50:35Z
 
 ---
 

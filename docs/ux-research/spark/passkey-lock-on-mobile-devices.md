@@ -1,6 +1,7 @@
 # Passkey Lock on mobile devices
 
-**Source:** https://sparkmailapp.com/help/add-manage-accounts/passkey-lock-on-mobile-devices
+Source: https://sparkmailapp.com/help/add-manage-accounts/passkey-lock-on-mobile-devices
+Scraped: 2026-05-31T10:50:21Z
 
 ---
 

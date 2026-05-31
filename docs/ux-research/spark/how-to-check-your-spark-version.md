@@ -1,6 +1,7 @@
 # How to check your Spark version
 
-**Source:** https://sparkmailapp.com/help/general/how-to-check-what-spark-version-you-use
+Source: https://sparkmailapp.com/help/general/how-to-check-what-spark-version-you-use
+Scraped: 2026-05-31T10:50:06Z
 
 ---
 

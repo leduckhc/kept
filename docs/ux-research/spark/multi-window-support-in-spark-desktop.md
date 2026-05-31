@@ -1,6 +1,7 @@
 # Multi-window support in Spark Desktop
 
-**Source:** https://sparkmailapp.com/help/sending-emails/multi-window-support-in-spark-desktop
+Source: https://sparkmailapp.com/help/sending-emails/multi-window-support-in-spark-desktop
+Scraped: 2026-05-31T10:50:44Z
 
 ---
 

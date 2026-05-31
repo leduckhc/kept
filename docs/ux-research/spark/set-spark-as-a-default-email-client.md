@@ -1,6 +1,7 @@
 # Set Spark as a default email client
 
-**Source:** https://sparkmailapp.com/help/general/set-spark-as-a-default-email-client
+Source: https://sparkmailapp.com/help/general/set-spark-as-a-default-email-client
+Scraped: 2026-05-31T10:49:56Z
 
 ---
 

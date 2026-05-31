@@ -1,6 +1,7 @@
 # Manage emails with swipes
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/manage-emails-with-swipes
+Source: https://sparkmailapp.com/help/manage-your-inbox/manage-emails-with-swipes
+Scraped: 2026-05-31T10:50:58Z
 
 ---
 

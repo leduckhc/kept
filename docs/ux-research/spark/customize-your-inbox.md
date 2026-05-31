@@ -1,6 +1,7 @@
 # Customize your Inbox
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/customize-your-inbox
+Source: https://sparkmailapp.com/help/manage-your-inbox/customize-your-inbox
+Scraped: 2026-05-31T10:50:59Z
 
 ---
 

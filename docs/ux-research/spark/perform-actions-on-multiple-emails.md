@@ -1,6 +1,7 @@
 # Perform Actions on Multiple Emails
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/perform-actions-on-multiple-emails
+Source: https://sparkmailapp.com/help/manage-your-inbox/perform-actions-on-multiple-emails
+Scraped: 2026-05-31T10:50:50Z
 
 ---
 

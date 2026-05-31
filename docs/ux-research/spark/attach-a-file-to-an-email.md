@@ -1,6 +1,7 @@
 # Attach a file to an email
 
-**Source:** https://sparkmailapp.com/help/sending-emails/attach-a-file-to-an-email
+Source: https://sparkmailapp.com/help/sending-emails/attach-a-file-to-an-email
+Scraped: 2026-05-31T10:50:26Z
 
 ---
 

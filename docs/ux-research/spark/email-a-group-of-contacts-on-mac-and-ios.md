@@ -1,6 +1,7 @@
 # Email a group of contacts on Mac and iOS
 
-**Source:** https://sparkmailapp.com/help/sending-emails/email-a-group-of-contacts-on-mac
+Source: https://sparkmailapp.com/help/sending-emails/email-a-group-of-contacts-on-mac
+Scraped: 2026-05-31T10:50:33Z
 
 ---
 

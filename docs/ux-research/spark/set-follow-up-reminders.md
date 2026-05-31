@@ -1,6 +1,7 @@
 # Set follow-up reminders
 
-**Source:** https://sparkmailapp.com/help/sending-emails/set-follow-up-reminders
+Source: https://sparkmailapp.com/help/sending-emails/set-follow-up-reminders
+Scraped: 2026-05-31T10:50:29Z
 
 ---
 

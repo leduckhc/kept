@@ -1,6 +1,7 @@
 # Answer Emails Using Quick Replies
 
-**Source:** https://sparkmailapp.com/help/sending-emails/answer-emails-using-quick-replies
+Source: https://sparkmailapp.com/help/sending-emails/answer-emails-using-quick-replies
+Scraped: 2026-05-31T10:50:36Z
 
 ---
 

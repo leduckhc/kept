@@ -1,6 +1,7 @@
 # How to find Spark Settings
 
-**Source:** https://sparkmailapp.com/help/general/how-to-find-spark-settings
+Source: https://sparkmailapp.com/help/general/how-to-find-spark-settings
+Scraped: 2026-05-31T10:49:53Z
 
 ---
 

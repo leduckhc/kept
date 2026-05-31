@@ -1,6 +1,7 @@
 # Group emails by sender or domain
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/group-emails-by-sender
+Source: https://sparkmailapp.com/help/manage-your-inbox/group-emails-by-sender
+Scraped: 2026-05-31T10:51:05Z
 
 ---
 

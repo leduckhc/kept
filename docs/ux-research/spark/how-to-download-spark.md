@@ -1,6 +1,7 @@
 # How to download Spark
 
-**Source:** https://sparkmailapp.com/help/general/how-to-download-spark
+Source: https://sparkmailapp.com/help/general/how-to-download-spark
+Scraped: 2026-05-31T10:49:52Z
 
 ---
 

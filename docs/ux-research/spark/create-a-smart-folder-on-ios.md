@@ -1,6 +1,7 @@
 # Create a Smart Folder on iOS
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/create-a-smart-folder-on-ios
+Source: https://sparkmailapp.com/help/manage-your-inbox/create-a-smart-folder-on-ios
+Scraped: 2026-05-31T10:51:01Z
 
 ---
 

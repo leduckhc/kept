@@ -1,6 +1,7 @@
 # Use Smart Search
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/use-smart-search
+Source: https://sparkmailapp.com/help/manage-your-inbox/use-smart-search
+Scraped: 2026-05-31T10:50:49Z
 
 ---
 

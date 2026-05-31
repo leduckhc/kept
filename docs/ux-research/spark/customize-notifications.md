@@ -1,6 +1,7 @@
 # Customize Notifications
 
-**Source:** https://sparkmailapp.com/help/add-manage-accounts/customize-notifications
+Source: https://sparkmailapp.com/help/add-manage-accounts/customize-notifications
+Scraped: 2026-05-31T10:50:18Z
 
 ---
 

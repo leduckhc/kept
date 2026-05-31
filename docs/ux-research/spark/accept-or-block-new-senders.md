@@ -1,6 +1,7 @@
 # Accept or block new senders
 
-**Source:** https://sparkmailapp.com/help/sending-emails/accept-or-block-new-senders
+Source: https://sparkmailapp.com/help/sending-emails/accept-or-block-new-senders
+Scraped: 2026-05-31T10:50:38Z
 
 ---
 

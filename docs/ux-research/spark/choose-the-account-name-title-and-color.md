@@ -1,6 +1,7 @@
 # Choose the account name, title, and color
 
-**Source:** https://sparkmailapp.com/help/add-manage-accounts/choose-the-account-name-title-and-color
+Source: https://sparkmailapp.com/help/add-manage-accounts/choose-the-account-name-title-and-color
+Scraped: 2026-05-31T10:50:15Z
 
 ---
 

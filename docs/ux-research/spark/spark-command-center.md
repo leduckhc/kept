@@ -1,6 +1,7 @@
 # Spark Command Center
 
-**Source:** https://sparkmailapp.com/help/general/spark-command-center
+Source: https://sparkmailapp.com/help/general/spark-command-center
+Scraped: 2026-05-31T10:50:04Z
 
 ---
 

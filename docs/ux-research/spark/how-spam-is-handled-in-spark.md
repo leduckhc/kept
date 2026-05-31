@@ -1,6 +1,7 @@
 # How Spam is handled in Spark
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/how-spam-is-handled-in-spark
+Source: https://sparkmailapp.com/help/manage-your-inbox/how-spam-is-handled-in-spark
+Scraped: 2026-05-31T10:50:55Z
 
 ---
 

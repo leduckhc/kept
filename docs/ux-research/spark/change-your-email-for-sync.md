@@ -1,6 +1,7 @@
 # Change your Email for Sync
 
-**Source:** https://sparkmailapp.com/help/sync-spark-between-devices/change-your-email-for-sync
+Source: https://sparkmailapp.com/help/sync-spark-between-devices/change-your-email-for-sync
+Scraped: 2026-05-31T10:50:09Z
 
 ---
 

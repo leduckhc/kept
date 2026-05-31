@@ -1,6 +1,7 @@
 # Avatars in Spark
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/avatars-in-spark
+Source: https://sparkmailapp.com/help/manage-your-inbox/avatars-in-spark
+Scraped: 2026-05-31T10:50:54Z
 
 ---
 

@@ -1,6 +1,7 @@
 # Send large email attachments with Spark
 
-**Source:** https://sparkmailapp.com/help/sending-emails/send-large-email-attachments-with-spark
+Source: https://sparkmailapp.com/help/sending-emails/send-large-email-attachments-with-spark
+Scraped: 2026-05-31T10:50:40Z
 
 ---
 

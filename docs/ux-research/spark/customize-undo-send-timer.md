@@ -1,6 +1,7 @@
 # Customize Undo Send Timer
 
-**Source:** https://sparkmailapp.com/help/sending-emails/customize-undo-send-timer
+Source: https://sparkmailapp.com/help/sending-emails/customize-undo-send-timer
+Scraped: 2026-05-31T10:50:46Z
 
 ---
 
