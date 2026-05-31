@@ -324,11 +324,11 @@ body {
 /* ── Thread row ─────────────────────────────────────────── */
 .thread-row {
   display: grid;
-  grid-template-columns: 8px 40px 1fr auto;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 10px;
-  min-height: 36px;
-  padding: 4px 12px;
+  height: 36px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 120ms ease;
@@ -342,18 +342,22 @@ body {
   border-left: 2px solid var(--accent);
 }
 
-/* Unread dot */
-.unread-dot {
-  width: 7px;
-  height: 7px;
+/* Unread dot — hidden DOM span; dot lives on .thread-sender::before */
+.unread-dot { display: none; }
+
+.thread-sender::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  border: 1.5px solid var(--text-muted);
+  background: transparent;
+  margin-right: 6px;
+  vertical-align: middle;
   flex-shrink: 0;
-  justify-self: center;
 }
-.unread-dot.filled {
-  background: var(--unread-dot);
-  border-color: var(--unread-dot);
+.thread-row.unread .thread-sender::before {
+  background: var(--accent);
 }
 
 /* Avatar circle */
@@ -394,13 +398,17 @@ body {
 /* Avatar wrap — clickable for selection */
 .avatar-wrap { cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; }
 
-/* Middle column */
-.thread-mid { min-width: 0; }
-.thread-top {
+/* Middle column — single-line: sender | subject — snippet · · · time */
+.thread-mid {
+  min-width: 0;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
+  align-items: center;
+  gap: 0;
+  overflow: hidden;
+}
+/* thread-top holds sender + date; collapse to inline participants */
+.thread-top {
+  display: contents;
 }
 
 .thread-sender {
@@ -410,8 +418,8 @@ body {
   text-overflow: ellipsis;
   color: var(--text-muted);
   font-weight: 400;
-  flex: 1;
-  min-width: 0;
+  flex-shrink: 0;
+  max-width: 120px;
 }
 .thread-row.unread .thread-sender {
   font-weight: 600;
@@ -420,30 +428,59 @@ body {
 .thread-sender.unread { font-weight: 600; }
 
 .thread-date {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-disabled);
   white-space: nowrap;
   flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 8px;
 }
 
 .thread-subject-line {
   font-size: 13px;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-muted);
+  flex-shrink: 1;
+  min-width: 0;
+  margin-left: 8px;
 }
-.thread-row.unread .thread-subject-line { color: var(--text); font-weight: 500; }
+.thread-row.unread .thread-subject-line { color: var(--text); font-weight: 400; }
 
 .thread-preview-line {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 2;
+  min-width: 0;
+}
+/* "·—·" separator before snippet */
+.thread-preview-line::before {
+  content: " \2014 ";
+  color: var(--text-disabled);
 }
 
-/* Right column — hidden since date is now in thread-top */
+/* Attachment / star hover indicators via pseudo-elements */
+.thread-mid.has-attachment::after {
+  content: none;
+  font-size: 11px;
+  opacity: 0;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.thread-row:hover .thread-mid.has-attachment::after {
+  content: '📎';
+  opacity: 1;
+}
+.thread-row.is-starred:hover .thread-sender::after {
+  content: ' ⭐';
+  font-size: 10px;
+}
+
 .attachment-icon { font-size: 11px; color: var(--text-muted); }
 
 /* Row actions (appear on hover) */
@@ -1938,7 +1975,7 @@ body {
 
 /* ── Bulk select ─────────────────────────────────────────── */
 .thread-row.bulk-mode {
-  grid-template-columns: 22px 8px 40px 1fr auto;
+  grid-template-columns: 22px 40px 1fr auto;
 }
 
 .bulk-checkbox {
