@@ -188,14 +188,24 @@ export async function openThread(
         const iframe = document.createElement('iframe');
         iframe.setAttribute('sandbox', 'allow-scripts allow-popups-to-escape-sandbox');
         iframe.style.cssText = 'width:100%; border:none; overflow:visible; min-height:200px;';
+        const isDark = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const bodyColor = isDark ? '#e8e8e8' : '#222';
+        const bodyBg = isDark ? '#0a0a0a' : '#ffffff';
+        const linkColor = isDark ? '#8b7cf7' : '#5B4EDB';
+        const imgBg = isDark ? '#1a1a1a' : '#f0f0f0';
+        const quoteBorder = isDark ? '#333' : '#ddd';
+        const quoteColor = isDark ? '#999' : '#666';
+        const tableBorder = isDark ? '#2a2a2a' : '#eee';
+        const preBg = isDark ? '#141414' : '#f5f5f5';
+
         iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-          body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:#222;margin:0;padding:0;line-height:1.5;word-break:break-word;}
-          a{color:#5B4EDB;}
-          img[data-original-src]{background:#f0f0f0;min-height:20px;border-radius:4px;}
-          blockquote{border-left:3px solid #ddd;margin:8px 0;padding-left:12px;color:#666;}
+          body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:${bodyColor};background:${bodyBg};margin:0;padding:0;line-height:1.5;word-break:break-word;}
+          a{color:${linkColor};}
+          img[data-original-src]{background:${imgBg};min-height:20px;border-radius:4px;}
+          blockquote{border-left:3px solid ${quoteBorder};margin:8px 0;padding-left:12px;color:${quoteColor};}
           table{border-collapse:collapse;max-width:100%;}
-          td,th{padding:4px 8px;border:1px solid #eee;}
-          pre{background:#f5f5f5;padding:8px;border-radius:4px;overflow-x:auto;}
+          td,th{padding:4px 8px;border:1px solid ${tableBorder};}
+          pre{background:${preBg};padding:8px;border-radius:4px;overflow-x:auto;}
           img{max-width:100%;height:auto;}
         </style></head><body>${sanitized}<script>
 document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(function(el){
