@@ -3,10 +3,12 @@ import { type ViewName, state } from './state';
 import { type ActionDeps } from './actions';
 import { popUndo } from './undoStack';
 import { showToast } from './toasts';
+import { dismissSearchBar, isSearchActive } from './search';
 
 export interface KeyboardDeps {
   renderInbox: () => void;
   openThread: (t: Thread) => void;
+  openSearchBar: () => void;
   openThreadWithReply: (t: Thread) => void;
   openComposeNew: (subject?: string) => void;
   switchView: (view: ViewName) => void;
@@ -348,8 +350,7 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
 
       case '/': {
         e.preventDefault();
-        const searchEl = document.getElementById('search') as HTMLInputElement | null;
-        if (searchEl) { searchEl.focus(); searchEl.select(); }
+        deps.openSearchBar();
         break;
       }
 
@@ -379,6 +380,7 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
       }
 
       case 'Escape': {
+        if (isSearchActive()) { dismissSearchBar(); break; }
         if (state.bulkMode) { deps.exitBulkMode(); break; }
         const sheet = document.getElementById('kb-cheatsheet');
         if (sheet) { sheet.remove(); break; }

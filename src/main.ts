@@ -37,6 +37,8 @@ import {
   threadRow,
   wireThreadRows,
 } from './threadList';
+import './search'; // search module self-registers
+import { showSearchBar } from './search';
 
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
@@ -874,6 +876,7 @@ function registerKeyboardShortcuts() {
     doToggleStar,
     doMarkUnread,
     doMute,
+    openSearchBar: () => showSearchBar({ renderInbox, openThread }),
   });
 }
 

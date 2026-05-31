@@ -7,6 +7,7 @@ import { showContextMenu } from './contextMenu';
 import { avatarHtml, ACCOUNT_BADGE_COLORS } from './avatar';
 import { getActiveReminderThreadIds } from './followupReminders';
 import { esc, formatDate } from './helpers';
+import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
 
 export interface ThreadListDeps {
   openThread: (t: Thread) => void;
@@ -26,6 +27,7 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
   const sender = t.senderName || t.senderEmail;
   const attachment = t.hasAttachment ? `<span class="attachment-icon" title="Has attachment">📎</span>` : '';
   const dot = `<span class="unread-dot${t.isUnread ? ' filled' : ''}"></span>`;
+  const searchQ = isSearchActive() ? getSearchQuery() : '';
 
   const acctIdx = state.unifiedMode ? state.accounts.findIndex(a => a.id === t.accountId) : -1;
   const acctBadge = acctIdx >= 0
@@ -66,10 +68,10 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
       </div>
       <div class="thread-mid${attachment ? ' has-attachment' : ''}">
         <div class="thread-top">
-          <span class="thread-sender">${esc(sender)}</span>
+          <span class="thread-sender">${searchQ ? highlightText(sender, searchQ) : esc(sender)}</span>
           <span class="thread-date">${date}</span>
         </div>
-        <div class="thread-subject-line">${esc(t.subject)}${t.messageCount && t.messageCount > 1 ? `<span class="thread-count">${t.messageCount}</span>` : ''}</div>
+        <div class="thread-subject-line">${searchQ ? highlightText(t.subject, searchQ) : esc(t.subject)}${t.messageCount && t.messageCount > 1 ? `<span class="thread-count">${t.messageCount}</span>` : ''}</div>
         <div class="thread-preview-line">${clockIndicator || esc(t.snippet)}</div>
       </div>
       ${actionsHtml}
@@ -90,8 +92,16 @@ export function renderInbox(deps: ThreadListDeps) {
   const container = document.getElementById('inbox');
   if (!container) return;
 
+  // Preserve search bar across re-renders
+  const existingBar = document.getElementById('search-bar');
+  const searchBarHtml = existingBar ? existingBar.outerHTML : null;
+  const searchValue = existingBar
+    ? (existingBar.querySelector<HTMLInputElement>('#search-bar-input')?.value ?? '')
+    : '';
+
   if (state.threads.length === 0 && state.syncing) {
     container.innerHTML = `<p class="sync-loading">Syncing inbox…</p>`;
+    if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
     return;
   }
 
@@ -104,49 +114,92 @@ export function renderInbox(deps: ThreadListDeps) {
     tabFiltered = focusedThreads.filter(t => !deps.isKnownSender(t.senderEmail));
   }
 
+  // Apply inline search filter on top of other filters
+  const searchFiltered = isSearchActive() ? getFilteredThreads(tabFiltered) : tabFiltered;
+
   const importantCount = focusedThreads.filter(t => deps.isKnownSender(t.senderEmail) && t.isUnread).length;
   const otherCount = focusedThreads.filter(t => !deps.isKnownSender(t.senderEmail) && t.isUnread).length;
 
-  const tabBar = `<div class="inbox-tabs">
+  const tabBar = isSearchActive() ? '' : `<div class="inbox-tabs">
     <button class="inbox-tab${state.activeInboxTab === 'all' ? ' active' : ''}" data-tab="all">All</button>
     <button class="inbox-tab${state.activeInboxTab === 'important' ? ' active' : ''}" data-tab="important">Important${importantCount ? ` <span class="tab-badge">${importantCount}</span>` : ''}</button>
     <button class="inbox-tab${state.activeInboxTab === 'other' ? ' active' : ''}" data-tab="other">Other${otherCount ? ` <span class="tab-badge">${otherCount}</span>` : ''}</button>
   </div>`;
 
-  if (tabFiltered.length === 0) {
+  if (searchFiltered.length === 0) {
+    const emptyText = isSearchActive() && getSearchQuery().trim()
+      ? 'No results'
+      : state.searchQuery ? 'No results'
+      : state.focusMode ? 'No messages from known senders'
+      : state.activeInboxTab === 'important' ? 'No important emails'
+      : state.activeInboxTab === 'other' ? 'No other emails'
+      : 'All caught up';
     container.innerHTML = tabBar + `
       <div class="empty-state">
         <div class="icon" style="color:var(--text-muted)">✉</div>
-        <div class="empty-text">${state.searchQuery ? 'No results' : state.focusMode ? 'No messages from known senders' : state.activeInboxTab === 'important' ? 'No important emails' : state.activeInboxTab === 'other' ? 'No other emails' : 'All caught up'}</div>
+        <div class="empty-text">${emptyText}</div>
         ${state.focusMode && hiddenCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus</div>` : ''}
       </div>`;
-    wireInboxTabs(container, deps.renderInbox);
+    if (!isSearchActive()) wireInboxTabs(container, deps.renderInbox);
+    if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
     return;
   }
 
-  const focusBanner = state.focusMode && hiddenCount > 0
+  const focusBanner = state.focusMode && hiddenCount > 0 && !isSearchActive()
     ? `<div class="focus-banner">Focus mode — ${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden</div>`
     : '';
 
-  const sections = groupBySection(tabFiltered);
-  const html = tabBar + focusBanner + sections.map(s => {
-    const unread = s.threads.filter(t => t.isUnread).length;
-    const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
-    return `
-    <div class="section-header">${s.label}${badge}</div>
-    ${s.threads.map(t => threadRow(t, false)).join('')}
-  `;
-  }).join('');
+  let html: string;
+  if (isSearchActive() && getSearchQuery().trim()) {
+    // Flat list — no sections while searching
+    html = tabBar + focusBanner + searchFiltered.map(t => threadRow(t, false)).join('');
+  } else {
+    const sections = groupBySection(searchFiltered);
+    html = tabBar + focusBanner + sections.map(s => {
+      const unread = s.threads.filter(t => t.isUnread).length;
+      const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
+      return `
+      <div class="section-header">${s.label}${badge}</div>
+      ${s.threads.map(t => threadRow(t, false)).join('')}
+    `;
+    }).join('');
+  }
 
   container.innerHTML = html;
-  wireInboxTabs(container, deps.renderInbox);
-  wireThreadRows(container, tabFiltered, false, deps);
+  if (!isSearchActive()) wireInboxTabs(container, deps.renderInbox);
+  wireThreadRows(container, searchFiltered, false, deps);
   if (state.bulkMode) deps.updateBulkBar();
   if (state.selectedThreadId) {
     const row = container.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
     if (row) row.classList.add('is-selected');
     else state.selectedThreadId = null;
   }
+
+  if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
+}
+
+function prependSearchBar(container: HTMLElement, barHtml: string, value: string, _deps: ThreadListDeps) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = barHtml;
+  const bar = tempDiv.firstElementChild as HTMLElement;
+  if (!bar) return;
+
+  const input = bar.querySelector<HTMLInputElement>('#search-bar-input');
+  if (input) input.value = value;
+
+  container.prepend(bar);
+
+  // Update count label
+  const countEl = bar.querySelector<HTMLElement>('#search-count');
+  if (countEl && value.trim()) {
+    const results = getFilteredThreads(state.threads);
+    countEl.textContent = `${results.length} result${results.length !== 1 ? 's' : ''}`;
+  }
+
+  // Re-wire close button
+  bar.querySelector('#search-close')?.addEventListener('click', () => {
+    dismissSearchBar();
+  });
 }
 
 export async function renderSnoozedView(deps: ThreadListDeps) {
