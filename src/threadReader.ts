@@ -187,7 +187,7 @@ export async function openThread(
       if (sanitized) {
         const iframe = document.createElement('iframe');
         iframe.setAttribute('sandbox', 'allow-scripts allow-popups-to-escape-sandbox');
-        iframe.style.cssText = 'width:100%; border:none; overflow:hidden; min-height:60px;';
+        iframe.style.cssText = 'width:100%; border:none; overflow:auto; min-height:200px;';
         iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
           body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:#222;margin:0;padding:0;line-height:1.5;word-break:break-word;}
           a{color:#5B4EDB;}
@@ -229,6 +229,9 @@ document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(functi
         });
         iframe.addEventListener('load', () => {
           resizeIframe();
+          // Re-check height after images/fonts load
+          setTimeout(resizeIframe, 300);
+          setTimeout(resizeIframe, 1000);
           const blocked = iframe.contentDocument?.querySelectorAll('img[data-original-src]');
           if (blocked && blocked.length > 0) loadImgBtn.style.display = 'inline-block';
         });
