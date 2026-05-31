@@ -1776,6 +1776,34 @@ body {
   to   { width: 0%; }
 }
 
+/* ── Reply chips ─────────────────────────────────────────── */
+.reply-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+.reply-chip {
+  background: var(--hover);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.reply-chip:hover {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
 /* ── Inline reply ───────────────────────────────────────── */
 .inline-reply {
   border-top: 1px solid var(--border);

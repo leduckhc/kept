@@ -2378,6 +2378,12 @@ async function openThread(t: Thread) {
     </div>
     <div class="reader-body"><div class="spinner"></div></div>
     <div class="reader-footer">
+      <div class="reply-chips" id="reply-chips">
+        <button class="reply-chip" data-reply="Thanks!">Thanks!</button>
+        <button class="reply-chip" data-reply="Got it">Got it</button>
+        <button class="reply-chip" data-reply="Sounds good">Sounds good</button>
+        <button class="reply-chip" data-reply="On it">On it</button>
+      </div>
       <button class="btn-primary" id="btn-reply"${savedDraft ? ' style="display:none"' : ''}>Reply</button>
       <button class="btn-secondary danger" id="btn-block-reader">Block sender</button>
       <div class="compose-area" id="compose" style="display:${savedDraft ? 'flex' : 'none'}; flex:1; flex-direction:column; gap:8px;">
@@ -2530,6 +2536,44 @@ async function openThread(t: Thread) {
   const textarea = reader.querySelector<HTMLTextAreaElement>('#compose-body')!;
   textarea.addEventListener('input', () => {
     localStorage.setItem(draftKey, textarea.value);
+  });
+
+  // Reply chips — instant send with 3s undo window
+  reader.querySelectorAll<HTMLButtonElement>('.reply-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const body = chip.dataset.reply!;
+      let cancelled = false;
+      let sendTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const chips = reader.querySelector<HTMLElement>('#reply-chips')!;
+      chips.style.pointerEvents = 'none';
+      chips.style.opacity = '0.4';
+
+      sendTimer = setTimeout(async () => {
+        if (cancelled) return;
+        try {
+          await sendEmail(account!, {
+            to: t.senderEmail,
+            subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
+            body,
+            threadId: t.gmailThreadId,
+            inReplyTo: lastMessageId ?? undefined,
+          });
+          closeReader();
+        } catch (e) {
+          chips.style.pointerEvents = '';
+          chips.style.opacity = '';
+          showToast(`Send failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }, 3000);
+
+      showUndoToast(`Sending "${body}"…`, () => {
+        cancelled = true;
+        if (sendTimer !== null) { clearTimeout(sendTimer); sendTimer = null; }
+        chips.style.pointerEvents = '';
+        chips.style.opacity = '';
+      });
+    });
   });
 
   // Reply
