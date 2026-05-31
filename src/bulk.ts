@@ -1,6 +1,6 @@
 import { state } from './state';
 import { snoozePresets, doSnooze } from './snooze';
-import { type ActionDeps, doArchive, doMarkRead } from './actions';
+import { type ActionDeps, doArchive, doMarkRead, doTrash } from './actions';
 import { formatDate, toDatetimeLocal } from './helpers';
 
 export function toggleBulkMode(renderInbox: () => void) {
@@ -41,7 +41,7 @@ export function removeBulkBar() {
 export function updateBulkBar(
   getActionDeps: () => ActionDeps,
   exitBulkModeFn: () => void,
-  openBulkSnoozePickerFn: (ids: string[], row: HTMLElement) => void,
+  _openBulkSnoozePickerFn: (ids: string[], row: HTMLElement) => void,
 ) {
   removeBulkBar();
   if (state.selectedIds.size === 0) return;
@@ -52,11 +52,17 @@ export function updateBulkBar(
   bar.innerHTML = `
     <span class="bulk-count">${state.selectedIds.size} selected</span>
     <button class="bulk-action-btn" id="bulk-archive">Archive All</button>
+    <button class="bulk-action-btn" id="bulk-trash">Trash All</button>
     <button class="bulk-action-btn" id="bulk-read">Mark Read</button>
-    <button class="bulk-action-btn" id="bulk-snooze">Snooze All</button>
-    <button class="bulk-cancel-btn" id="bulk-cancel">Cancel</button>
+    <button class="bulk-cancel-btn" id="bulk-cancel">✕</button>
   `;
-  document.body.appendChild(bar);
+
+  const inbox = document.getElementById('inbox');
+  if (inbox) {
+    inbox.prepend(bar);
+  } else {
+    document.body.appendChild(bar);
+  }
 
   document.getElementById('bulk-archive')!.addEventListener('click', async () => {
     const ids = Array.from(state.selectedIds);
@@ -65,6 +71,17 @@ export function updateBulkBar(
       if (!t) continue;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
       if (row) await doArchive(t, row, getActionDeps());
+    }
+    exitBulkModeFn();
+  });
+
+  document.getElementById('bulk-trash')!.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedIds);
+    for (const id of ids) {
+      const t = state.threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doTrash(t, row, getActionDeps());
     }
     exitBulkModeFn();
   });
@@ -78,14 +95,6 @@ export function updateBulkBar(
       if (row) await doMarkRead(t, row, getActionDeps());
     }
     exitBulkModeFn();
-  });
-
-  document.getElementById('bulk-snooze')!.addEventListener('click', () => {
-    const ids = Array.from(state.selectedIds);
-    const firstThread = state.threads.find(x => x.id === ids[0]);
-    if (!firstThread) return;
-    const fakeRow = document.querySelector<HTMLElement>(`.thread-row[data-id="${ids[0]}"]`) ?? document.body as HTMLElement;
-    openBulkSnoozePickerFn(ids, fakeRow);
   });
 
   document.getElementById('bulk-cancel')!.addEventListener('click', () => exitBulkModeFn());

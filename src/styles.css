@@ -2041,66 +2041,56 @@ body {
 }
 
 .thread-row.bulk-selected {
-  background: var(--lavender-tint);
+  background: var(--surface-active);
+  border-left: 2px solid var(--accent);
 }
-[data-theme="dark"] .thread-row.bulk-selected {
-  background: #2d2640;
-}
-
 
 .bulk-bar {
-  position: fixed;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1a1a2e;
-  color: #fff;
-  border-radius: 10px;
-  padding: 10px 16px;
+  height: 36px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 10px;
-  z-index: 100;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  gap: 8px;
+  padding: 0 12px;
   font-size: 13px;
   white-space: nowrap;
-}
-[data-theme="dark"] .bulk-bar {
-  background: #2a2a3e;
+  flex-shrink: 0;
 }
 
 .bulk-count {
   font-weight: 600;
   margin-right: 4px;
-  color: rgba(255,255,255,0.75);
+  color: var(--text-secondary);
 }
 
 .bulk-action-btn {
-  background: rgba(255,255,255,0.12);
-  border: none;
-  color: #fff;
-  border-radius: 6px;
-  padding: 5px 12px;
-  font-size: 13px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
   font-family: var(--font);
   cursor: pointer;
   transition: background 0.1s;
 }
-.bulk-action-btn:hover { background: rgba(255,255,255,0.22); }
+.bulk-action-btn:hover { background: var(--surface-hover); }
 
 .bulk-cancel-btn {
   background: none;
-  border: 1px solid rgba(255,255,255,0.3);
-  color: rgba(255,255,255,0.75);
-  border-radius: 6px;
-  padding: 5px 12px;
-  font-size: 13px;
+  border: none;
+  color: var(--text-muted);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 14px;
   font-family: var(--font);
   cursor: pointer;
-  transition: background 0.1s;
-  margin-left: 4px;
+  transition: color 0.1s;
+  margin-left: auto;
 }
-.bulk-cancel-btn:hover { background: rgba(255,255,255,0.08); }
+.bulk-cancel-btn:hover { color: var(--text); }
 
 /* ── Command Palette ─────────────────────────────────────── */
 #cmd-palette-backdrop {
