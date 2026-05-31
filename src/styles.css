@@ -92,6 +92,102 @@ body {
   position: relative;
 }
 
+/* ── Three-pane body ────────────────────────────────────── */
+.app-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+.sidebar {
+  width: 48px;
+  flex-shrink: 0;
+  background: #0a0a0a;
+  border-right: 1px solid #1e1e1e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 4px;
+}
+
+.sidebar-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  color: #666;
+  transition: color 0.12s, background 0.12s;
+}
+.sidebar-btn:hover { color: #ccc; background: rgba(255,255,255,0.08); }
+.sidebar-btn.active {
+  color: #fff;
+}
+.sidebar-btn.active::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: #4a9eff;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Thread list (inbox) ────────────────────────────────── */
+.inbox {
+  width: 320px;
+  flex-shrink: 0;
+  background: #0f0f0f;
+  border-right: 1px solid #1e1e1e;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* ── Reader pane ────────────────────────────────────────── */
+.reader-pane {
+  flex: 1;
+  background: #111;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.reader-pane-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: #444;
+}
+.reader-pane-empty-icon { font-size: 32px; opacity: 0.3; }
+.reader-pane-empty-text { font-size: 13px; }
+
+/* reader-fullpage inside the pane: fills it, not position:absolute */
+.reader-pane .reader-fullpage {
+  position: static;
+  flex: 1;
+  height: 100%;
+  animation: none;
+}
+
+/* Mobile tab buttons hidden on desktop */
+.mobile-tab-btn { display: none; }
+
 /* ── Toolbar ────────────────────────────────────────────── */
 .toolbar {
   display: flex;
@@ -193,12 +289,7 @@ body {
 }
 .btn-icon:hover { color: var(--text); background: var(--surface); }
 
-/* ── Inbox ──────────────────────────────────────────────── */
-.inbox {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0;
-}
+/* ── Inbox (see .app-body .inbox above for three-pane layout) ── */
 
 .section-header {
   padding: 8px 12px;
@@ -408,19 +499,14 @@ body {
 
 /* ── Full-page reader ─────────────────────────────────────── */
 .reader-fullpage {
-  position: absolute;
-  inset: 0;
-  background: var(--bg);
-  z-index: 50;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1;
+  background: #111;
 }
-#app-shell.reader-open > .toolbar,
-#app-shell.reader-open > .inbox,
-#app-shell.reader-open > .statusbar {
-  display: none;
-}
+/* Desktop: reader-open class no longer hides inbox — pane is always visible */
+/* Mobile: .reader-open hides inbox/toolbar to give reader full screen */
 .reader-back {
   font-size: 18px;
   margin-right: 8px;
@@ -2102,6 +2188,42 @@ body {
 /* ── Mobile density ──────────────────────────────────────── */
 @media (max-width: 600px) {
   .thread-row { min-height: 40px; }
+}
+
+/* ── Mobile layout (<1024px): revert to single-pane ─────── */
+@media (max-width: 1023px) {
+  /* Show mobile tab buttons, hide sidebar */
+  .mobile-tab-btn { display: inline-block !important; }
+  .sidebar { display: none; }
+
+  /* app-body stacks — inbox fills width */
+  .app-body {
+    flex-direction: column;
+    position: relative;
+  }
+  .inbox {
+    width: 100%;
+    border-right: none;
+    background: var(--bg);
+    flex: 1;
+  }
+
+  /* Reader pane hidden by default on mobile; shown as fullpage overlay when open */
+  .reader-pane {
+    display: none;
+  }
+
+  /* When reader-open, fullpage reader sits above inbox */
+  #app-shell.reader-open .reader-pane {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: var(--bg);
+  }
+  .reader-fullpage {
+    background: var(--bg);
+  }
 }
 
 /* ── Core @keyframes ─────────────────────────────────────── */

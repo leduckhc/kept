@@ -25,13 +25,13 @@ export async function openThread(
   const savedDraft = localStorage.getItem(draftKey);
 
   const shell = document.getElementById('app-shell')!;
-  shell.classList.add('reader-open');
+  const pane = document.getElementById('reader-pane');
 
   const reader = document.createElement('div');
   reader.className = 'reader-fullpage';
   reader.innerHTML = `
     <div class="reader-header">
-      <button class="btn-icon reader-back" id="reader-back" title="Back to inbox">←</button>
+      <button class="btn-icon reader-back" id="reader-back" title="Back to inbox [Escape]">←</button>
       <div class="reader-subject">${esc(t.subject)}</div>
       <div class="reader-actions-header">
         <button class="btn-icon" id="btn-archive-reader" title="Archive">🗑</button>
@@ -55,11 +55,29 @@ export async function openThread(
         </div>
       </div>
     </div>`;
-  shell.appendChild(reader);
+
+  if (pane) {
+    pane.innerHTML = '';
+    pane.appendChild(reader);
+    shell.classList.add('reader-open');
+  } else {
+    // Fallback: mobile fullpage overlay
+    shell.classList.add('reader-open');
+    shell.appendChild(reader);
+  }
 
   function closeReader() {
-    reader.remove();
-    shell.classList.remove('reader-open');
+    if (pane) {
+      pane.innerHTML = `
+        <div class="reader-pane-empty">
+          <div class="reader-pane-empty-icon">✉</div>
+          <div class="reader-pane-empty-text">Select a conversation</div>
+        </div>`;
+      shell.classList.remove('reader-open');
+    } else {
+      reader.remove();
+      shell.classList.remove('reader-open');
+    }
   }
 
   document.getElementById('reader-back')!.addEventListener('click', closeReader);

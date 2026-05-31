@@ -185,13 +185,24 @@ function showShell() {
     <div id="app-shell">
       <div class="toolbar">
         <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">✏</button>
-        ${VIEWS.map(v => `<button class="tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
+        ${VIEWS.map(v => `<button class="tab-btn mobile-tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
         <button class="btn-icon state.account-picker-btn" id="btn-state.account" title="Switch state.account" style="font-size:13px">${state.account?.email?.split('@')[0] ?? '…'} ▾</button>
         <button class="btn-icon btn-menu" id="btn-menu" title="More options">⋮</button>
       </div>
-      <div class="inbox" id="inbox"></div>
+      <div class="app-body">
+        <nav class="sidebar" id="sidebar">
+          ${VIEWS.map(v => `<button class="sidebar-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}" title="${v.name}">${v.icon}</button>`).join('')}
+        </nav>
+        <div class="inbox" id="inbox"></div>
+        <div class="reader-pane" id="reader-pane">
+          <div class="reader-pane-empty">
+            <div class="reader-pane-empty-icon">✉</div>
+            <div class="reader-pane-empty-text">Select a conversation</div>
+          </div>
+        </div>
+      </div>
       <div class="statusbar">
         <span id="status-left">${state.account?.email ?? ''}</span>
         <span id="status-right"></span>
@@ -248,8 +259,8 @@ function showShell() {
 
   document.getElementById('btn-focus')!.addEventListener('click', () => toggleFocusMode());
 
-  // Tab buttons
-  document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
+  // Sidebar nav + mobile tab buttons
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view as ViewName));
   });
 
@@ -452,8 +463,8 @@ function renderSettingsAccounts() {
 // ── View switching ────────────────────────────────────────
 function switchView(view: ViewName) {
   state.currentView = view;
-  // Update tab buttons
-  document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
+  // Update sidebar + mobile tab buttons
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
   // Render appropriate content
