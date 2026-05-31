@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { getAllAccounts, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, hasSyncedBefore } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, hasSyncedBefore, groupBySection } from './gmail';
 
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
@@ -33,6 +33,8 @@ import {
   renderSnoozedView as _renderSnoozedView,
   renderStarredView as _renderStarredView,
   renderScheduledView,
+  threadRow,
+  wireThreadRows,
 } from './threadList';
 
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -456,7 +458,8 @@ function switchView(view: ViewName) {
   });
   // Render appropriate content
   if (view === 'Inbox') {
-    renderInbox();
+    // Reload inbox threads from DB (may have been overwritten by label views)
+    reloadInboxThreads();
   } else if (view === 'Snoozed') {
     renderSnoozedView();
   } else if (view === 'Starred') {
@@ -468,6 +471,17 @@ function switchView(view: ViewName) {
   }
 }
 
+/** Reload inbox threads from the local DB and render immediately. */
+async function reloadInboxThreads() {
+  if (!state.account) return;
+  if (state.unifiedMode) {
+    state.threads = await loadUnifiedThreads();
+  } else {
+    state.threads = await loadThreads(state.account.id);
+  }
+  renderInbox();
+}
+
 function renderLabelView(view: ViewName) {
   const container = document.getElementById('inbox');
   if (!container) return;
@@ -475,8 +489,19 @@ function renderLabelView(view: ViewName) {
   const gmailLabel = VIEW_TO_LABEL[view];
   if (!state.account || !gmailLabel) return;
   loadThreads(state.account.id, gmailLabel).then(ts => {
-    state.threads = ts;
-    renderInbox();
+    // Don't overwrite state.threads — render label view in-place
+    if (state.currentView !== view) return; // user already navigated away
+    const container = document.getElementById('inbox');
+    if (!container) return;
+    // Render using the same thread row template but with label-specific data
+    const sections = groupBySection(ts);
+    const html = sections.map(s => {
+      return `
+      <div class="section-header">${s.label}</div>
+      ${s.threads.map(t => threadRow(t, false)).join('')}`;
+    }).join('');
+    container.innerHTML = html || `<div class="empty-state"><div class="empty-text">No ${view.toLowerCase()} messages</div></div>`;
+    wireThreadRows(container, ts, false, getThreadListDeps());
   });
 }
 
