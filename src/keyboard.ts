@@ -14,7 +14,7 @@ export interface KeyboardDeps {
   exitBulkMode: () => void;
   updateBulkBar: () => void;
   renderCommandPalette: () => void;
-  openSnippetPicker: (ta: HTMLTextAreaElement | null) => void;
+  openSnippetPicker: (ta: HTMLElement | null) => void;
   getActionDeps: () => ActionDeps;
   doArchive: (t: Thread, row: HTMLElement, deps: ActionDeps) => Promise<void>;
   doToggleStar: (t: Thread, row: HTMLElement) => Promise<void>;
@@ -162,8 +162,9 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
   document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === ';' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      const ta = document.activeElement as HTMLTextAreaElement | null;
-      deps.openSnippetPicker(ta && ta.tagName === 'TEXTAREA' ? ta : null);
+      const active = document.activeElement as HTMLElement | null;
+      const isEditable = active && (active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable') === 'true');
+      deps.openSnippetPicker(isEditable ? active : null);
     }
   });
 
