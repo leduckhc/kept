@@ -187,7 +187,7 @@ export async function openThread(
       if (sanitized) {
         const iframe = document.createElement('iframe');
         iframe.setAttribute('sandbox', 'allow-scripts allow-popups-to-escape-sandbox');
-        iframe.style.cssText = 'width:100%; border:none; overflow:visible; flex:1; min-height:60vh;';
+        iframe.style.cssText = 'width:100%; border:none; overflow:visible; flex:1; min-height:calc(100vh - 160px);';
         const isDark = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
         const bodyColor = isDark ? '#e8e8e8' : '#222';
         const bodyBg = isDark ? '#0a0a0a' : '#ffffff';
