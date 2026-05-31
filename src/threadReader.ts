@@ -72,7 +72,9 @@ export async function openThread(
   let lastMessageId: string | null = null;
 
   try {
+    console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account.id);
     const result = await fetchMessageBody(state.account, t.gmailThreadId);
+    console.log('[threadReader] Got messages:', (result as any)?.messages?.length ?? 'unknown');
     const bodies = (result as any).bodies ?? (result as any).messages ?? result;
     lastMessageId = (result as any).lastMessageId ?? null;
     const bodyEl = reader.querySelector('.reader-body')!;
@@ -178,8 +180,9 @@ export async function openThread(
     });
 
     bodyEl.scrollTop = bodyEl.scrollHeight;
-  } catch {
-    reader.querySelector('.reader-body')!.innerHTML = '<p style="color:var(--text-muted)">Could not load messages.</p>';
+  } catch (err) {
+    console.error('[threadReader] Failed to load messages:', err);
+    reader.querySelector('.reader-body')!.innerHTML = `<p style="color:var(--text-muted)">Could not load messages. ${esc(String(err))}</p>`;
   }
 
   const textarea = reader.querySelector<HTMLTextAreaElement>('#compose-body')!;
