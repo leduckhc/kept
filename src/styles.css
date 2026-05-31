@@ -2063,6 +2063,18 @@ body {
   border-bottom-color: rgba(124,111,212,0.2);
 }
 
+/* ── Follow-up prompt ────────────────────────────────────── */
+.followup-prompt {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 14px; font-size: 12px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 10px; z-index: 9000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: fadeIn 0.15s ease;
+}
+.followup-prompt a { color: var(--accent); cursor: pointer; text-decoration: none; font-weight: 500; }
+.followup-prompt a:hover { text-decoration: underline; }
+.followup-dismiss { color: var(--text-muted) !important; opacity: 0.6; }
+
 /* ── Mobile density ──────────────────────────────────────── */
 @media (max-width: 600px) {
   .thread-row { min-height: 40px; }

@@ -6,6 +6,7 @@ import { sanitizeEmailHtml } from './sanitize';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
+import { saveReminder, getOverdueReminders, markReminderNotified, getActiveReminderThreadIds, dismissReminder } from './followupReminders';
 
 // ── State ─────────────────────────────────────────────────
 let account: Account | null = null;      // active account
@@ -106,6 +107,43 @@ async function boot() {
     // Auth screen already shown — user can log in fresh
   }
 }
+
+// ── Follow-up Reminders ──────────────────────────────────
+function showFollowupPrompt(opts: { threadId: string; subject: string; sentTo: string }) {
+  const existing = document.querySelector('.followup-prompt');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.className = 'followup-prompt';
+  el.innerHTML = `<span>Remind if no reply?</span>
+    <a data-days="1">1 day</a> <a data-days="3">3 days</a> <a data-days="7">1 week</a>
+    <a class="followup-dismiss">✕</a>`;
+  el.querySelectorAll('a[data-days]').forEach(a => {
+    a.addEventListener('click', () => {
+      const days = parseInt((a as HTMLElement).dataset.days || '3');
+      const remindAfter = new Date(Date.now() + days * 86400000).toISOString();
+      saveReminder({ threadId: opts.threadId, subject: opts.subject, sentTo: opts.sentTo, remindAfter });
+      el.remove();
+    });
+  });
+  el.querySelector('.followup-dismiss')?.addEventListener('click', () => el.remove());
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+function checkOverdueReminders() {
+  const overdue = getOverdueReminders();
+  overdue.forEach(r => {
+    markReminderNotified(r.id);
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `⏰ No reply from <b>${r.sentTo}</b> — "${r.subject}" <a class="toast-dismiss">dismiss</a>`;
+    toast.querySelector('.toast-dismiss')?.addEventListener('click', () => { dismissReminder(r.id); toast.remove(); });
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 8000);
+  });
+}
+
+setInterval(checkOverdueReminders, 60000);
 
 // ── Auth screen ───────────────────────────────────────────
 function showAuth() {
@@ -1641,6 +1679,8 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
     ? `<span class="snooze-badge" title="Snoozed until ${formatDate(t.snoozedUntil)}">🕐 ${formatDate(t.snoozedUntil)}</span>`
     : '';
 
+  const hasReminder = getActiveReminderThreadIds().has(t.id);
+
   const starIcon = t.isStarred ? '★' : '☆';
   const starClass = t.isStarred ? 'btn-star starred' : 'btn-star';
 
@@ -1664,7 +1704,7 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
     : '';
 
   return `
-    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}${bulkMode && selectedIds.has(t.id) ? ' bulk-selected' : ''}${bulkMode ? ' bulk-mode' : ''}" data-id="${t.id}">
+    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}${hasReminder ? ' awaiting-reply' : ''}${bulkMode && selectedIds.has(t.id) ? ' bulk-selected' : ''}${bulkMode ? ' bulk-mode' : ''}" data-id="${t.id}">
       ${bulkCheckbox}
       ${dot}
       <div class="avatar-wrap">
@@ -2421,6 +2461,7 @@ async function openComposeNew(prefillSubject = '') {
       await sendEmail(account, { to: toList.join(', '), subject: subject || '(no subject)', body });
       closeSafe();
       showToast('Message sent');
+      showFollowupPrompt({ threadId: '', subject: subject || '(no subject)', sentTo: toList.join(', ') });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errorEl.textContent = `Send failed: ${msg}`;
@@ -2697,6 +2738,7 @@ async function openThread(t: Thread) {
       });
       localStorage.removeItem(draftKey);
       closeReader();
+      showFollowupPrompt({ threadId: t.id, subject: t.subject, sentTo: t.senderEmail });
     } catch (e) {
       // Show inline error in reply footer — no alert() per KPT-025Q spec
       const errDiv = document.getElementById('reply-send-error') ?? (() => {
