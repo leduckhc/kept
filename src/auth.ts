@@ -5,6 +5,7 @@ import { open } from '@tauri-apps/plugin-shell';
 import { getDb } from './db';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
+const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? '';
 const SCOPES = [
   'openid',
   'email',
@@ -157,6 +158,7 @@ async function exchangeCode(code: string, verifier: string, redirectUri: string)
     body: new URLSearchParams({
       code,
       client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
       code_verifier: verifier,
@@ -212,6 +214,7 @@ async function _doRefreshToken(account: Account): Promise<Account> {
       grant_type: 'refresh_token',
       refresh_token: account.refreshToken,
       client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
     }),
   });
   if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
