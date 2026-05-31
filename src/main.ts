@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, loadRepliedToSenders, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, hasSyncedBefore, unmuteThread } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, loadRepliedToSenders, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, hasSyncedBefore } from './gmail';
 import { sanitizeEmailHtml } from './sanitize';
 
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
@@ -14,6 +14,7 @@ import { avatarHtml, avatarColor, ACCOUNT_BADGE_COLORS } from './avatar';
 import { type InboxTab, type ViewName, state, setAccount } from './state';
 import { snoozePresets, openSnoozePicker, doSnooze, setupSnoozeResurface } from './snooze';
 import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute } from './actions';
+import { showContextMenu } from './contextMenu';
 
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
@@ -1523,7 +1524,7 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
     });
     row.addEventListener('contextmenu', e => {
       e.preventDefault();
-      showContextMenu(e.clientX, e.clientY, t, row, isSnoozed);
+      showContextMenu(e.clientX, e.clientY, t, row, isSnoozed, getActionDeps());
     });
     row.querySelector('.btn-read')?.addEventListener('click', e => { e.stopPropagation(); doMarkRead(t, row, getActionDeps()); });
     row.querySelector('.btn-mark-unread')?.addEventListener('click', e => { e.stopPropagation(); doMarkUnread(t, row); });
@@ -1748,76 +1749,6 @@ function openInlineReply(t: Thread, row: HTMLElement) {
 }
 
 // ── Context menu ──────────────────────────────────────────
-function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSnoozed: boolean) {
-  document.getElementById('kept-ctx-menu')?.remove();
-
-  const menu = document.createElement('div');
-  menu.id = 'kept-ctx-menu';
-  menu.className = 'ctx-menu';
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-
-  type MenuItem = { label: string; action: () => void; cls?: string };
-  const items: Array<MenuItem | 'divider'> = [];
-
-  if (!isSnoozed) {
-    items.push({ label: '🕐  Snooze…', action: () => { menu.remove(); openSnoozePicker(t, row); }, cls: 'ctx-menu-item--snooze' });
-  } else {
-    items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row, getActionDeps()); }, cls: 'ctx-menu-item--snooze' });
-  }
-  items.push({ label: `${t.isStarred ? '★  Unstar' : '☆  Star'}`, action: () => { menu.remove(); doToggleStar(t, row); } });
-  items.push({ label: '✉  Mark as unread', action: () => { menu.remove(); doMarkUnread(t, row); } });
-  items.push('divider');
-  items.push({ label: '📂  Archive', action: () => { menu.remove(); doArchive(t, row, getActionDeps()); } });
-  items.push({ label: '✓  Mark read', action: () => { menu.remove(); doMarkRead(t, row, getActionDeps()); } });
-  items.push({ label: t.isMuted ? '🔔  Unmute thread' : '🔇  Mute thread', action: () => {
-    menu.remove();
-    if (t.isMuted) {
-      unmuteThread(t).then(() => {
-        t.isMuted = false;
-        renderInbox();
-      }).catch(() => setStatus('Unmute failed'));
-    } else {
-      doMute(t, row, getActionDeps());
-    }
-  }});
-  items.push('divider');
-  items.push({ label: '🚫  Block sender', action: () => { menu.remove(); doBlock(t, row, getActionDeps()); }, cls: 'ctx-menu-item--danger' });
-
-  const actionItems = items.filter((x): x is MenuItem => x !== 'divider');
-  menu.innerHTML = items.map((item) =>
-    item === 'divider'
-      ? `<hr class="ctx-menu-divider">`
-      : `<button class="ctx-menu-item${item.cls ? ' ' + item.cls : ''}" data-action-idx="${actionItems.indexOf(item)}">${item.label}</button>`
-  ).join('');
-
-  menu.querySelectorAll<HTMLButtonElement>('.ctx-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const item = actionItems[parseInt(btn.dataset.actionIdx!)];
-      if (item) item.action();
-    });
-  });
-
-  document.body.appendChild(menu);
-
-  requestAnimationFrame(() => {
-    const rect = menu.getBoundingClientRect();
-    if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 8}px`;
-    if (rect.bottom > window.innerHeight) menu.style.top = `${y - rect.height}px`;
-  });
-
-  function dismiss(e: MouseEvent | KeyboardEvent) {
-    if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-    if (e instanceof MouseEvent && menu.contains(e.target as Node)) return;
-    menu.remove();
-    document.removeEventListener('click', dismiss as EventListener);
-    document.removeEventListener('keydown', dismiss as EventListener);
-  }
-  setTimeout(() => {
-    document.addEventListener('click', dismiss as EventListener);
-    document.addEventListener('keydown', dismiss as EventListener);
-  }, 0);
-}
 // ── Compose new email ─────────────────────────────────────
 async function openComposeNew(prefillSubject = '') {
   if (!state.account) return;
