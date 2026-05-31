@@ -7,10 +7,10 @@ import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './n
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 import { saveReminder, getOverdueReminders, markReminderNotified, getActiveReminderThreadIds, dismissReminder } from './followupReminders';
 import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
-import { applyTheme, setStatus, esc, formatDate, toDatetimeLocal } from './helpers';
+import { applyTheme, setStatus, esc, formatDate } from './helpers';
 import { avatarHtml, ACCOUNT_BADGE_COLORS } from './avatar';
 import { type InboxTab, type ViewName, state, setAccount } from './state';
-import { snoozePresets, openSnoozePicker, doSnooze, setupSnoozeResurface } from './snooze';
+import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute } from './actions';
 import { showContextMenu } from './contextMenu';
 import { openInlineReply } from './inlineReply';
@@ -22,6 +22,14 @@ import {
   showCheatSheet,
   openThreadWithReply as _openThreadWithReply,
 } from './keyboard';
+import {
+  toggleBulkMode as _toggleBulkMode,
+  exitBulkMode as _exitBulkMode,
+  toggleBulkSelection as _toggleBulkSelection,
+  removeBulkBar,
+  updateBulkBar as _updateBulkBar,
+  openBulkSnoozePicker as _openBulkSnoozePicker,
+} from './bulk';
 
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
@@ -786,202 +794,11 @@ function registerKeyboardShortcuts() {
   });
 }
 
-// ── Bulk select ───────────────────────────────────────────
-function toggleBulkMode() {
-  state.bulkMode = !state.bulkMode;
-  if (!state.bulkMode) {
-    state.selectedIds.clear();
-    removeBulkBar();
-  }
-  renderInbox();
-}
-
-function exitBulkMode() {
-  state.bulkMode = false;
-  state.selectedIds.clear();
-  removeBulkBar();
-  renderInbox();
-}
-
-function toggleBulkSelection(id: string) {
-  if (state.selectedIds.has(id)) {
-    state.selectedIds.delete(id);
-  } else {
-    state.selectedIds.add(id);
-  }
-  const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-  if (row) {
-    row.classList.toggle('bulk-selected', state.selectedIds.has(id));
-    const cb = row.querySelector<HTMLInputElement>('.bulk-checkbox');
-    if (cb) cb.checked = state.selectedIds.has(id);
-  }
-  updateBulkBar();
-}
-
-function updateBulkBar() {
-  removeBulkBar();
-  if (state.selectedIds.size === 0) return;
-
-  const bar = document.createElement('div');
-  bar.id = 'bulk-bar';
-  bar.className = 'bulk-bar';
-  bar.innerHTML = `
-    <span class="bulk-count">${state.selectedIds.size} selected</span>
-    <button class="bulk-action-btn" id="bulk-archive">Archive All</button>
-    <button class="bulk-action-btn" id="bulk-read">Mark Read</button>
-    <button class="bulk-action-btn" id="bulk-snooze">Snooze All</button>
-    <button class="bulk-cancel-btn" id="bulk-cancel">Cancel</button>
-  `;
-  document.body.appendChild(bar);
-
-  document.getElementById('bulk-archive')!.addEventListener('click', async () => {
-    const ids = Array.from(state.selectedIds);
-    for (const id of ids) {
-      const t = state.threads.find(x => x.id === id);
-      if (!t) continue;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doArchive(t, row, getActionDeps());
-    }
-    exitBulkMode();
-  });
-
-  document.getElementById('bulk-read')!.addEventListener('click', async () => {
-    const ids = Array.from(state.selectedIds);
-    for (const id of ids) {
-      const t = state.threads.find(x => x.id === id);
-      if (!t) continue;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doMarkRead(t, row, getActionDeps());
-    }
-    exitBulkMode();
-  });
-
-  document.getElementById('bulk-snooze')!.addEventListener('click', () => {
-    const ids = Array.from(state.selectedIds);
-    const firstThread = state.threads.find(x => x.id === ids[0]);
-    if (!firstThread) return;
-    // Use a synthetic row element just for picker positioning
-    const fakeRow = document.querySelector<HTMLElement>(`.thread-row[data-id="${ids[0]}"]`) ?? document.body as HTMLElement;
-    openBulkSnoozePicker(ids, fakeRow);
-  });
-
-  document.getElementById('bulk-cancel')!.addEventListener('click', () => exitBulkMode());
-}
-
-function removeBulkBar() {
-  document.getElementById('bulk-bar')?.remove();
-}
-
-function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement) {
-  document.getElementById('snooze-picker')?.remove();
-
-  const presets = snoozePresets();
-  const now = new Date();
-  const defaultDt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
-  const dtLocal = toDatetimeLocal(defaultDt);
-
-  const picker = document.createElement('div');
-  picker.id = 'snooze-picker';
-  picker.className = 'snooze-picker';
-  picker.innerHTML = `
-    <div class="snooze-picker-header">
-      <span>Snooze ${ids.length} state.threads until…</span>
-      <button class="btn-icon snooze-picker-close" aria-label="Close">✕</button>
-    </div>
-    <div class="snooze-presets">
-      ${presets.map((p, i) => `
-        <button class="snooze-preset-btn" data-idx="${i}">
-          <span class="snooze-preset-label">${p.label}</span>
-          <span class="snooze-preset-time">${formatDate(p.untilMs())}</span>
-        </button>`).join('')}
-    </div>
-    <div class="snooze-custom">
-      <label class="snooze-custom-label">Custom date &amp; time</label>
-      <input type="datetime-local" id="snooze-dt" class="snooze-dt-input" value="${dtLocal}" />
-      <div id="snooze-dt-error" class="snooze-dt-error" style="display:none">Pick a future time</div>
-      <button class="btn-primary snooze-confirm-btn" id="snooze-confirm" disabled>Snooze</button>
-    </div>
-  `;
-
-  document.body.appendChild(picker);
-
-  const rowRect = anchorRow.getBoundingClientRect();
-  picker.style.top = `${Math.min(rowRect.bottom + 4, window.innerHeight - 320)}px`;
-  picker.style.left = `${Math.max(8, Math.min(rowRect.left, window.innerWidth - 280))}px`;
-
-  picker.querySelector('.snooze-picker-close')!.addEventListener('click', () => picker.remove());
-
-  let selectedPresetMs: number | null = null;
-  const confirmBtn = document.getElementById('snooze-confirm') as HTMLButtonElement;
-
-  picker.querySelectorAll<HTMLButtonElement>('.snooze-preset-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      picker.querySelectorAll('.snooze-preset-btn').forEach(b => b.classList.remove('snooze-preset-btn--active'));
-      btn.classList.add('snooze-preset-btn--active');
-      const idx = parseInt(btn.dataset.idx!);
-      selectedPresetMs = presets[idx].untilMs();
-      confirmBtn.disabled = false;
-    });
-  });
-
-  async function applyBulkSnooze(untilMs: number) {
-    for (const id of ids) {
-      const t = state.threads.find(x => x.id === id);
-      if (!t) continue;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doSnooze(t, row, untilMs);
-    }
-    picker.remove();
-    exitBulkMode();
-  }
-
-  confirmBtn.addEventListener('click', async () => {
-    const input = document.getElementById('snooze-dt') as HTMLInputElement;
-    const errorEl = document.getElementById('snooze-dt-error')!;
-    if (selectedPresetMs !== null) {
-      await applyBulkSnooze(selectedPresetMs);
-      return;
-    }
-    const val = input.value;
-    if (!val) { errorEl.style.display = ''; return; }
-    const chosen = new Date(val).getTime();
-    if (chosen <= Date.now()) {
-      errorEl.style.display = '';
-      errorEl.textContent = 'Must be a future time';
-      return;
-    }
-    errorEl.style.display = 'none';
-    await applyBulkSnooze(chosen);
-  });
-
-  (document.getElementById('snooze-dt') as HTMLInputElement).addEventListener('change', () => {
-    const inp = document.getElementById('snooze-dt') as HTMLInputElement;
-    const errorEl = document.getElementById('snooze-dt-error')!;
-    picker.querySelectorAll('.snooze-preset-btn').forEach(b => b.classList.remove('snooze-preset-btn--active'));
-    selectedPresetMs = null;
-    const chosen = new Date(inp.value).getTime();
-    if (chosen <= Date.now()) {
-      errorEl.style.display = '';
-      errorEl.textContent = 'Must be a future time';
-      confirmBtn.disabled = true;
-    } else {
-      errorEl.style.display = 'none';
-      confirmBtn.disabled = false;
-    }
-  });
-
-  function dismiss(e: MouseEvent | KeyboardEvent) {
-    if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-    if (e instanceof MouseEvent && picker.contains(e.target as Node)) return;
-    picker.remove();
-    document.removeEventListener('click', dismiss as EventListener);
-    document.removeEventListener('keydown', dismiss as EventListener);
-  }
-  setTimeout(() => {
-    document.addEventListener('click', dismiss as EventListener);
-    document.addEventListener('keydown', dismiss as EventListener);
-  }, 0);
-}
+function toggleBulkMode() { _toggleBulkMode(renderInbox); }
+function exitBulkMode() { _exitBulkMode(renderInbox); }
+function toggleBulkSelection(id: string) { _toggleBulkSelection(id, updateBulkBar); }
+function updateBulkBar() { _updateBulkBar(getActionDeps, exitBulkMode, openBulkSnoozePicker); }
+function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement) { _openBulkSnoozePicker(ids, anchorRow, exitBulkMode); }
 
 // ── Render inbox ──────────────────────────────────────────
 function renderInbox() {
