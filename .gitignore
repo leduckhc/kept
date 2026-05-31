@@ -7,3 +7,4 @@ src-tauri/gen/
 
 # OS stuffs
 .DS_Store
+.worktrees/
