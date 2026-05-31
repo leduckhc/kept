@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
-import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
+import { getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, loadRepliedToSenders, markRead, markUnread, archiveThread, unarchiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, unsnoozeThread, toggleStar, hasSyncedBefore, muteThread, unmuteThread } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, loadRepliedToSenders, markRead, archiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, hasSyncedBefore, unmuteThread } from './gmail';
 import { sanitizeEmailHtml } from './sanitize';
 
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
@@ -13,6 +13,7 @@ import { showToast, showUndoToast } from './toasts';
 import { avatarHtml, avatarColor, ACCOUNT_BADGE_COLORS } from './avatar';
 import { type InboxTab, type ViewName, state, setAccount } from './state';
 import { snoozePresets, openSnoozePicker, doSnooze, setupSnoozeResurface } from './snooze';
+import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute } from './actions';
 
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
@@ -53,15 +54,6 @@ function applyFocusFilter(list: Thread[]): { visible: Thread[]; hiddenCount: num
   const visible = list.filter(t => isKnownSender(t.senderEmail));
   return { visible, hiddenCount: list.length - visible.length };
 }
-
-// KPT-037: resolve the Account for a thread action (unified mode uses t.accountId)
-function accountFor(t: Thread): Account | null {
-  if (state.unifiedMode && t.accountId) {
-    return state.accounts.find(a => a.id === t.accountId) ?? state.account;
-  }
-  return state.account;
-}
-
 
 // ── Boot ──────────────────────────────────────────────────
 async function boot() {
@@ -513,6 +505,10 @@ async function loadUnifiedThreads(): Promise<Thread[]> {
   return merged;
 }
 
+function getActionDeps(): ActionDeps {
+  return { renderInbox, loadUnifiedThreads };
+}
+
 async function syncAndRender() {
   if (state.syncing || !state.account) return;
   state.syncing = true;
@@ -927,7 +923,7 @@ function registerKeyboardShortcuts() {
         const idx = ids.indexOf(state.selectedThreadId);
         const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
         const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
-        if (row) await doArchive(t, row);
+        if (row) await doArchive(t, row, getActionDeps());
         selectThread(nextId);
         break;
       }
@@ -941,7 +937,7 @@ function registerKeyboardShortcuts() {
         const idx = ids.indexOf(state.selectedThreadId);
         const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
         const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
-        if (row) await doArchive(t, row);
+        if (row) await doArchive(t, row, getActionDeps());
         selectThread(nextId);
         break;
       }
@@ -991,7 +987,7 @@ function registerKeyboardShortcuts() {
         const idx = ids.indexOf(state.selectedThreadId);
         const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
         const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
-        if (row) await doMute(t, row);
+        if (row) await doMute(t, row, getActionDeps());
         selectThread(nextId);
         break;
       }
@@ -1187,7 +1183,7 @@ function updateBulkBar() {
       const t = state.threads.find(x => x.id === id);
       if (!t) continue;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doArchive(t, row);
+      if (row) await doArchive(t, row, getActionDeps());
     }
     exitBulkMode();
   });
@@ -1198,7 +1194,7 @@ function updateBulkBar() {
       const t = state.threads.find(x => x.id === id);
       if (!t) continue;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doMarkRead(t, row);
+      if (row) await doMarkRead(t, row, getActionDeps());
     }
     exitBulkMode();
   });
@@ -1529,14 +1525,14 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
       e.preventDefault();
       showContextMenu(e.clientX, e.clientY, t, row, isSnoozed);
     });
-    row.querySelector('.btn-read')?.addEventListener('click', e => { e.stopPropagation(); doMarkRead(t, row); });
+    row.querySelector('.btn-read')?.addEventListener('click', e => { e.stopPropagation(); doMarkRead(t, row, getActionDeps()); });
     row.querySelector('.btn-mark-unread')?.addEventListener('click', e => { e.stopPropagation(); doMarkUnread(t, row); });
     row.querySelector('.btn-star')?.addEventListener('click', e => { e.stopPropagation(); doToggleStar(t, row); });
-    row.querySelector('.btn-archive')?.addEventListener('click', e => { e.stopPropagation(); doArchive(t, row); });
-    row.querySelector('.btn-block')?.addEventListener('click', e => { e.stopPropagation(); doBlock(t, row); });
+    row.querySelector('.btn-archive')?.addEventListener('click', e => { e.stopPropagation(); doArchive(t, row, getActionDeps()); });
+    row.querySelector('.btn-block')?.addEventListener('click', e => { e.stopPropagation(); doBlock(t, row, getActionDeps()); });
     row.querySelector('.btn-reply')?.addEventListener('click', e => { e.stopPropagation(); openInlineReply(t, row); });
     if (isSnoozed) {
-      row.querySelector('.btn-unsnooze')?.addEventListener('click', e => { e.stopPropagation(); doUnsnooze(t, row); });
+      row.querySelector('.btn-unsnooze')?.addEventListener('click', e => { e.stopPropagation(); doUnsnooze(t, row, getActionDeps()); });
     } else {
       row.querySelector('.btn-snooze')?.addEventListener('click', e => { e.stopPropagation(); openSnoozePicker(t, row); });
     }
@@ -1605,7 +1601,7 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
       if (absDx >= THRESHOLD) {
         if (dx > 0) {
           row.style.transform = '';
-          doArchive(t, row);
+          doArchive(t, row, getActionDeps());
         } else {
           row.style.transform = '';
           openSnoozePicker(t, row);
@@ -1751,138 +1747,6 @@ function openInlineReply(t: Thread, row: HTMLElement) {
   });
 }
 
-// ── Row actions ───────────────────────────────────────────
-async function doMarkRead(t: Thread, row: HTMLElement) {
-  const acct = accountFor(t);
-  if (!acct) return;
-  try {
-    await markRead(acct, t);
-    const fresh = await getAccountById(acct.id);
-    if (fresh && !state.unifiedMode) setAccount(fresh);
-    t.isUnread = false;
-    row.classList.remove('unread');
-    row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
-  } catch (e) {
-    console.error('Mark read failed:', e);
-    setStatus('Mark read failed');
-    t.isUnread = true;
-    renderInbox();
-  }
-}
-
-async function doMarkUnread(t: Thread, row: HTMLElement) {
-  const acct = accountFor(t);
-  if (!acct) return;
-  try {
-    await markUnread(acct, t);
-    t.isUnread = true;
-    row.classList.add('unread');
-    row.querySelector<HTMLElement>('.unread-dot')?.classList.add('filled');
-  } catch (e) {
-    console.error('Mark unread failed:', e);
-    setStatus('Mark unread failed');
-  }
-}
-
-async function doToggleStar(t: Thread, row: HTMLElement) {
-  const acct = accountFor(t);
-  if (!acct) return;
-  try {
-    const nowStarred = await toggleStar(acct, t);
-    t.isStarred = nowStarred;
-    const btn = row.querySelector<HTMLButtonElement>('.btn-star');
-    if (btn) {
-      btn.textContent = nowStarred ? '★' : '☆';
-      btn.title = nowStarred ? 'Unstar' : 'Star';
-      btn.classList.toggle('starred', nowStarred);
-    }
-    row.classList.toggle('is-starred', nowStarred);
-  } catch (e) {
-    console.error('Toggle star failed:', e);
-    setStatus('Star toggle failed');
-  }
-}
-
-async function doArchive(t: Thread, row: HTMLElement) {
-  const acct = accountFor(t);
-  if (!acct) return;
-  try {
-    await archiveThread(acct, t);
-    const fresh = await getAccountById(acct.id);
-    if (fresh && !state.unifiedMode) setAccount(fresh);
-    row.remove();
-    state.threads = state.threads.filter(x => x.id !== t.id);
-    showUndoToast('Archived', async () => {
-      await unarchiveThread(acct, t);
-      if (state.unifiedMode) {
-        state.threads = await loadUnifiedThreads();
-      } else {
-        state.threads = await loadThreads(acct.id);
-      }
-      renderInbox();
-    });
-  } catch (e) {
-    console.error('Archive failed:', e);
-    setStatus('Archive failed');
-    renderInbox();
-  }
-}
-
-async function doBlock(t: Thread, _row: HTMLElement) {
-  const acct = accountFor(t);
-  if (!acct) return;
-  if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
-  await blockSender(acct, t);
-  const fresh = await getAccountById(acct.id);
-  if (fresh && !state.unifiedMode) setAccount(fresh);
-  state.threads = state.threads.filter(x => !(x.senderEmail === t.senderEmail && x.accountId === t.accountId));
-  renderInbox();
-  showUndoToast(`Blocked ${t.senderEmail}`, async () => {
-    if (state.unifiedMode) {
-      state.threads = await loadUnifiedThreads();
-    } else {
-      state.threads = await loadThreads(acct.id);
-    }
-    renderInbox();
-  });
-}
-
-async function doUnsnooze(t: Thread, row: HTMLElement) {
-  const acct = accountFor(t);
-  await unsnoozeThread(t);
-  t.snoozedUntil = null;
-  row.remove();
-  state.threads = state.threads.filter(x => x.id !== t.id);
-  showToast('Back in inbox', 3000);
-  if (acct) {
-    state.threads = state.unifiedMode ? await loadUnifiedThreads() : await loadThreads(acct.id);
-  }
-}
-
-async function doMute(t: Thread, row: HTMLElement) {
-  const acct = accountFor(t);
-  if (!acct) return;
-  try {
-    await muteThread(acct, t);
-    t.isMuted = true;
-    row.remove();
-    state.threads = state.threads.filter(x => x.id !== t.id);
-    showUndoToast('Thread muted', async () => {
-      await unmuteThread(t);
-      t.isMuted = false;
-      if (state.unifiedMode) {
-        state.threads = await loadUnifiedThreads();
-      } else {
-        state.threads = await loadThreads(acct.id);
-      }
-      renderInbox();
-    });
-  } catch (e) {
-    console.error('Mute failed:', e);
-    setStatus('Mute failed');
-  }
-}
-
 // ── Context menu ──────────────────────────────────────────
 function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSnoozed: boolean) {
   document.getElementById('kept-ctx-menu')?.remove();
@@ -1899,13 +1763,13 @@ function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSn
   if (!isSnoozed) {
     items.push({ label: '🕐  Snooze…', action: () => { menu.remove(); openSnoozePicker(t, row); }, cls: 'ctx-menu-item--snooze' });
   } else {
-    items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row); }, cls: 'ctx-menu-item--snooze' });
+    items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row, getActionDeps()); }, cls: 'ctx-menu-item--snooze' });
   }
   items.push({ label: `${t.isStarred ? '★  Unstar' : '☆  Star'}`, action: () => { menu.remove(); doToggleStar(t, row); } });
   items.push({ label: '✉  Mark as unread', action: () => { menu.remove(); doMarkUnread(t, row); } });
   items.push('divider');
-  items.push({ label: '📂  Archive', action: () => { menu.remove(); doArchive(t, row); } });
-  items.push({ label: '✓  Mark read', action: () => { menu.remove(); doMarkRead(t, row); } });
+  items.push({ label: '📂  Archive', action: () => { menu.remove(); doArchive(t, row, getActionDeps()); } });
+  items.push({ label: '✓  Mark read', action: () => { menu.remove(); doMarkRead(t, row, getActionDeps()); } });
   items.push({ label: t.isMuted ? '🔔  Unmute thread' : '🔇  Mute thread', action: () => {
     menu.remove();
     if (t.isMuted) {
@@ -1914,11 +1778,11 @@ function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSn
         renderInbox();
       }).catch(() => setStatus('Unmute failed'));
     } else {
-      doMute(t, row);
+      doMute(t, row, getActionDeps());
     }
   }});
   items.push('divider');
-  items.push({ label: '🚫  Block sender', action: () => { menu.remove(); doBlock(t, row); }, cls: 'ctx-menu-item--danger' });
+  items.push({ label: '🚫  Block sender', action: () => { menu.remove(); doBlock(t, row, getActionDeps()); }, cls: 'ctx-menu-item--danger' });
 
   const actionItems = items.filter((x): x is MenuItem => x !== 'divider');
   menu.innerHTML = items.map((item) =>
@@ -2536,7 +2400,7 @@ function renderCommandPalette() {
       if (!state.selectedThreadId || !state.account) return;
       const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
-      if (row) doArchive(t, row);
+      if (row) doArchive(t, row, getActionDeps());
     }},
     { id: 'star',          label: 'Star / Unstar',     shortcut: 's', icon: '★', group: 'Thread', action: () => {
       if (!state.selectedThreadId || !state.account) return;
@@ -2548,7 +2412,7 @@ function renderCommandPalette() {
       if (!state.selectedThreadId || !state.account) return;
       const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
-      if (row) doMute(t, row);
+      if (row) doMute(t, row, getActionDeps());
     }},
     { id: 'mark-unread',   label: 'Mark as Unread',    shortcut: 'Shift+U', icon: '●', group: 'Thread', action: () => {
       if (!state.selectedThreadId || !state.account) return;
