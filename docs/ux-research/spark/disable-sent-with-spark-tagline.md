@@ -1,6 +1,7 @@
 # Disable "Sent with Spark" tagline
 
-**Source:** https://sparkmailapp.com/help/sending-emails/disable-sent-with-spark-tagline
+Source: https://sparkmailapp.com/help/sending-emails/disable-sent-with-spark-tagline
+Scraped: 2026-05-31T10:50:43Z
 
 ---
 

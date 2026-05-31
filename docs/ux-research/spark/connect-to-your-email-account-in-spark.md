@@ -1,6 +1,7 @@
 # Connect to Your Email Account in Spark
 
-**Source:** https://sparkmailapp.com/help/add-manage-accounts/connect-to-your-email-account-in-spark
+Source: https://sparkmailapp.com/help/add-manage-accounts/connect-to-your-email-account-in-spark
+Scraped: 2026-05-31T10:50:10Z
 
 ---
 

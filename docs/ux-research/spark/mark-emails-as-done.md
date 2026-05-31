@@ -1,6 +1,7 @@
 # Mark emails as Done
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/mark-as-done
+Source: https://sparkmailapp.com/help/manage-your-inbox/mark-as-done
+Scraped: 2026-05-31T10:51:02Z
 
 ---
 

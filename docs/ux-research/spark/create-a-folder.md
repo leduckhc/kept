@@ -1,6 +1,7 @@
 # Create a Folder
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/create-a-folder
+Source: https://sparkmailapp.com/help/manage-your-inbox/create-a-folder
+Scraped: 2026-05-31T10:50:52Z
 
 ---
 

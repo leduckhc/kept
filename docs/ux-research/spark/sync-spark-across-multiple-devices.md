@@ -1,6 +1,7 @@
 # Sync Spark across multiple devices
 
-**Source:** https://sparkmailapp.com/help/sync-spark-between-devices/sync-spark-across-multiple-devices
+Source: https://sparkmailapp.com/help/sync-spark-between-devices/sync-spark-across-multiple-devices
+Scraped: 2026-05-31T10:50:07Z
 
 ---
 

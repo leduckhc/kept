@@ -1,6 +1,7 @@
 # Set Aside vs Pin vs Snooze
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/set-aside-vs-pin-vs-snooze
+Source: https://sparkmailapp.com/help/manage-your-inbox/set-aside-vs-pin-vs-snooze
+Scraped: 2026-05-31T10:51:04Z
 
 ---
 

@@ -1,6 +1,7 @@
 # Spark Tutorials
 
-**Source:** https://sparkmailapp.com/help/spark-tutorials
+Source: https://sparkmailapp.com/help/spark-tutorials
+Scraped: 2026-05-31T10:49:50Z
 
 ---
 

@@ -1,6 +1,7 @@
 # Pins and Priority senders and threads
 
-**Source:** https://sparkmailapp.com/help/sending-emails/pin-and-priority
+Source: https://sparkmailapp.com/help/sending-emails/pin-and-priority
+Scraped: 2026-05-31T10:50:41Z
 
 ---
 

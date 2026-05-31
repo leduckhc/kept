@@ -1,6 +1,7 @@
 # Set up an email alias
 
-**Source:** https://sparkmailapp.com/help/sending-emails/set-up-an-email-alias
+Source: https://sparkmailapp.com/help/sending-emails/set-up-an-email-alias
+Scraped: 2026-05-31T10:50:30Z
 
 ---
 

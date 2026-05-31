@@ -1,6 +1,7 @@
 # Use rich text formatting in emails
 
-**Source:** https://sparkmailapp.com/help/sending-emails/use-rich-text-formatting-in-emails
+Source: https://sparkmailapp.com/help/sending-emails/use-rich-text-formatting-in-emails
+Scraped: 2026-05-31T10:50:32Z
 
 ---
 

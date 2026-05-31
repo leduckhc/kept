@@ -1,6 +1,7 @@
 # Remove an email account from Spark
 
-**Source:** https://sparkmailapp.com/help/add-manage-accounts/remove-an-email-account-from-spark
+Source: https://sparkmailapp.com/help/add-manage-accounts/remove-an-email-account-from-spark
+Scraped: 2026-05-31T10:50:13Z
 
 ---
 

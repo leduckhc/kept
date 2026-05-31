@@ -1,6 +1,7 @@
 # Manage email signatures
 
-**Source:** https://sparkmailapp.com/help/sending-emails/manage-email-signatures
+Source: https://sparkmailapp.com/help/sending-emails/manage-email-signatures
+Scraped: 2026-05-31T10:50:24Z
 
 ---
 

@@ -1,6 +1,7 @@
 # Compose an email
 
-**Source:** https://sparkmailapp.com/help/sending-emails/compose-an-email
+Source: https://sparkmailapp.com/help/sending-emails/compose-an-email
+Scraped: 2026-05-31T10:50:23Z
 
 ---
 

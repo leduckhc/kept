@@ -1,6 +1,7 @@
 # Enable Notification Badges
 
-**Source:** https://sparkmailapp.com/help/add-manage-accounts/enable-notification-badges
+Source: https://sparkmailapp.com/help/add-manage-accounts/enable-notification-badges
+Scraped: 2026-05-31T10:50:16Z
 
 ---
 

@@ -1,6 +1,7 @@
 # Email Storage and Backups
 
-**Source:** https://sparkmailapp.com/help/general/email-storage-and-backups
+Source: https://sparkmailapp.com/help/general/email-storage-and-backups
+Scraped: 2026-05-31T10:49:58Z
 
 ---
 

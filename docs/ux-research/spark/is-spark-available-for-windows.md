@@ -1,6 +1,7 @@
 # Is Spark Available for Windows?
 
-**Source:** https://sparkmailapp.com/help/general/is-spark-available-for-windows
+Source: https://sparkmailapp.com/help/general/is-spark-available-for-windows
+Scraped: 2026-05-31T10:50:01Z
 
 ---
 

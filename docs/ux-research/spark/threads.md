@@ -1,6 +1,7 @@
 # Threads
 
-**Source:** https://sparkmailapp.com/help/manage-your-inbox/threads-in-spark
+Source: https://sparkmailapp.com/help/manage-your-inbox/threads-in-spark
+Scraped: 2026-05-31T10:50:56Z
 
 ---
 

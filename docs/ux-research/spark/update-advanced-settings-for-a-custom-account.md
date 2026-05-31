@@ -1,6 +1,7 @@
 # Update Advanced Settings for a Custom Account
 
-**Source:** https://sparkmailapp.com/help/add-manage-accounts/can-i-change-advanced-settings-for-a-custom-account
+Source: https://sparkmailapp.com/help/add-manage-accounts/can-i-change-advanced-settings-for-a-custom-account
+Scraped: 2026-05-31T10:50:20Z
 
 ---
 

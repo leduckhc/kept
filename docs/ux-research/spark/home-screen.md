@@ -1,6 +1,7 @@
 # Home Screen
 
-**Source:** https://sparkmailapp.com/help/general/home-screen
+Source: https://sparkmailapp.com/help/general/home-screen
+Scraped: 2026-05-31T10:50:03Z
 
 ---
 

@@ -1,6 +1,7 @@
 # Can I change my password in Spark?
 
-**Source:** https://sparkmailapp.com/help/general/can-i-change-my-password-in-spark
+Source: https://sparkmailapp.com/help/general/can-i-change-my-password-in-spark
+Scraped: 2026-05-31T10:49:55Z
 
 ---
 
