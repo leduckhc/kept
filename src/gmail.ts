@@ -1,4 +1,5 @@
 // gmail.ts — Gmail API sync, send, reply, block, snooze
+import { fetch } from '@tauri-apps/plugin-http';
 import { type Account, ensureFreshToken } from './auth';
 import { getDb } from './db';
 
