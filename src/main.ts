@@ -15,6 +15,7 @@ let searchQuery = '';
 let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 let knownSenders = new Set<string>();   // KPT-038: replied-to sender cache
+let focusMode = localStorage.getItem('focusMode') === 'true'; // KPT-050
 type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred';
 let currentView: ViewName = 'Inbox';
 let selectedThreadId: string | null = null;
@@ -41,6 +42,29 @@ async function refreshKnownSenders() {
   if (!accounts.length) return;
   const allEmails = await Promise.all(accounts.map(a => loadRepliedToSenders(a.id).catch(() => [] as string[])));
   knownSenders = new Set(allEmails.flat().map(e => e.toLowerCase()));
+}
+
+function toggleFocusMode() {
+  focusMode = !focusMode;
+  localStorage.setItem('focusMode', String(focusMode));
+  const btn = document.getElementById('btn-focus');
+  if (btn) btn.classList.toggle('focus-active', focusMode);
+  renderInbox();
+}
+
+const NOISE_PREFIXES = ['noreply@', 'no-reply@', 'newsletter@', 'marketing@', 'donotreply@', 'notifications@', 'updates@', 'news@', 'info@', 'hello@', 'support@', 'mailer@'];
+
+function isKnownSender(email: string): boolean {
+  const lower = email.toLowerCase();
+  if (knownSenders.has(lower)) return true;
+  // Fallback: filter out obvious noise patterns
+  return !NOISE_PREFIXES.some(p => lower.startsWith(p));
+}
+
+function applyFocusFilter(list: Thread[]): { visible: Thread[]; hiddenCount: number } {
+  if (!focusMode) return { visible: list, hiddenCount: 0 };
+  const visible = list.filter(t => isKnownSender(t.senderEmail));
+  return { visible, hiddenCount: list.length - visible.length };
 }
 
 // KPT-037: resolve the Account for a thread action (unified mode uses t.accountId)
@@ -125,6 +149,7 @@ function showShell() {
         <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">✏</button>
         ${VIEWS.map(v => `<button class="tab-btn${v.name === currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
         <input class="search-input" id="search" placeholder="Search…" type="search" />
+        <button class="btn-icon btn-focus${focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
         <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${account?.email?.split('@')[0] ?? '…'} ▾</button>
         <button class="btn-icon btn-menu" id="btn-menu" title="More options">⋮</button>
       </div>
@@ -182,6 +207,8 @@ function showShell() {
   `;
 
   document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
+
+  document.getElementById('btn-focus')!.addEventListener('click', () => toggleFocusMode());
 
   // Tab buttons
   document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
@@ -783,6 +810,7 @@ function showCheatSheet() {
           <table class="kb-table">
             <tr><td><kbd class="kb-key">⌘K</kbd></td><td>Command palette</td></tr>
             <tr><td><kbd class="kb-key">⌘⇧N</kbd></td><td>Compose new</td></tr>
+            <tr><td><kbd class="kb-key">⇧F</kbd></td><td>Toggle Focus mode</td></tr>
             <tr><td><kbd class="kb-key">?</kbd></td><td>This shortcut help</td></tr>
           </table>
         </div>
@@ -898,6 +926,14 @@ function registerKeyboardShortcuts() {
         if (!t) break;
         const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
         if (row) await doToggleStar(t, row);
+        break;
+      }
+
+      case 'F': {
+        // Shift+F — toggle focus mode
+        if (!e.shiftKey) break;
+        e.preventDefault();
+        toggleFocusMode();
         break;
       }
 
@@ -1269,17 +1305,24 @@ function renderInbox() {
     return;
   }
 
-  if (threads.length === 0) {
+  const { visible: focusedThreads, hiddenCount } = applyFocusFilter(threads);
+
+  if (focusedThreads.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="icon" style="color:var(--text-muted)">✉</div>
-        <div class="empty-text">${searchQuery ? 'No results' : 'All caught up'}</div>
+        <div class="empty-text">${searchQuery ? 'No results' : focusMode ? 'No messages from known senders' : 'All caught up'}</div>
+        ${focusMode && hiddenCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus</div>` : ''}
       </div>`;
     return;
   }
 
-  const sections = groupBySection(threads);
-  const html = sections.map(s => {
+  const focusBanner = focusMode && hiddenCount > 0
+    ? `<div class="focus-banner">Focus mode — ${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden</div>`
+    : '';
+
+  const sections = groupBySection(focusedThreads);
+  const html = focusBanner + sections.map(s => {
     const unread = s.threads.filter(t => t.isUnread).length;
     const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
     return `
@@ -1289,7 +1332,7 @@ function renderInbox() {
   }).join('');
 
   container.innerHTML = html;
-  wireThreadRows(container, threads, false);
+  wireThreadRows(container, focusedThreads, false);
   if (bulkMode) updateBulkBar();
   // Restore keyboard selection highlight after re-render
   if (selectedThreadId) {

@@ -2026,6 +2026,43 @@ body {
 .cmd-palette-thread.active { background: var(--surface); }
 .cmd-palette-thread-subject { font-weight: 500; }
 .cmd-palette-thread-meta { color: var(--text-muted); font-size: 12px; }
+/* ── Focus mode ──────────────────────────────────────────── */
+.btn-focus {
+  font-size: 15px;
+}
+
+.btn-focus.focus-active {
+  color: var(--lavender-accent);
+  background: var(--lavender-tint);
+}
+
+.btn-focus.focus-active:hover {
+  color: var(--lavender-text);
+  background: var(--lavender-tint);
+}
+
+[data-theme="dark"] .btn-focus.focus-active {
+  color: #a89de0;
+  background: rgba(124,111,212,0.18);
+}
+
+.focus-banner {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--lavender-text);
+  background: var(--lavender-tint);
+  border-bottom: 1px solid var(--lavender-border);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+[data-theme="dark"] .focus-banner {
+  color: #a89de0;
+  background: rgba(124,111,212,0.12);
+  border-bottom-color: rgba(124,111,212,0.2);
+}
+
 /* ── Mobile density ──────────────────────────────────────── */
 @media (max-width: 600px) {
   .thread-row { min-height: 40px; }
