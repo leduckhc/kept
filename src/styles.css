@@ -2068,6 +2068,24 @@ body {
 }
 
 /* ── Follow-up prompt ────────────────────────────────────── */
+
+/* ── Inbox Tabs (Split Inbox) ────────────────────────────── */
+.inbox-tabs {
+  display: flex; gap: 0; padding: 0 12px; border-bottom: 1px solid var(--border);
+  background: var(--surface); position: sticky; top: 0; z-index: 10;
+}
+.inbox-tab {
+  padding: 8px 12px; font-size: 12px; font-weight: 500;
+  color: var(--text-muted); background: none; border: none; cursor: pointer;
+  border-bottom: 2px solid transparent; transition: color 120ms, border-color 120ms;
+}
+.inbox-tab:hover { color: var(--text); }
+.inbox-tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.tab-badge {
+  font-size: 10px; background: var(--accent); color: #fff; border-radius: 8px;
+  padding: 1px 5px; margin-left: 4px; font-weight: 600;
+}
+
 .followup-prompt {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px;

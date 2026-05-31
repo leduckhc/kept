@@ -18,6 +18,8 @@ let searchQuery = '';
 let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 let knownSenders = new Set<string>();   // KPT-038: replied-to sender cache
+type InboxTab = 'all' | 'important' | 'other';
+let activeInboxTab: InboxTab = (localStorage.getItem('kept_inbox_tab') as InboxTab) || 'all';
 let focusMode = localStorage.getItem('focusMode') === 'true'; // KPT-050
 type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled';
 let currentView: ViewName = 'Inbox';
@@ -1359,13 +1361,32 @@ function renderInbox() {
 
   const { visible: focusedThreads, hiddenCount } = applyFocusFilter(threads);
 
-  if (focusedThreads.length === 0) {
-    container.innerHTML = `
+  // Apply inbox tab filter
+  let tabFiltered = focusedThreads;
+  if (activeInboxTab === 'important') {
+    tabFiltered = focusedThreads.filter(t => isKnownSender(t.senderEmail));
+  } else if (activeInboxTab === 'other') {
+    tabFiltered = focusedThreads.filter(t => !isKnownSender(t.senderEmail));
+  }
+
+  // Count unreads per tab for badges
+  const importantCount = focusedThreads.filter(t => isKnownSender(t.senderEmail) && t.isUnread).length;
+  const otherCount = focusedThreads.filter(t => !isKnownSender(t.senderEmail) && t.isUnread).length;
+
+  const tabBar = `<div class="inbox-tabs">
+    <button class="inbox-tab${activeInboxTab === 'all' ? ' active' : ''}" data-tab="all">All</button>
+    <button class="inbox-tab${activeInboxTab === 'important' ? ' active' : ''}" data-tab="important">Important${importantCount ? ` <span class="tab-badge">${importantCount}</span>` : ''}</button>
+    <button class="inbox-tab${activeInboxTab === 'other' ? ' active' : ''}" data-tab="other">Other${otherCount ? ` <span class="tab-badge">${otherCount}</span>` : ''}</button>
+  </div>`;
+
+  if (tabFiltered.length === 0) {
+    container.innerHTML = tabBar + `
       <div class="empty-state">
         <div class="icon" style="color:var(--text-muted)">✉</div>
-        <div class="empty-text">${searchQuery ? 'No results' : focusMode ? 'No messages from known senders' : 'All caught up'}</div>
+        <div class="empty-text">${searchQuery ? 'No results' : focusMode ? 'No messages from known senders' : activeInboxTab === 'important' ? 'No important emails' : activeInboxTab === 'other' ? 'No other emails' : 'All caught up'}</div>
         ${focusMode && hiddenCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus</div>` : ''}
       </div>`;
+    wireInboxTabs(container);
     return;
   }
 
@@ -1373,8 +1394,8 @@ function renderInbox() {
     ? `<div class="focus-banner">Focus mode — ${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden</div>`
     : '';
 
-  const sections = groupBySection(focusedThreads);
-  const html = focusBanner + sections.map(s => {
+  const sections = groupBySection(tabFiltered);
+  const html = tabBar + focusBanner + sections.map(s => {
     const unread = s.threads.filter(t => t.isUnread).length;
     const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
     return `
@@ -1384,7 +1405,8 @@ function renderInbox() {
   }).join('');
 
   container.innerHTML = html;
-  wireThreadRows(container, focusedThreads, false);
+  wireInboxTabs(container);
+  wireThreadRows(container, tabFiltered, false);
   if (bulkMode) updateBulkBar();
   // Restore keyboard selection highlight after re-render
   if (selectedThreadId) {
@@ -1392,6 +1414,16 @@ function renderInbox() {
     if (row) row.classList.add('is-selected');
     else selectedThreadId = null;
   }
+}
+
+function wireInboxTabs(container: HTMLElement) {
+  container.querySelectorAll('.inbox-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeInboxTab = (btn as HTMLElement).dataset.tab as InboxTab;
+      localStorage.setItem('kept_inbox_tab', activeInboxTab);
+      renderInbox();
+    });
+  });
 }
 
 async function renderSnoozedView() {
