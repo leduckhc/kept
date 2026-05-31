@@ -223,15 +223,21 @@ export async function openComposeNew(
 
     try {
       await sendEmail(state.account, { to: toList.join(', '), subject: subject || '(no subject)', body });
-      closeSafe();
-      showToast('Message sent');
-      showFollowupPrompt({ threadId: '', subject: subject || '(no subject)', sentTo: toList.join(', ') });
+      sendBtn.innerHTML = '✓ Sent';
+      sendBtn.classList.add('send-success');
+      setTimeout(() => {
+        closeSafe();
+        showToast('Message sent');
+        showFollowupPrompt({ threadId: '', subject: subject || '(no subject)', sentTo: toList.join(', ') });
+      }, 1000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errorEl.textContent = `Send failed: ${msg}`;
       errorEl.style.display = 'block';
       sendBtn.disabled = false;
       sendBtn.innerHTML = 'Send';
+      sendBtn.classList.add('send-error');
+      setTimeout(() => sendBtn.classList.remove('send-error'), 2000);
       toEl.disabled = false;
       subjectEl.disabled = false;
       bodyEl.disabled = false;

@@ -1404,6 +1404,27 @@ body {
   animation: compose-spin 0.6s linear infinite;
   vertical-align: middle;
 }
+/* Send button states */
+.send-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+.send-success {
+  background: #00C49A !important;
+  color: white !important;
+  transition: background 0.15s ease !important;
+}
+.send-error {
+  background: var(--danger, #dc2626) !important;
+  color: white !important;
+  transition: background 0.15s ease !important;
+}
 /* Discard confirm overlay */
 .compose-discard-confirm {
   position: absolute;
