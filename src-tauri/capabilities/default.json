@@ -13,6 +13,15 @@
     "sql:allow-execute",
     "sql:allow-select",
     "notification:default",
-    "http:default"
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://gmail.googleapis.com/*" },
+        { "url": "https://www.googleapis.com/*" },
+        { "url": "https://oauth2.googleapis.com/*" },
+        { "url": "https://accounts.google.com/*" },
+        { "url": "https://people.googleapis.com/*" }
+      ]
+    }
   ]
 }
