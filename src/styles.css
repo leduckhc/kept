@@ -125,7 +125,7 @@ body {
   cursor: pointer;
   font-size: 16px;
   color: #666;
-  transition: color 0.12s, background 0.12s;
+  transition: all 0.12s ease;
 }
 .sidebar-btn:hover { color: #ccc; background: rgba(255,255,255,0.08); }
 .sidebar-btn.active {
@@ -180,7 +180,7 @@ body {
   position: static;
   flex: 1;
   height: 100%;
-  animation: none;
+  animation: fadeIn 150ms ease-out;
 }
 
 /* Mobile tab buttons hidden on desktop */
@@ -331,7 +331,7 @@ body {
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background 0.1s ease, transform 0.15s ease;
   position: relative;
   overflow: hidden;
   isolation: isolate;
@@ -2318,8 +2318,7 @@ body {
   to   { opacity: 0; }
 }
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { transform: translateY(20px); opacity: 0; }
 }
 @keyframes slideDown {
   from { opacity: 1; transform: translateY(0); }
@@ -2330,7 +2329,7 @@ body {
   to   { opacity: 0; transform: translateX(-24px); max-height: 0; padding: 0; border: none; }
 }
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.97); }
+  from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
 }
 @keyframes threadSlideIn {
@@ -2350,7 +2349,15 @@ body {
 
 /* Archive / delete slide-out */
 .thread-row.removing {
-  animation: slideOutLeft 200ms ease forwards;
+  transform: translateX(-100%);
+  opacity: 0;
+  transition: transform 200ms ease-out, opacity 200ms ease-out;
+  pointer-events: none;
+  overflow: hidden;
+}
+.thread-row.removing-collapse {
+  max-height: 0 !important;
+  transition: max-height 150ms ease-out;
   pointer-events: none;
   overflow: hidden;
 }
@@ -2384,7 +2391,7 @@ body {
   animation: fadeOut 120ms ease forwards;
 }
 #cmd-palette {
-  animation: scaleIn 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: scaleIn 100ms ease-out both;
 }
 #cmd-palette-backdrop.closing #cmd-palette {
   animation: slideDown 120ms ease forwards;
@@ -2421,6 +2428,9 @@ body {
 }
 
 /* ── Toast animations ────────────────────────────────────── */
+.toast {
+  animation: slideUp 200ms ease-out;
+}
 .kept-toast {
   /* override the inline transform-based show/hide with animation classes */
 }
