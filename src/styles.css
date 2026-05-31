@@ -110,100 +110,57 @@ body {
   flex: 1;
 }
 
-/* ── Title-as-Navigator ─────────────────────────────────── */
-.title-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.3px;
-  flex: 1;
+/* ── Inline tab navigation ──────────────────────────────── */
+.tab-btn {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text);
   font-family: var(--font);
-  padding: 0;
-  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #999;
+  padding: 0 4px;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: color 0.1s;
 }
-.title-nav:hover { color: var(--text-muted); }
+.tab-btn:hover { color: #555; }
+.tab-btn.active {
+  color: #222;
+  font-weight: 400;
+}
+[data-theme="dark"] .tab-btn { color: #666; }
+[data-theme="dark"] .tab-btn:hover { color: #aaa; }
+[data-theme="dark"] .tab-btn.active { color: #f0f0f0; }
 
-.title-nav-chevron {
-  font-size: 10px;
-  display: inline-block;
-  transition: transform 0.2s ease;
-  opacity: 0.6;
-}
-.title-nav.open .title-nav-chevron {
-  transform: rotate(180deg);
-}
-
-/* ── Nav tray ────────────────────────────────────────────── */
-.nav-tray-wrapper {
-  position: relative;
-  flex-shrink: 0;
-  z-index: 50;
-}
-
-.nav-tray {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: var(--bg);
-  border-bottom: 1px solid var(--lavender-border);
-  box-shadow: 0 4px 16px rgba(124,111,212,0.10);
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.22s ease;
-}
-.nav-tray.open {
-  max-height: 300px;
-}
-
-.nav-tray-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--text);
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-  font-family: var(--font);
-  transition: background 0.1s;
-  border-bottom: 1px solid var(--border);
-}
-.nav-tray-item:last-child { border-bottom: none; }
-.nav-tray-item:hover { background: var(--surface); }
-.nav-tray-item.active {
-  background: var(--lavender-tint);
-  color: var(--lavender-text);
-  font-weight: 600;
-}
-.nav-tray-item.active .nav-tray-icon { color: var(--lavender-accent); }
-
-.nav-tray-icon {
-  font-size: 15px;
-  width: 20px;
-  text-align: center;
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
-.nav-tray-label { flex: 1; }
-
-/* overlay to catch outside-tray taps */
-.nav-tray-backdrop {
+/* ── Toolbar ⋮ menu ─────────────────────────────────────── */
+.toolbar-menu {
   position: fixed;
-  inset: 0;
-  z-index: 40;
+  top: 44px;
+  right: 8px;
+  min-width: 160px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  padding: 4px 0;
+  z-index: 201;
 }
+.toolbar-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  font-family: var(--font);
+  color: var(--text);
+  transition: background 0.08s;
+}
+.toolbar-menu-item:hover { background: var(--surface); }
 
 .search-input {
   width: 160px;
@@ -341,6 +298,9 @@ body {
   z-index: 1;
 }
 
+/* Avatar wrap — clickable for selection */
+.avatar-wrap { cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; }
+
 /* Middle column */
 .thread-mid { min-width: 0; }
 .thread-top {
@@ -456,8 +416,6 @@ body {
   overflow: hidden;
 }
 #app-shell.reader-open > .toolbar,
-#app-shell.reader-open > .nav-tray-wrapper,
-#app-shell.reader-open > .label-nav,
 #app-shell.reader-open > .inbox,
 #app-shell.reader-open > .statusbar {
   display: none;
@@ -1389,8 +1347,6 @@ body {
 
 /* Inbox slides left when settings opens */
 #app-shell.settings-open .toolbar,
-#app-shell.settings-open .nav-tray-wrapper,
-#app-shell.settings-open .label-nav,
 #app-shell.settings-open .inbox,
 #app-shell.settings-open .statusbar {
   transform: translateX(-40px);
@@ -1401,8 +1357,6 @@ body {
 
 /* Default (no transition while closed) */
 .toolbar,
-.nav-tray-wrapper,
-.label-nav,
 .inbox,
 .statusbar {
   transform: translateX(0);
@@ -1846,10 +1800,6 @@ body {
   background: #2d2640;
 }
 
-.btn-bulk-select.active {
-  background: var(--lavender-tint);
-  color: var(--lavender-text);
-}
 
 .bulk-bar {
   position: fixed;

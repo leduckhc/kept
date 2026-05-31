@@ -121,31 +121,11 @@ function showShell() {
     <div id="app-shell">
       <div class="toolbar">
         <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">✏</button>
-        <button class="title-nav" id="title-nav" aria-haspopup="listbox" aria-expanded="false">
-          <span class="title-nav-label">${currentView}</span>
-          <span class="title-nav-chevron">&#x25BE;</span>
-        </button>
+        ${VIEWS.map(v => `<button class="tab-btn${v.name === currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
         <input class="search-input" id="search" placeholder="Search…" type="search" />
-        <button class="btn-icon btn-bulk-select" id="btn-bulk-select" title="Select threads">☐</button>
-        <button class="btn-icon" id="btn-sync" title="Sync inbox">↻</button>
         <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${account?.email?.split('@')[0] ?? '…'} ▾</button>
-        <button class="btn-icon btn-settings" id="btn-settings" title="Settings">⚙</button>
+        <button class="btn-icon btn-menu" id="btn-menu" title="More options">⋮</button>
       </div>
-      <div class="nav-tray-wrapper">
-        <div class="nav-tray" id="nav-tray" role="listbox">
-          ${VIEWS.map(v => `
-            <button class="nav-tray-item${v.name === currentView ? ' active' : ''}" data-view="${v.name}" role="option" aria-selected="${v.name === currentView}">
-              <span class="nav-tray-icon">${v.icon}</span>
-              <span class="nav-tray-label">${v.name}</span>
-            </button>`).join('')}
-        </div>
-      </div>
-      <nav class="label-nav" id="label-nav">
-        <button class="label-nav-btn active" data-label="INBOX">Inbox</button>
-        <button class="label-nav-btn" data-label="SENT">Sent</button>
-        <button class="label-nav-btn" data-label="DRAFT">Drafts</button>
-        <button class="label-nav-btn" data-label="STARRED">Starred</button>
-      </nav>
       <div class="inbox" id="inbox"></div>
       <div class="statusbar">
         <span id="status-left">${account?.email ?? ''}</span>
@@ -199,56 +179,16 @@ function showShell() {
     </div>
   `;
 
-  // Title-nav toggle
-  const titleNavBtn = document.getElementById('title-nav') as HTMLButtonElement;
-  const navTray = document.getElementById('nav-tray') as HTMLElement;
-
-  function openTray() {
-    titleNavBtn.classList.add('open');
-    navTray.classList.add('open');
-    titleNavBtn.setAttribute('aria-expanded', 'true');
-    // backdrop
-    const backdrop = document.createElement('div');
-    backdrop.className = 'nav-tray-backdrop';
-    backdrop.id = 'nav-tray-backdrop';
-    document.body.appendChild(backdrop);
-    backdrop.addEventListener('click', closeTray);
-  }
-
-  function closeTray() {
-    titleNavBtn.classList.remove('open');
-    navTray.classList.remove('open');
-    titleNavBtn.setAttribute('aria-expanded', 'false');
-    document.getElementById('nav-tray-backdrop')?.remove();
-  }
-
-  titleNavBtn.addEventListener('click', () => {
-    if (navTray.classList.contains('open')) closeTray();
-    else openTray();
-  });
-
-  // Tray item selection
-  navTray.querySelectorAll<HTMLButtonElement>('.nav-tray-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const view = item.dataset.view as ViewName;
-      closeTray();
-      switchView(view);
-    });
-  });
-
-  // Swipe-up to dismiss tray
-  let touchStartY = 0;
-  navTray.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
-  navTray.addEventListener('touchmove', e => {
-    if (e.touches[0].clientY - touchStartY < -30) closeTray();
-  }, { passive: true });
-
   document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
 
-  document.getElementById('btn-bulk-select')!.addEventListener('click', () => toggleBulkMode());
+  // Tab buttons
+  document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view as ViewName));
+  });
 
-  document.getElementById('btn-sync')!.addEventListener('click', () => syncAndRender());
-  document.getElementById('btn-settings')!.addEventListener('click', () => openSettings());
+  // ⋮ menu
+  document.getElementById('btn-menu')!.addEventListener('click', () => showToolbarMenu());
+
   document.getElementById('btn-account')!.addEventListener('click', () => {
     showAccountMenu();
   });
@@ -445,14 +385,9 @@ function renderSettingsAccounts() {
 // ── View switching ────────────────────────────────────────
 function switchView(view: ViewName) {
   currentView = view;
-  // Update title label
-  const label = document.querySelector('.title-nav-label');
-  if (label) label.textContent = view;
-  // Update tray items
-  document.querySelectorAll<HTMLButtonElement>('.nav-tray-item').forEach(item => {
-    const isActive = item.dataset.view === view;
-    item.classList.toggle('active', isActive);
-    item.setAttribute('aria-selected', String(isActive));
+  // Update tab buttons
+  document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
   });
   // Render appropriate content
   if (view === 'Inbox') {
@@ -592,6 +527,30 @@ async function syncAndRender() {
     if (btn) btn.style.opacity = '';
     setTimeout(() => setStatus(''), 5000);
   }
+}
+
+// ── Toolbar ⋮ menu ────────────────────────────────────────
+function showToolbarMenu() {
+  document.getElementById('toolbar-menu-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'toolbar-menu-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const menu = document.createElement('div');
+  menu.className = 'toolbar-menu';
+  menu.innerHTML = `
+    <button class="toolbar-menu-item" id="tmenu-sync">Sync</button>
+    <button class="toolbar-menu-item" id="tmenu-select">Select mode</button>
+    <button class="toolbar-menu-item" id="tmenu-settings">Settings</button>
+  `;
+  overlay.appendChild(menu);
+  document.body.appendChild(overlay);
+
+  document.getElementById('tmenu-sync')!.addEventListener('click', () => { overlay.remove(); syncAndRender(); });
+  document.getElementById('tmenu-select')!.addEventListener('click', () => { overlay.remove(); toggleBulkMode(); });
+  document.getElementById('tmenu-settings')!.addEventListener('click', () => { overlay.remove(); openSettings(); });
 }
 
 // ── Account menu ──────────────────────────────────────────
@@ -918,11 +877,7 @@ function registerKeyboardShortcuts() {
       case 'A': {
         if (!(e.ctrlKey || e.metaKey)) break;
         e.preventDefault();
-        if (!bulkMode) {
-          bulkMode = true;
-          const btn = document.getElementById('btn-bulk-select');
-          if (btn) btn.classList.add('active');
-        }
+        if (!bulkMode) bulkMode = true;
         getVisibleThreadIds().forEach(id => selectedIds.add(id));
         renderInbox();
         updateBulkBar();
@@ -951,8 +906,6 @@ function toggleBulkMode() {
     selectedIds.clear();
     removeBulkBar();
   }
-  const btn = document.getElementById('btn-bulk-select');
-  if (btn) btn.classList.toggle('active', bulkMode);
   renderInbox();
 }
 
@@ -960,8 +913,6 @@ function exitBulkMode() {
   bulkMode = false;
   selectedIds.clear();
   removeBulkBar();
-  const btn = document.getElementById('btn-bulk-select');
-  if (btn) btn.classList.remove('active');
   renderInbox();
 }
 
@@ -1239,8 +1190,19 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
     const id = row.dataset.id!;
     const t = list.find(x => x.id === id);
     if (!t) return;
+    row.querySelector<HTMLElement>('.avatar-wrap')?.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!bulkMode) bulkMode = true;
+      toggleBulkSelection(t.id);
+      if (selectedIds.size === 0) {
+        bulkMode = false;
+        removeBulkBar();
+        renderInbox();
+      }
+    });
     row.addEventListener('click', e => {
       if ((e.target as HTMLElement).closest('.thread-actions')) return;
+      if ((e.target as HTMLElement).closest('.avatar-wrap')) return;
       if (bulkMode) {
         toggleBulkSelection(t.id);
         return;
