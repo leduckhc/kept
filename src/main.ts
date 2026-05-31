@@ -7,6 +7,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 import { saveReminder, getOverdueReminders, markReminderNotified, getActiveReminderThreadIds, dismissReminder } from './followupReminders';
+import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
 
 // ── State ─────────────────────────────────────────────────
 let account: Account | null = null;      // active account
@@ -881,6 +882,15 @@ function registerKeyboardShortcuts() {
     if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       renderCommandPalette();
+    }
+  });
+
+  // Cmd+; / Ctrl+; opens snippet picker from anywhere
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === ';' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      const ta = document.activeElement as HTMLTextAreaElement | null;
+      openSnippetPicker(ta && ta.tagName === 'TEXTAREA' ? ta : null);
     }
   });
 
@@ -2392,6 +2402,12 @@ async function openComposeNew(prefillSubject = '') {
   }
 
   bodyEl.addEventListener('input', updateSendState);
+  bodyEl.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === '/' && bodyEl.value === '') {
+      e.preventDefault();
+      openSnippetPicker(bodyEl);
+    }
+  });
   updateSendState();
   toEl.focus();
 
@@ -2669,6 +2685,12 @@ async function openThread(t: Thread) {
   const textarea = reader.querySelector<HTMLTextAreaElement>('#compose-body')!;
   textarea.addEventListener('input', () => {
     localStorage.setItem(draftKey, textarea.value);
+  });
+  textarea.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === '/' && textarea.value === '') {
+      e.preventDefault();
+      openSnippetPicker(textarea);
+    }
   });
 
   // Reply chips — instant send with 3s undo window
@@ -3092,6 +3114,254 @@ function renderCommandPalette() {
   backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
 
   renderList('');
+}
+
+// ── Snippet picker ────────────────────────────────────────
+function openSnippetPicker(targetTextarea: HTMLTextAreaElement | null) {
+  document.getElementById('snippet-picker-backdrop')?.remove();
+
+  const snippets = loadSnippets().sort((a, b) => b.usageCount - a.usageCount);
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'snippet-picker-backdrop';
+
+  const picker = document.createElement('div');
+  picker.id = 'snippet-picker';
+
+  // Position near compose area or center if none
+  if (targetTextarea) {
+    const rect = targetTextarea.getBoundingClientRect();
+    picker.style.bottom = `${window.innerHeight - rect.top + 6}px`;
+    picker.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 340))}px`;
+    picker.classList.add('snippet-picker--anchored');
+  }
+
+  picker.innerHTML = `
+    <div class="snippet-picker-search-wrap">
+      <span class="snippet-picker-icon">☰</span>
+      <input class="snippet-picker-input" id="snippet-picker-input" type="text"
+        placeholder="Search snippets…" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="snippet-picker-list" id="snippet-picker-list"></div>
+    <div class="snippet-picker-footer">
+      <button class="snippet-picker-manage-btn" id="snippet-manage-btn">Manage snippets</button>
+    </div>`;
+
+  backdrop.appendChild(picker);
+  document.body.appendChild(backdrop);
+
+  const input = picker.querySelector<HTMLInputElement>('#snippet-picker-input')!;
+  const list = picker.querySelector<HTMLElement>('#snippet-picker-list')!;
+  let activeIdx = 0;
+
+  function insertSnippet(s: Snippet) {
+    bumpUsage(s.id);
+    close();
+    if (!targetTextarea) return;
+    const start = targetTextarea.selectionStart ?? 0;
+    const end = targetTextarea.selectionEnd ?? 0;
+    const before = targetTextarea.value.slice(0, start);
+    const after = targetTextarea.value.slice(end);
+    targetTextarea.value = before + s.body + after;
+    const pos = start + s.body.length;
+    targetTextarea.setSelectionRange(pos, pos);
+    targetTextarea.focus();
+    targetTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function renderList(q: string) {
+    list.innerHTML = '';
+    activeIdx = 0;
+    const filtered = q
+      ? snippets.filter(s => s.title.toLowerCase().includes(q.toLowerCase()) || s.body.toLowerCase().includes(q.toLowerCase()))
+      : snippets;
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="snippet-picker-empty">No snippets found</div>';
+      return;
+    }
+
+    filtered.forEach((s, i) => {
+      const item = document.createElement('div');
+      item.className = 'snippet-picker-item' + (i === 0 ? ' active' : '');
+      item.dataset.idx = String(i);
+      item.innerHTML = `
+        <div class="snippet-picker-item-title">${esc(s.title)}</div>
+        <div class="snippet-picker-item-body">${esc(s.body)}</div>`;
+      item.addEventListener('mouseenter', () => setActive(i));
+      item.addEventListener('click', () => insertSnippet(filtered[i]));
+      list.appendChild(item);
+    });
+  }
+
+  function setActive(idx: number) {
+    activeIdx = idx;
+    list.querySelectorAll<HTMLElement>('.snippet-picker-item').forEach((el, i) => {
+      el.classList.toggle('active', i === idx);
+      if (i === idx) el.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  function getFiltered(): Snippet[] {
+    const q = input.value.trim();
+    return q
+      ? snippets.filter(s => s.title.toLowerCase().includes(q.toLowerCase()) || s.body.toLowerCase().includes(q.toLowerCase()))
+      : snippets;
+  }
+
+  function close() {
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+    const items = list.querySelectorAll<HTMLElement>('.snippet-picker-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive(Math.min(activeIdx + 1, items.length - 1));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive(Math.max(activeIdx - 1, 0));
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const filtered = getFiltered();
+      if (filtered[activeIdx]) insertSnippet(filtered[activeIdx]);
+      return;
+    }
+  }
+  document.addEventListener('keydown', onKey);
+
+  input.addEventListener('input', () => renderList(input.value.trim()));
+
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+
+  document.getElementById('snippet-manage-btn')!.addEventListener('click', () => {
+    close();
+    openSnippetManager(targetTextarea);
+  });
+
+  renderList('');
+  input.focus();
+}
+
+// ── Snippet manager ───────────────────────────────────────
+function openSnippetManager(returnTarget: HTMLTextAreaElement | null) {
+  document.getElementById('snippet-manager-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'snippet-manager-overlay';
+  overlay.className = 'snippet-manager-overlay';
+
+  const panel = document.createElement('div');
+  panel.className = 'snippet-manager-panel';
+  panel.innerHTML = `
+    <div class="snippet-manager-header">
+      <span class="snippet-manager-title">Manage Snippets</span>
+      <button class="btn-icon snippet-manager-close" id="snippet-mgr-close">✕</button>
+    </div>
+    <div class="snippet-manager-body" id="snippet-mgr-body"></div>
+    <div class="snippet-manager-footer">
+      <button class="snippet-manager-add-btn" id="snippet-mgr-add">+ New Snippet</button>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  function close() {
+    overlay.remove();
+  }
+
+  function renderSnippets() {
+    const body = document.getElementById('snippet-mgr-body')!;
+    const snippets = loadSnippets();
+    if (snippets.length === 0) {
+      body.innerHTML = '<div class="snippet-mgr-empty">No snippets yet. Add one below.</div>';
+      return;
+    }
+    body.innerHTML = snippets.map(s => `
+      <div class="snippet-mgr-row" data-id="${esc(s.id)}">
+        <div class="snippet-mgr-info">
+          <div class="snippet-mgr-title">${esc(s.title)}</div>
+          <div class="snippet-mgr-body-preview">${esc(s.body)}</div>
+        </div>
+        <div class="snippet-mgr-actions">
+          <button class="snippet-mgr-edit-btn" data-id="${esc(s.id)}" title="Edit">✏</button>
+          <button class="snippet-mgr-delete-btn" data-id="${esc(s.id)}" title="Delete">🗑</button>
+        </div>
+      </div>`).join('');
+
+    body.querySelectorAll<HTMLButtonElement>('.snippet-mgr-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => showEditForm(btn.dataset.id!));
+    });
+    body.querySelectorAll<HTMLButtonElement>('.snippet-mgr-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        deleteSnippet(btn.dataset.id!);
+        renderSnippets();
+      });
+    });
+  }
+
+  function showEditForm(id: string | null) {
+    const snippets = loadSnippets();
+    const existing = id ? snippets.find(s => s.id === id) : null;
+
+    const body = document.getElementById('snippet-mgr-body')!;
+    body.innerHTML = `
+      <div class="snippet-edit-form">
+        <label class="snippet-edit-label">Title</label>
+        <input class="snippet-edit-title" id="snippet-edit-title" type="text"
+          value="${esc(existing?.title ?? '')}" placeholder="e.g. Thank you" />
+        <label class="snippet-edit-label">Body</label>
+        <textarea class="snippet-edit-body" id="snippet-edit-body"
+          rows="5" placeholder="Snippet text…">${esc(existing?.body ?? '')}</textarea>
+        <div class="snippet-edit-actions">
+          <button class="btn-primary snippet-edit-save" id="snippet-edit-save">Save</button>
+          <button class="btn-secondary snippet-edit-cancel" id="snippet-edit-cancel">Cancel</button>
+        </div>
+        <div class="snippet-edit-error" id="snippet-edit-error" style="display:none"></div>
+      </div>`;
+
+    const titleInput = document.getElementById('snippet-edit-title') as HTMLInputElement;
+    const bodyInput = document.getElementById('snippet-edit-body') as HTMLTextAreaElement;
+    const errorEl = document.getElementById('snippet-edit-error')!;
+
+    titleInput.focus();
+
+    document.getElementById('snippet-edit-save')!.addEventListener('click', () => {
+      const title = titleInput.value.trim();
+      const body = bodyInput.value.trim();
+      if (!title) { errorEl.textContent = 'Title is required.'; errorEl.style.display = ''; return; }
+      if (!body) { errorEl.textContent = 'Body is required.'; errorEl.style.display = ''; return; }
+      if (id) {
+        updateSnippet(id, title, body);
+      } else {
+        saveSnippet(title, body);
+      }
+      renderSnippets();
+    });
+
+    document.getElementById('snippet-edit-cancel')!.addEventListener('click', () => renderSnippets());
+  }
+
+  document.getElementById('snippet-mgr-close')!.addEventListener('click', () => {
+    close();
+    if (returnTarget) openSnippetPicker(returnTarget);
+  });
+
+  document.getElementById('snippet-mgr-add')!.addEventListener('click', () => showEditForm(null));
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  document.addEventListener('keydown', function onEsc(e: KeyboardEvent) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); }
+  });
+
+  renderSnippets();
 }
 
 // ── Start ─────────────────────────────────────────────────
