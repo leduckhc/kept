@@ -5,6 +5,13 @@ import { sanitizeEmailHtml } from './sanitize';
 import { showToast, showUndoToast } from './toasts';
 import { esc, formatDate } from './helpers';
 
+function getAvatarColor(name: string): string {
+  const colors = ["#5B4EDB","#E84D8A","#FEB300","#00C49A","#2F80ED","#F97316","#8B5CF6","#06B6D4"];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
 export async function openThread(
   t: Thread,
   renderInbox: () => void,
@@ -98,29 +105,62 @@ export async function openThread(
     const bodyEl = reader.querySelector('.reader-body')!;
     bodyEl.innerHTML = '';
     const msgs = bodies as any[];
-    const isThread = msgs.length > 1;
+
+    // Thread summary header
+    if (msgs.length > 1) {
+      const myEmail = state.account?.email ?? '';
+      const lastMsg = msgs[msgs.length - 1];
+      const lastFrom = lastMsg.from ?? '';
+      const lastIsMe = lastFrom.includes(myEmail);
+      const lastSenderName = lastFrom.replace(/<.*>/, '').trim() || lastFrom;
+
+      const uniqueSenders: string[] = [];
+      for (const m of msgs) {
+        const name = (m.from ?? '').replace(/<.*>/, '').trim() || m.from;
+        if (!uniqueSenders.includes(name)) uniqueSenders.push(name);
+      }
+      const shown = uniqueSenders.slice(0, 4);
+      const overflow = uniqueSenders.length - shown.length;
+
+      const avatarsHtml = shown.map(name => {
+        const initial = name[0]?.toUpperCase() ?? '?';
+        const color = getAvatarColor(name);
+        return `<span class="thread-avatar" style="background:${color}" title="${esc(name)}">${esc(initial)}</span>`;
+      }).join('') + (overflow > 0 ? `<span class="thread-avatar" style="background:#555">+${overflow}</span>` : '');
+
+      const statusText = lastIsMe
+        ? 'You replied'
+        : `Awaiting reply from ${esc(lastSenderName)}`;
+
+      const summaryEl = document.createElement('div');
+      summaryEl.className = 'thread-summary';
+      summaryEl.innerHTML = `<span class="thread-count-badge">${msgs.length} messages</span><div class="thread-participants">${avatarsHtml}</div><span class="thread-status">${statusText}</span>`;
+      bodyEl.appendChild(summaryEl);
+    }
 
     msgs.forEach((m: any, idx: number) => {
       const isLast = idx === msgs.length - 1;
       const msgContainer = document.createElement('div');
-      msgContainer.className = 'thread-message' + (!isLast && isThread ? ' thread-message-collapsed' : '');
+      msgContainer.className = 'thread-message' + (!isLast ? ' thread-message-collapsed' : '');
 
       const senderName = m.from.replace(/<.*>/, '').trim() || m.from;
+      const senderInitial = senderName[0]?.toUpperCase() ?? '?';
+      const avatarColor = getAvatarColor(senderName);
+      const senderEmail = (m.from.match(/<(.+)>/) ?? [])[1] ?? '';
+      const preview = (m.body || '').slice(0, 80).replace(/\n/g, ' ');
 
-      if (isThread && !isLast) {
-        const headerBar = document.createElement('div');
-        headerBar.className = 'thread-message-header';
-        const preview = (m.body || '').slice(0, 80).replace(/\n/g, ' ');
-        headerBar.innerHTML = `
-          <span class="thread-msg-sender">${esc(senderName)}</span>
-          <span class="thread-msg-preview">${esc(preview)}</span>
-          <span class="thread-msg-date">${formatDate(m.receivedAt)}</span>
-          <span class="thread-msg-chevron">›</span>`;
-        headerBar.addEventListener('click', () => {
-          msgContainer.classList.toggle('thread-message-collapsed');
-        });
-        msgContainer.appendChild(headerBar);
-      }
+      const headerBar = document.createElement('div');
+      headerBar.className = 'thread-message-header';
+      headerBar.innerHTML = `
+        <span class="msg-avatar" style="background:${avatarColor}">${esc(senderInitial)}</span>
+        <span class="thread-msg-sender">${esc(senderName)}</span>${senderEmail ? `<span class="thread-msg-email">${esc(senderEmail)}</span>` : ''}
+        ${isLast ? '' : `<span class="thread-msg-preview">${esc(preview)}</span>`}
+        <span class="thread-msg-date">${formatDate(m.receivedAt)}</span>
+        <span class="thread-msg-chevron">›</span>`;
+      headerBar.addEventListener('click', () => {
+        msgContainer.classList.toggle('thread-message-collapsed');
+      });
+      msgContainer.appendChild(headerBar);
 
       const contentWrap = document.createElement('div');
       contentWrap.className = 'thread-message-content';
@@ -135,7 +175,7 @@ export async function openThread(
 
       if (sanitized) {
         const iframe = document.createElement('iframe');
-        iframe.setAttribute('sandbox', 'allow-popups-to-escape-sandbox');
+        iframe.setAttribute('sandbox', 'allow-scripts allow-popups-to-escape-sandbox');
         iframe.style.cssText = 'width:100%; border:none; overflow:hidden; min-height:60px;';
         iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
           body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:#222;margin:0;padding:0;line-height:1.5;word-break:break-word;}
@@ -146,7 +186,16 @@ export async function openThread(
           td,th{padding:4px 8px;border:1px solid #eee;}
           pre{background:#f5f5f5;padding:8px;border-radius:4px;overflow-x:auto;}
           img{max-width:100%;height:auto;}
-        </style></head><body>${sanitized}</body></html>`;
+        </style></head><body>${sanitized}<script>
+document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(function(el){
+  el.style.display="none";
+  var btn=document.createElement("button");
+  btn.textContent="··· Show trimmed content";
+  btn.style.cssText="background:none;border:none;color:#7c6ce0;cursor:pointer;font-size:12px;padding:4px 0;";
+  btn.addEventListener("click",function(){el.style.display="block";btn.remove();});
+  el.parentNode.insertBefore(btn,el);
+});
+<\/script></body></html>`;
 
         const resizeIframe = () => {
           const h = iframe.contentDocument?.body?.scrollHeight;
@@ -176,17 +225,42 @@ export async function openThread(
         contentWrap.appendChild(iframe);
         contentWrap.appendChild(loadImgBtn);
       } else {
+        const plainText: string = m.body ?? '';
+        const lines = plainText.slice(0, 20000).split('\n');
+        const quoteStart = lines.findIndex((line, i) =>
+          line.startsWith('>') || (i > 0 && /^On .+ wrote:/.test(line))
+        );
+
+        const visibleText = quoteStart > 0 ? lines.slice(0, quoteStart).join('\n') : plainText.slice(0, 20000);
+        const quotedText = quoteStart > 0 ? lines.slice(quoteStart).join('\n') : '';
+
         const bodyDiv = document.createElement('div');
         bodyDiv.style.cssText = 'white-space:pre-wrap; font-size:14px;';
-        bodyDiv.textContent = m.body.slice(0, 20000);
+        bodyDiv.textContent = visibleText;
         contentWrap.appendChild(bodyDiv);
 
-        if (m.body.length > 20000) {
+        if (quotedText) {
+          const quotedDiv = document.createElement('div');
+          quotedDiv.className = 'quoted-hidden';
+          quotedDiv.style.cssText = 'white-space:pre-wrap; font-size:13px; color:#888;';
+          quotedDiv.textContent = quotedText;
+          const toggleBtn = document.createElement('button');
+          toggleBtn.className = 'btn-show-trimmed';
+          toggleBtn.textContent = '··· Show trimmed content';
+          toggleBtn.addEventListener('click', () => {
+            quotedDiv.classList.remove('quoted-hidden');
+            toggleBtn.remove();
+          });
+          contentWrap.appendChild(toggleBtn);
+          contentWrap.appendChild(quotedDiv);
+        }
+
+        if (plainText.length > 20000) {
           const showMore = document.createElement('button');
           showMore.className = 'btn-show-more';
           showMore.textContent = 'Show full email';
           showMore.addEventListener('click', () => {
-            bodyDiv.textContent = m.body;
+            bodyDiv.textContent = plainText;
             showMore.remove();
           });
           contentWrap.appendChild(showMore);
