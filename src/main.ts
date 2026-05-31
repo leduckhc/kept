@@ -756,51 +756,38 @@ function showCheatSheet() {
         <div class="kb-category">
           <div class="kb-cat-title">Navigation</div>
           <table class="kb-table">
-            <tr><td class="kb-key">j / ↓</td><td>Next thread</td></tr>
-            <tr><td class="kb-key">k / ↑</td><td>Previous thread</td></tr>
-            <tr><td class="kb-key">Enter / o</td><td>Open thread</td></tr>
-            <tr><td class="kb-key">u</td><td>Back to inbox</td></tr>
-            <tr><td class="kb-key">n</td><td>Next message in thread</td></tr>
-            <tr><td class="kb-key">p</td><td>Prev message in thread</td></tr>
-            <tr><td class="kb-key">Space</td><td>Scroll reader down</td></tr>
-            <tr><td class="kb-key">Shift+Space</td><td>Scroll reader up</td></tr>
-            <tr><td class="kb-key">Tab</td><td>Next view</td></tr>
-            <tr><td class="kb-key">Shift+Tab</td><td>Prev view</td></tr>
-            <tr><td class="kb-key">/</td><td>Focus search</td></tr>
+            <tr><td><kbd class="kb-key">j</kbd> <kbd class="kb-key">k</kbd></td><td>Navigate threads</td></tr>
+            <tr><td><kbd class="kb-key">o</kbd> <kbd class="kb-key">Enter</kbd></td><td>Open thread</td></tr>
+            <tr><td><kbd class="kb-key">Escape</kbd></td><td>Back to list</td></tr>
+            <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">i</kbd></td><td>Go to Inbox</td></tr>
+            <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">s</kbd></td><td>Go to Starred</td></tr>
+            <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">d</kbd></td><td>Go to Drafts</td></tr>
+            <tr><td><kbd class="kb-key">n</kbd> <kbd class="kb-key">p</kbd></td><td>Next/prev message</td></tr>
+            <tr><td><kbd class="kb-key">Tab</kbd> <kbd class="kb-key">⇧Tab</kbd></td><td>Cycle views</td></tr>
           </table>
         </div>
         <div class="kb-category">
-          <div class="kb-cat-title">Thread Actions</div>
+          <div class="kb-cat-title">Actions</div>
           <table class="kb-table">
-            <tr><td class="kb-key">e</td><td>Archive thread</td></tr>
-            <tr><td class="kb-key">#</td><td>Trash / delete</td></tr>
-            <tr><td class="kb-key">s</td><td>Star / unstar</td></tr>
-            <tr><td class="kb-key">Shift+U</td><td>Mark as unread</td></tr>
-            <tr><td class="kb-key">m</td><td>Mute thread</td></tr>
-            <tr><td class="kb-key">x</td><td>Toggle bulk select</td></tr>
-            <tr><td class="kb-key">Esc</td><td>Dismiss / back</td></tr>
+            <tr><td><kbd class="kb-key">e</kbd></td><td>Archive</td></tr>
+            <tr><td><kbd class="kb-key">#</kbd></td><td>Delete / Trash</td></tr>
+            <tr><td><kbd class="kb-key">r</kbd></td><td>Reply</td></tr>
+            <tr><td><kbd class="kb-key">f</kbd></td><td>Forward</td></tr>
+            <tr><td><kbd class="kb-key">x</kbd></td><td>Select / bulk toggle</td></tr>
+            <tr><td><kbd class="kb-key">/</kbd></td><td>Focus search</td></tr>
+            <tr><td><kbd class="kb-key">Space</kbd> <kbd class="kb-key">⇧Space</kbd></td><td>Scroll reader</td></tr>
           </table>
         </div>
         <div class="kb-category">
-          <div class="kb-cat-title">Compose</div>
+          <div class="kb-cat-title">Commands</div>
           <table class="kb-table">
-            <tr><td class="kb-key">c</td><td>Compose new</td></tr>
-            <tr><td class="kb-key">r</td><td>Reply</td></tr>
-            <tr><td class="kb-key">f</td><td>Forward</td></tr>
-          </table>
-          <div class="kb-cat-title" style="margin-top:16px">Go To</div>
-          <table class="kb-table">
-            <tr><td class="kb-key">g i</td><td>Inbox</td></tr>
-            <tr><td class="kb-key">g s</td><td>Starred</td></tr>
-            <tr><td class="kb-key">g d</td><td>Drafts</td></tr>
-          </table>
-          <div class="kb-cat-title" style="margin-top:16px">Other</div>
-          <table class="kb-table">
-            <tr><td class="kb-key">?</td><td>Show this overlay</td></tr>
+            <tr><td><kbd class="kb-key">⌘K</kbd></td><td>Command palette</td></tr>
+            <tr><td><kbd class="kb-key">⌘⇧N</kbd></td><td>Compose new</td></tr>
+            <tr><td><kbd class="kb-key">?</kbd></td><td>This shortcut help</td></tr>
           </table>
         </div>
       </div>
-      <div class="kb-dismiss-hint">Press <span class="kb-key">Esc</span> or <span class="kb-key">?</span> to close</div>
+      <div class="kb-dismiss-hint">Press <kbd class="kb-key">Esc</kbd> or <kbd class="kb-key">?</kbd> to close</div>
     </div>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
