@@ -10,6 +10,7 @@ import { applyTheme, setStatus, esc } from './helpers';
 import { type ViewName, state, setAccount } from './state';
 import { ACCOUNT_BADGE_COLORS } from './avatar';
 import { openSnoozePicker, setupSnoozeResurface } from './snooze';
+import { initSwipeGestures } from './swipe';
 import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute } from './actions';
 import { openInlineReply } from './inlineReply';
 import { openComposeNew as _openComposeNew } from './compose';
@@ -292,6 +293,8 @@ function showShell() {
   }
   document.addEventListener('keydown', handleKey);
   registerKeyboardShortcuts();
+
+  initSwipeGestures({ getActionDeps });
 }
 
 // ── Settings panel ─────────────────────────────────────────

@@ -335,6 +335,7 @@ body {
   position: relative;
   overflow: hidden;
   isolation: isolate;
+  touch-action: pan-y;
 }
 .thread-row:hover { background: var(--surface-hover); }
 .thread-row.selected {
