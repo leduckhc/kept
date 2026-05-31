@@ -1,6 +1,6 @@
 // main.ts — Kept inbox UI
 import { type Account, getAllAccounts, getAccountById, removeAccount, startOAuth } from './auth';
-import { resolveActiveAccount, setActiveAccountId, clearActiveAccountId } from './accountContext';
+import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
 import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThreads, loadSenderEmails, loadRepliedToSenders, markRead, markUnread, archiveThread, unarchiveThread, blockSender, fetchMessageBody, sendEmail, groupBySection, snoozeThread, unsnoozeThread, toggleStar, hasSyncedBefore, muteThread, unmuteThread } from './gmail';
 import { sanitizeEmailHtml } from './sanitize';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -11,28 +11,9 @@ import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, 
 import { applyTheme, setStatus, esc, formatDate, toDatetimeLocal } from './helpers';
 import { showToast, showUndoToast } from './toasts';
 import { avatarHtml, avatarColor, ACCOUNT_BADGE_COLORS } from './avatar';
+import { type InboxTab, type ViewName, state, setAccount } from './state';
 
-// ── State ─────────────────────────────────────────────────
-let account: Account | null = null;      // active account
-let accounts: Account[] = [];            // all accounts
-let unifiedMode = false;                 // KPT-037: show all accounts merged
-let threads: Thread[] = [];
-let searchQuery = '';
-let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
-let knownSenders = new Set<string>();   // KPT-038: replied-to sender cache
-type InboxTab = 'all' | 'important' | 'other';
-let activeInboxTab: InboxTab = (localStorage.getItem('kept_inbox_tab') as InboxTab) || 'all';
-let focusMode = localStorage.getItem('focusMode') === 'true'; // KPT-050
-type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled';
-let currentView: ViewName = 'Inbox';
-let selectedThreadId: string | null = null;
-let kbRegistered = false;
-let currentInlineReply: HTMLElement | null = null;
-let bulkMode = false;
-let selectedIds = new Set<string>();
-let gPending = false;
-let gTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',     icon: '✉' },
@@ -42,22 +23,18 @@ const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Starred',   icon: '★' },
   { name: 'Scheduled', icon: '⏰' },
 ];
-function setAccount(a: Account) {
-  account = a;
-  setActiveAccountId(a.id);
-}
 
 async function refreshKnownSenders() {
-  if (!accounts.length) return;
-  const allEmails = await Promise.all(accounts.map(a => loadRepliedToSenders(a.id).catch(() => [] as string[])));
-  knownSenders = new Set(allEmails.flat().map(e => e.toLowerCase()));
+  if (!state.accounts.length) return;
+  const allEmails = await Promise.all(state.accounts.map(a => loadRepliedToSenders(a.id).catch(() => [] as string[])));
+  state.knownSenders = new Set(allEmails.flat().map(e => e.toLowerCase()));
 }
 
 function toggleFocusMode() {
-  focusMode = !focusMode;
-  localStorage.setItem('focusMode', String(focusMode));
+  state.focusMode = !state.focusMode;
+  localStorage.setItem('state.focusMode', String(state.focusMode));
   const btn = document.getElementById('btn-focus');
-  if (btn) btn.classList.toggle('focus-active', focusMode);
+  if (btn) btn.classList.toggle('focus-active', state.focusMode);
   renderInbox();
 }
 
@@ -65,23 +42,23 @@ const NOISE_PREFIXES = ['noreply@', 'no-reply@', 'newsletter@', 'marketing@', 'd
 
 function isKnownSender(email: string): boolean {
   const lower = email.toLowerCase();
-  if (knownSenders.has(lower)) return true;
+  if (state.knownSenders.has(lower)) return true;
   // Fallback: filter out obvious noise patterns
   return !NOISE_PREFIXES.some(p => lower.startsWith(p));
 }
 
 function applyFocusFilter(list: Thread[]): { visible: Thread[]; hiddenCount: number } {
-  if (!focusMode) return { visible: list, hiddenCount: 0 };
+  if (!state.focusMode) return { visible: list, hiddenCount: 0 };
   const visible = list.filter(t => isKnownSender(t.senderEmail));
   return { visible, hiddenCount: list.length - visible.length };
 }
 
 // KPT-037: resolve the Account for a thread action (unified mode uses t.accountId)
 function accountFor(t: Thread): Account | null {
-  if (unifiedMode && t.accountId) {
-    return accounts.find(a => a.id === t.accountId) ?? account;
+  if (state.unifiedMode && t.accountId) {
+    return state.accounts.find(a => a.id === t.accountId) ?? state.account;
   }
-  return account;
+  return state.account;
 }
 
 
@@ -100,9 +77,9 @@ async function boot() {
   }
 
   try {
-    accounts = await getAllAccounts();
-    account = await resolveActiveAccount();
-    if (account) {
+    state.accounts = await getAllAccounts();
+    state.account = await resolveActiveAccount();
+    if (state.account) {
       showShell();
       refreshKnownSenders().catch(() => {});
       await refreshAll();
@@ -174,9 +151,9 @@ function showAuth() {
     const originalHTML = btn.innerHTML;
     btn.textContent = 'Opening browser…';
     try {
-      account = await startOAuth();
-      accounts = await getAllAccounts();
-      setAccount(account);
+      state.account = await startOAuth();
+      state.accounts = await getAllAccounts();
+      setAccount(state.account);
       showShell();
       await refreshAll();
     } catch (e) {
@@ -193,15 +170,15 @@ function showShell() {
     <div id="app-shell">
       <div class="toolbar">
         <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">✏</button>
-        ${VIEWS.map(v => `<button class="tab-btn${v.name === currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
+        ${VIEWS.map(v => `<button class="tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
         <input class="search-input" id="search" placeholder="Search…" type="search" />
-        <button class="btn-icon btn-focus${focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
-        <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${account?.email?.split('@')[0] ?? '…'} ▾</button>
+        <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
+        <button class="btn-icon state.account-picker-btn" id="btn-state.account" title="Switch state.account" style="font-size:13px">${state.account?.email?.split('@')[0] ?? '…'} ▾</button>
         <button class="btn-icon btn-menu" id="btn-menu" title="More options">⋮</button>
       </div>
       <div class="inbox" id="inbox"></div>
       <div class="statusbar">
-        <span id="status-left">${account?.email ?? ''}</span>
+        <span id="status-left">${state.account?.email ?? ''}</span>
         <span id="status-right"></span>
       </div>
       <div class="settings-panel" id="settings-panel" aria-hidden="true">
@@ -212,10 +189,10 @@ function showShell() {
         <div class="settings-body">
           <div class="settings-section">
             <div class="settings-section-label">Accounts</div>
-            <div id="settings-accounts-list"></div>
-            <button class="settings-add-account" id="settings-add-account">
-              <span class="settings-add-account-icon"></span>
-              + Add account
+            <div id="settings-state.accounts-list"></div>
+            <button class="settings-add-state.account" id="settings-add-state.account">
+              <span class="settings-add-state.account-icon"></span>
+              + Add state.account
             </button>
           </div>
           <div class="settings-divider"></div>
@@ -264,17 +241,17 @@ function showShell() {
   // ⋮ menu
   document.getElementById('btn-menu')!.addEventListener('click', () => showToolbarMenu());
 
-  document.getElementById('btn-account')!.addEventListener('click', () => {
+  document.getElementById('btn-state.account')!.addEventListener('click', () => {
     showAccountMenu();
   });
 
   const searchEl = document.getElementById('search') as HTMLInputElement;
   searchEl.addEventListener('input', () => {
-    searchQuery = searchEl.value;
+    state.searchQuery = searchEl.value;
     if (searchDebounce !== null) clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
-      if (!account) return;
-      threads = await loadThreads(account.id, searchQuery || undefined);
+      if (!state.account) return;
+      state.threads = await loadThreads(state.account.id, state.searchQuery || undefined);
       renderInbox();
     }, 200);
   });
@@ -297,7 +274,7 @@ function openSettings() {
   const panel = document.getElementById('settings-panel');
   if (!shell || !panel) return;
 
-  // Render accounts list
+  // Render state.accounts list
   renderSettingsAccounts();
 
   // Sync dark mode toggle state
@@ -318,7 +295,7 @@ function openSettings() {
     smartNotifToggle.setAttribute('aria-checked', String(smartOn));
     smartNotifToggle.classList.toggle('on', smartOn);
   }
-  if (smartNotifSub) smartNotifSub.textContent = smartOn ? 'Only notify for known senders' : 'Notify for all new threads';
+  if (smartNotifSub) smartNotifSub.textContent = smartOn ? 'Only notify for known senders' : 'Notify for all new state.threads';
 
   // Wire back button
   document.getElementById('settings-back')!.addEventListener('click', closeSettings, { once: true });
@@ -331,7 +308,7 @@ function openSettings() {
     smartNotifToggle.setAttribute('aria-checked', String(next));
     smartNotifToggle.classList.toggle('on', next);
     const subEl = document.getElementById('settings-smartnotif-sub');
-    if (subEl) subEl.textContent = next ? 'Only notify for known senders' : 'Notify for all new threads';
+    if (subEl) subEl.textContent = next ? 'Only notify for known senders' : 'Notify for all new state.threads';
   }, { once: true });
 
   // Wire dark mode toggle (once: true prevents listener accumulation on repeated open/close)
@@ -348,39 +325,39 @@ function openSettings() {
   // Wire sign out (once: true prevents duplicate confirm dialogs on repeated open/close)
   const signoutBtn = document.getElementById('settings-signout') as HTMLButtonElement;
   signoutBtn?.addEventListener('click', async () => {
-    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
+    if (!confirm('Sign out of all state.accounts? This will delete all local data.')) return;
     signoutBtn.disabled = true;
     signoutBtn.textContent = 'Signing out…';
     try {
-      for (const a of accounts) {
+      for (const a of state.accounts) {
         await removeAccount(a).catch(e => console.error('Remove error:', e));
       }
     } finally {
       clearActiveAccountId();
-      account = null;
-      accounts = [];
-      threads = [];
-      syncing = false;
+      state.account = null;
+      state.accounts = [];
+      state.threads = [];
+      state.syncing = false;
       showAuth();
     }
   }, { once: true });
 
-  // Wire add account (once: true prevents duplicate OAuth launches on repeated open/close)
-  document.getElementById('settings-add-account')!.addEventListener('click', async () => {
+  // Wire add state.account (once: true prevents duplicate OAuth launches on repeated open/close)
+  document.getElementById('settings-add-state.account')!.addEventListener('click', async () => {
     try {
       const newAcct = await startOAuth();
-      const existing = accounts.find(a => a.id === newAcct.id);
+      const existing = state.accounts.find(a => a.id === newAcct.id);
       if (existing) {
-        const idx = accounts.indexOf(existing);
-        accounts[idx] = newAcct;
+        const idx = state.accounts.indexOf(existing);
+        state.accounts[idx] = newAcct;
         setStatus(`${newAcct.email} token refreshed`);
       } else {
-        accounts.push(newAcct);
+        state.accounts.push(newAcct);
         setStatus(`${newAcct.email} added`);
       }
       renderSettingsAccounts();
     } catch (e) {
-      setStatus(`Add account failed: ${e}`);
+      setStatus(`Add state.account failed: ${e}`);
     }
     setTimeout(() => setStatus(''), 5000);
   });
@@ -401,57 +378,57 @@ function closeSettings() {
 }
 
 function renderSettingsAccounts() {
-  const list = document.getElementById('settings-accounts-list');
+  const list = document.getElementById('settings-state.accounts-list');
   if (!list) return;
   const avatarColors = ['#7c6fa8', '#5b8dd9', '#7cb9a8', '#d97c5b', '#c47cad'];
-  list.innerHTML = accounts.map((a, i) => {
+  list.innerHTML = state.accounts.map((a, i) => {
     const initial = (a.email[0] ?? '?').toUpperCase();
     const color = avatarColors[i % avatarColors.length];
-    const isOnly = accounts.length === 1;
+    const isOnly = state.accounts.length === 1;
     return `
-      <div class="settings-account-row" data-id="${esc(a.id)}">
+      <div class="settings-state.account-row" data-id="${esc(a.id)}">
         <div class="settings-avatar" style="background:${color}">${initial}</div>
-        <div class="settings-account-info">
-          <div class="settings-account-name">${esc(a.email.split('@')[0])}</div>
-          <div class="settings-account-email">${esc(a.email)}</div>
+        <div class="settings-state.account-info">
+          <div class="settings-state.account-name">${esc(a.email.split('@')[0])}</div>
+          <div class="settings-state.account-email">${esc(a.email)}</div>
         </div>
-        <button class="settings-account-remove" data-id="${esc(a.id)}" title="Remove account"
+        <button class="settings-state.account-remove" data-id="${esc(a.id)}" title="Remove state.account"
           ${isOnly ? 'disabled' : ''} aria-label="Remove ${esc(a.email)}">×</button>
       </div>`;
   }).join('');
 
   // Wire remove buttons
-  list.querySelectorAll<HTMLButtonElement>('.settings-account-remove').forEach(btn => {
+  list.querySelectorAll<HTMLButtonElement>('.settings-state.account-remove').forEach(btn => {
     if (btn.disabled) return;
     btn.addEventListener('click', async () => {
       const removeId = btn.dataset.id!;
-      const target = accounts.find(a => a.id === removeId);
+      const target = state.accounts.find(a => a.id === removeId);
       if (!target) return;
-      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
+      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this state.account.`)) return;
       try {
         await removeAccount(target);
-        accounts = accounts.filter(a => a.id !== removeId);
-        if (account?.id === removeId) {
-          const next = accounts[0] ?? null;
+        state.accounts = state.accounts.filter(a => a.id !== removeId);
+        if (state.account?.id === removeId) {
+          const next = state.accounts[0] ?? null;
           if (next) {
             setAccount(next);
-            threads = await loadThreads(next.id);
+            state.threads = await loadThreads(next.id);
             closeSettings();
             renderInbox();
             await refreshAll();
           } else {
             clearActiveAccountId();
-            account = null;
-            threads = [];
-            syncing = false;
+            state.account = null;
+            state.threads = [];
+            state.syncing = false;
             showAuth();
           }
         } else {
           renderSettingsAccounts();
         }
       } catch (err) {
-        console.error('Remove account error:', err);
-        setStatus('Failed to remove account');
+        console.error('Remove state.account error:', err);
+        setStatus('Failed to remove state.account');
       }
     });
   });
@@ -459,7 +436,7 @@ function renderSettingsAccounts() {
 
 // ── View switching ────────────────────────────────────────
 function switchView(view: ViewName) {
-  currentView = view;
+  state.currentView = view;
   // Update tab buttons
   document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
@@ -483,32 +460,32 @@ function renderLabelView(view: ViewName) {
   if (!container) return;
   const VIEW_TO_LABEL: Record<string, string> = { Sent: 'SENT', Drafts: 'DRAFT', Starred: 'STARRED' };
   const gmailLabel = VIEW_TO_LABEL[view];
-  if (!account || !gmailLabel) return;
-  loadThreads(account.id, gmailLabel).then(ts => {
-    threads = ts;
+  if (!state.account || !gmailLabel) return;
+  loadThreads(state.account.id, gmailLabel).then(ts => {
+    state.threads = ts;
     renderInbox();
   });
 }
 
 // ── Sync ──────────────────────────────────────────────────
-/** On boot: load active account threads, then kick off parallel sync for all accounts. */
+/** On boot: load active state.account state.threads, then kick off parallel sync for all state.accounts. */
 async function refreshAll() {
-  if (!account) return;
+  if (!state.account) return;
 
-  if (unifiedMode) {
-    threads = await loadUnifiedThreads();
+  if (state.unifiedMode) {
+    state.threads = await loadUnifiedThreads();
   } else {
-    threads = await loadThreads(account.id);
+    state.threads = await loadThreads(state.account.id);
   }
   renderInbox();
 
   // Request notification permission early (non-blocking)
   ensureNotificationPermission().catch(() => {});
 
-  // Parallel sync — one per account, errors are non-fatal per account
+  // Parallel sync — one per state.account, errors are non-fatal per state.account
   const allAccts = await getAllAccounts();
   const syncPromises = allAccts.map(acct =>
-    syncInbox(acct, acct.id === account!.id ? n => setStatus(`Syncing… ${n} threads`) : undefined)
+    syncInbox(acct, acct.id === state.account!.id ? n => setStatus(`Syncing… ${n} state.threads`) : undefined)
       .catch(err => console.error(`Sync error for ${acct.email}:`, err))
   );
   const btn = document.getElementById('btn-sync');
@@ -516,17 +493,17 @@ async function refreshAll() {
   setStatus('Syncing…');
   await Promise.all(syncPromises);
   if (btn) btn.style.opacity = '';
-  if (unifiedMode) {
-    threads = await loadUnifiedThreads();
+  if (state.unifiedMode) {
+    state.threads = await loadUnifiedThreads();
   } else {
-    threads = await loadThreads(account.id);
+    state.threads = await loadThreads(state.account.id);
   }
   renderInbox();
-  setStatus(`Synced — ${threads.length} threads`);
+  setStatus(`Synced — ${state.threads.length} state.threads`);
   setTimeout(() => setStatus(''), 5000);
 }
 
-/** KPT-037: Load and merge inbox threads from all accounts, sorted by receivedAt desc. */
+/** KPT-037: Load and merge inbox state.threads from all state.accounts, sorted by receivedAt desc. */
 async function loadUnifiedThreads(): Promise<Thread[]> {
   const allAccts = await getAllAccounts();
   const perAccount = await Promise.all(allAccts.map(a => loadThreads(a.id).catch(() => [] as Thread[])));
@@ -536,44 +513,44 @@ async function loadUnifiedThreads(): Promise<Thread[]> {
 }
 
 async function syncAndRender() {
-  if (syncing || !account) return;
-  syncing = true;
+  if (state.syncing || !state.account) return;
+  state.syncing = true;
   setStatus('Syncing…');
   const btn = document.getElementById('btn-sync');
   if (btn) btn.style.opacity = '0.4';
   try {
-    if (unifiedMode) {
-      // Sync all accounts in parallel
+    if (state.unifiedMode) {
+      // Sync all state.accounts in parallel
       const allAccts = await getAllAccounts();
       await Promise.all(allAccts.map(a =>
-        syncInbox(a, a.id === account!.id ? n => setStatus(`Syncing… ${n} threads`) : undefined)
+        syncInbox(a, a.id === state.account!.id ? n => setStatus(`Syncing… ${n} state.threads`) : undefined)
           .catch(err => console.error(`Sync error for ${a.email}:`, err))
       ));
-      threads = await loadUnifiedThreads();
+      state.threads = await loadUnifiedThreads();
       renderInbox();
-      setStatus(`Synced — ${threads.length} threads`);
+      setStatus(`Synced — ${state.threads.length} state.threads`);
     } else {
       // Capture thread IDs known before sync to detect new arrivals
-      const preSync = await loadThreads(account.id);
+      const preSync = await loadThreads(state.account.id);
       const knownIds = new Set(preSync.map(t => t.id));
       // Gate: only send notifications on second+ sync (historyId already set)
-      const isSubsequentSync = await hasSyncedBefore(account.id);
+      const isSubsequentSync = await hasSyncedBefore(state.account.id);
 
-      await syncInbox(account, n => setStatus(`Syncing… ${n} threads`));
-      threads = await loadThreads(account.id);
+      await syncInbox(state.account, n => setStatus(`Syncing… ${n} state.threads`));
+      state.threads = await loadThreads(state.account.id);
       renderInbox();
-      setStatus(`Synced — ${threads.length} threads`);
+      setStatus(`Synced — ${state.threads.length} state.threads`);
 
       // Refresh known-senders after sync (SENT folder may have grown)
       refreshKnownSenders().catch(() => {});
 
-      // Fire notifications for newly-arrived threads (not first sync)
+      // Fire notifications for newly-arrived state.threads (not first sync)
       if (isSubsequentSync) {
-        const newThreads = threads.filter(t => !knownIds.has(t.id));
+        const newThreads = state.threads.filter(t => !knownIds.has(t.id));
         if (newThreads.length > 0) {
           const smartNotifs = localStorage.getItem('smartNotifications') !== 'false';
           const toNotify = smartNotifs
-            ? newThreads.filter(t => knownSenders.has(t.senderEmail.toLowerCase()))
+            ? newThreads.filter(t => state.knownSenders.has(t.senderEmail.toLowerCase()))
             : newThreads;
           if (toNotify.length > 0) {
             notifyNewThreads(toNotify.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
@@ -583,14 +560,14 @@ async function syncAndRender() {
     }
 
     // Update tray badge / dock badge with total unread count
-    const unreadCount = threads.filter(t => t.isUnread).length;
+    const unreadCount = state.threads.filter(t => t.isUnread).length;
     updateBadge(unreadCount).catch(() => {});
   } catch (e) {
     console.error('Sync error:', e);
     const msg = e instanceof Error ? e.message : String(e);
     setStatus(`Sync error: ${msg}`);
     // Show error in inbox if it's empty so user sees it
-    if (threads.length === 0) {
+    if (state.threads.length === 0) {
       const container = document.getElementById('inbox');
       if (container) container.innerHTML = `
         <div class="empty-state" style="color:var(--text-muted)">
@@ -600,7 +577,7 @@ async function syncAndRender() {
         </div>`;
     }
   } finally {
-    syncing = false;
+    state.syncing = false;
     if (btn) btn.style.opacity = '';
     setTimeout(() => setStatus(''), 5000);
   }
@@ -633,146 +610,146 @@ function showToolbarMenu() {
 // ── Account menu ──────────────────────────────────────────
 function showAccountMenu() {
   // Remove any existing menu
-  document.getElementById('account-menu-overlay')?.remove();
+  document.getElementById('state.account-menu-overlay')?.remove();
 
   const overlay = document.createElement('div');
-  overlay.id = 'account-menu-overlay';
+  overlay.id = 'state.account-menu-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:200;';
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const menu = document.createElement('div');
-  menu.className = 'account-menu';
+  menu.className = 'state.account-menu';
   menu.innerHTML = `
-    <div class="account-menu-header">Accounts</div>
-    ${accounts.length > 1 ? `
-      <button class="account-menu-item${unifiedMode ? ' active' : ''}" id="btn-all-accounts">
-        <span class="account-email">All Accounts</span>
-        ${unifiedMode ? '<span class="account-active-badge">active</span>' : ''}
+    <div class="state.account-menu-header">Accounts</div>
+    ${state.accounts.length > 1 ? `
+      <button class="state.account-menu-item${state.unifiedMode ? ' active' : ''}" id="btn-all-state.accounts">
+        <span class="state.account-email">All Accounts</span>
+        ${state.unifiedMode ? '<span class="state.account-active-badge">active</span>' : ''}
       </button>` : ''}
-    ${accounts.map((a, i) => `
-      <button class="account-menu-item${!unifiedMode && a.id === account?.id ? ' active' : ''}" data-id="${a.id}">
-        <span class="account-badge-dot" style="background:${ACCOUNT_BADGE_COLORS[i % ACCOUNT_BADGE_COLORS.length]}"></span>
-        <span class="account-email">${esc(a.email)}</span>
-        ${!unifiedMode && a.id === account?.id ? '<span class="account-active-badge">active</span>' : ''}
-        <button class="account-remove-btn" data-remove-id="${a.id}" title="Remove account">×</button>
+    ${state.accounts.map((a, i) => `
+      <button class="state.account-menu-item${!state.unifiedMode && a.id === state.account?.id ? ' active' : ''}" data-id="${a.id}">
+        <span class="state.account-badge-dot" style="background:${ACCOUNT_BADGE_COLORS[i % ACCOUNT_BADGE_COLORS.length]}"></span>
+        <span class="state.account-email">${esc(a.email)}</span>
+        ${!state.unifiedMode && a.id === state.account?.id ? '<span class="state.account-active-badge">active</span>' : ''}
+        <button class="state.account-remove-btn" data-remove-id="${a.id}" title="Remove state.account">×</button>
       </button>`).join('')}
-    <button class="account-menu-add" id="btn-add-account">+ Add account</button>
+    <button class="state.account-menu-add" id="btn-add-state.account">+ Add state.account</button>
     <hr style="border:none;border-top:1px solid var(--border);margin:4px 0"/>
-    <button class="account-menu-signout" id="btn-signout-all">Sign out of all accounts</button>
+    <button class="state.account-menu-signout" id="btn-signout-all">Sign out of all state.accounts</button>
   `;
 
   overlay.appendChild(menu);
   document.body.appendChild(overlay);
 
   // All Accounts unified mode
-  document.getElementById('btn-all-accounts')?.addEventListener('click', async () => {
+  document.getElementById('btn-all-state.accounts')?.addEventListener('click', async () => {
     overlay.remove();
-    unifiedMode = true;
-    const acctBtn = document.getElementById('btn-account');
+    state.unifiedMode = true;
+    const acctBtn = document.getElementById('btn-state.account');
     if (acctBtn) acctBtn.textContent = 'All Accounts ▾';
     const statusLeft = document.getElementById('status-left');
     if (statusLeft) statusLeft.textContent = 'All Accounts';
     await refreshAll();
   });
 
-  // Switch account
+  // Switch state.account
   menu.querySelectorAll<HTMLButtonElement>('.account-menu-item').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       if ((e.target as HTMLElement).closest('.account-remove-btn')) return;
       const id = btn.dataset.id!;
       if (!id) return; // "All Accounts" button has no data-id
-      const target = accounts.find(a => a.id === id);
+      const target = state.accounts.find(a => a.id === id);
       if (!target) { overlay.remove(); return; }
-      if (!unifiedMode && target.id === account?.id) { overlay.remove(); return; }
-      unifiedMode = false;
+      if (!state.unifiedMode && target.id === state.account?.id) { overlay.remove(); return; }
+      state.unifiedMode = false;
       setAccount(target);
-      threads = await loadThreads(target.id);
+      state.threads = await loadThreads(target.id);
       renderInbox();
       const statusLeft = document.getElementById('status-left');
       if (statusLeft) statusLeft.textContent = target.email;
-      const acctBtn = document.getElementById('btn-account');
+      const acctBtn = document.getElementById('btn-state.account');
       if (acctBtn) acctBtn.textContent = `${target.email.split('@')[0]} ▾`;
       overlay.remove();
       syncAndRender();
     });
   });
 
-  // Remove account
+  // Remove state.account
   menu.querySelectorAll<HTMLButtonElement>('.account-remove-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const removeId = btn.dataset.removeId!;
-      const target = accounts.find(a => a.id === removeId);
+      const target = state.accounts.find(a => a.id === removeId);
       if (!target) return;
-      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
+      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this state.account.`)) return;
       overlay.remove();
       try {
         await removeAccount(target);
-        accounts = accounts.filter(a => a.id !== removeId);
-        if (account?.id === removeId) {
-          // Switch to another account or go to auth
-          const next = accounts[0] ?? null;
+        state.accounts = state.accounts.filter(a => a.id !== removeId);
+        if (state.account?.id === removeId) {
+          // Switch to another state.account or go to auth
+          const next = state.accounts[0] ?? null;
           if (next) {
             setAccount(next);
-            threads = await loadThreads(next.id);
+            state.threads = await loadThreads(next.id);
             showShell();
             await refreshAll();
           } else {
             clearActiveAccountId();
-            account = null;
-            threads = [];
-            syncing = false;
+            state.account = null;
+            state.threads = [];
+            state.syncing = false;
             showAuth();
           }
         }
       } catch (err) {
-        console.error('Remove account error:', err);
-        setStatus('Failed to remove account');
+        console.error('Remove state.account error:', err);
+        setStatus('Failed to remove state.account');
       }
     });
   });
 
-  // Add account
-  document.getElementById('btn-add-account')!.addEventListener('click', async () => {
+  // Add state.account
+  document.getElementById('btn-add-state.account')!.addEventListener('click', async () => {
     overlay.remove();
-    const addBtn = document.getElementById('btn-account') as HTMLButtonElement | null;
+    const addBtn = document.getElementById('btn-state.account') as HTMLButtonElement | null;
     if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Connecting…'; }
     try {
       const newAcct = await startOAuth();
       // Check if already in list (duplicate email → update token, already done by saveAccount)
-      const existing = accounts.find(a => a.id === newAcct.id);
+      const existing = state.accounts.find(a => a.id === newAcct.id);
       if (existing) {
         // Update token in-list
-        const idx = accounts.indexOf(existing);
-        accounts[idx] = newAcct;
+        const idx = state.accounts.indexOf(existing);
+        state.accounts[idx] = newAcct;
         setStatus(`${newAcct.email} token refreshed`);
       } else {
-        accounts.push(newAcct);
+        state.accounts.push(newAcct);
         setStatus(`${newAcct.email} added`);
       }
     } catch (e) {
-      console.error('Add account error:', e);
-      setStatus(`Add account failed: ${e}`);
+      console.error('Add state.account error:', e);
+      setStatus(`Add state.account failed: ${e}`);
     } finally {
-      if (addBtn) { addBtn.disabled = false; addBtn.textContent = `${account?.email?.split('@')[0] ?? '…'} ▾`; }
+      if (addBtn) { addBtn.disabled = false; addBtn.textContent = `${state.account?.email?.split('@')[0] ?? '…'} ▾`; }
       setTimeout(() => setStatus(''), 5000);
     }
   });
 
-  // Sign out of all accounts
+  // Sign out of all state.accounts
   document.getElementById('btn-signout-all')!.addEventListener('click', async () => {
-    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
+    if (!confirm('Sign out of all state.accounts? This will delete all local data.')) return;
     overlay.remove();
     try {
-      for (const a of accounts) {
+      for (const a of state.accounts) {
         await removeAccount(a).catch(e => console.error('Remove error:', e));
       }
     } finally {
       clearActiveAccountId();
-      account = null;
-      accounts = [];
-      threads = [];
-      syncing = false;
+      state.account = null;
+      state.accounts = [];
+      state.threads = [];
+      state.syncing = false;
       showAuth();
     }
   });
@@ -795,7 +772,7 @@ function getVisibleThreadIds(): string[] {
 function selectThread(id: string | null) {
   document.querySelectorAll<HTMLElement>('.thread-row.is-selected')
     .forEach(r => r.classList.remove('is-selected'));
-  selectedThreadId = id;
+  state.selectedThreadId = id;
   if (!id) return;
   const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
   if (row) {
@@ -807,7 +784,7 @@ function selectThread(id: string | null) {
 function moveSelection(direction: 1 | -1) {
   const ids = getVisibleThreadIds();
   if (ids.length === 0) return;
-  const cur = selectedThreadId ? ids.indexOf(selectedThreadId) : -1;
+  const cur = state.selectedThreadId ? ids.indexOf(state.selectedThreadId) : -1;
   let next: number;
   if (direction === 1) {
     next = cur < ids.length - 1 ? cur + 1 : cur === -1 ? 0 : cur;
@@ -831,7 +808,7 @@ function showCheatSheet() {
         <div class="kb-category">
           <div class="kb-cat-title">Navigation</div>
           <table class="kb-table">
-            <tr><td><kbd class="kb-key">j</kbd> <kbd class="kb-key">k</kbd></td><td>Navigate threads</td></tr>
+            <tr><td><kbd class="kb-key">j</kbd> <kbd class="kb-key">k</kbd></td><td>Navigate state.threads</td></tr>
             <tr><td><kbd class="kb-key">o</kbd> <kbd class="kb-key">Enter</kbd></td><td>Open thread</td></tr>
             <tr><td><kbd class="kb-key">Escape</kbd></td><td>Back to list</td></tr>
             <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">i</kbd></td><td>Go to Inbox</td></tr>
@@ -879,8 +856,8 @@ function openThreadWithReply(t: Thread) {
 }
 
 function registerKeyboardShortcuts() {
-  if (kbRegistered) return;
-  kbRegistered = true;
+  if (state.kbRegistered) return;
+  state.kbRegistered = true;
 
   // Cmd+K / Ctrl+K opens the command palette from anywhere (even inputs)
   document.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -903,9 +880,9 @@ function registerKeyboardShortcuts() {
     if (isInputFocused()) return;
 
     // g+key two-step navigation
-    if (gPending) {
-      gPending = false;
-      if (gTimeout !== null) { clearTimeout(gTimeout); gTimeout = null; }
+    if (state.gPending) {
+      state.gPending = false;
+      if (state.gTimeout !== null) { clearTimeout(state.gTimeout); state.gTimeout = null; }
       switch (e.key) {
         case 'i': e.preventDefault(); switchView('Inbox'); return;
         case 's': e.preventDefault(); switchView('Starred'); return;
@@ -929,8 +906,8 @@ function registerKeyboardShortcuts() {
 
       case 'Enter':
       case 'o': {
-        if (!selectedThreadId) break;
-        const t = threads.find(x => x.id === selectedThreadId);
+        if (!state.selectedThreadId) break;
+        const t = state.threads.find(x => x.id === state.selectedThreadId);
         if (t) openThread(t);
         break;
       }
@@ -942,13 +919,13 @@ function registerKeyboardShortcuts() {
           document.getElementById('btn-archive-reader')?.click();
           break;
         }
-        if (!selectedThreadId || !account) break;
-        const t = threads.find(x => x.id === selectedThreadId);
+        if (!state.selectedThreadId || !state.account) break;
+        const t = state.threads.find(x => x.id === state.selectedThreadId);
         if (!t) break;
         const ids = getVisibleThreadIds();
-        const idx = ids.indexOf(selectedThreadId);
+        const idx = ids.indexOf(state.selectedThreadId);
         const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
-        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
         if (row) await doArchive(t, row);
         selectThread(nextId);
         break;
@@ -956,13 +933,13 @@ function registerKeyboardShortcuts() {
 
       case '#': {
         // Trash = archive (no dedicated trash API yet)
-        if (!selectedThreadId || !account) break;
-        const t = threads.find(x => x.id === selectedThreadId);
+        if (!state.selectedThreadId || !state.account) break;
+        const t = state.threads.find(x => x.id === state.selectedThreadId);
         if (!t) break;
         const ids = getVisibleThreadIds();
-        const idx = ids.indexOf(selectedThreadId);
+        const idx = ids.indexOf(state.selectedThreadId);
         const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
-        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
         if (row) await doArchive(t, row);
         selectThread(nextId);
         break;
@@ -970,18 +947,18 @@ function registerKeyboardShortcuts() {
 
       case 'x': {
         // Toggle bulk selection for the currently focused thread
-        if (!selectedThreadId) break;
-        if (!bulkMode) bulkMode = true;
-        toggleBulkSelection(selectedThreadId);
-        if (selectedIds.size === 0) { bulkMode = false; removeBulkBar(); renderInbox(); }
+        if (!state.selectedThreadId) break;
+        if (!state.bulkMode) state.bulkMode = true;
+        toggleBulkSelection(state.selectedThreadId);
+        if (state.selectedIds.size === 0) { state.bulkMode = false; removeBulkBar(); renderInbox(); }
         break;
       }
 
       case 's': {
-        if (!selectedThreadId || !account) break;
-        const t = threads.find(x => x.id === selectedThreadId);
+        if (!state.selectedThreadId || !state.account) break;
+        const t = state.threads.find(x => x.id === state.selectedThreadId);
         if (!t) break;
-        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
         if (row) await doToggleStar(t, row);
         break;
       }
@@ -997,30 +974,30 @@ function registerKeyboardShortcuts() {
       case 'U': {
         // Shift+U — mark unread
         if (!e.shiftKey) break;
-        if (!selectedThreadId || !account) break;
-        const t = threads.find(x => x.id === selectedThreadId);
+        if (!state.selectedThreadId || !state.account) break;
+        const t = state.threads.find(x => x.id === state.selectedThreadId);
         if (!t) break;
-        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
         if (row) await doMarkUnread(t, row);
         break;
       }
 
       case 'm': {
-        if (!selectedThreadId || !account) break;
-        const t = threads.find(x => x.id === selectedThreadId);
+        if (!state.selectedThreadId || !state.account) break;
+        const t = state.threads.find(x => x.id === state.selectedThreadId);
         if (!t) break;
         const ids = getVisibleThreadIds();
-        const idx = ids.indexOf(selectedThreadId);
+        const idx = ids.indexOf(state.selectedThreadId);
         const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
-        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
         if (row) await doMute(t, row);
         selectThread(nextId);
         break;
       }
 
       case 'r': {
-        if (!selectedThreadId) break;
-        const t = threads.find(x => x.id === selectedThreadId);
+        if (!state.selectedThreadId) break;
+        const t = state.threads.find(x => x.id === state.selectedThreadId);
         if (t) openThreadWithReply(t);
         break;
       }
@@ -1029,7 +1006,7 @@ function registerKeyboardShortcuts() {
         // Forward — open compose with Fwd: subject if a thread is selected/open
         const readerSubjectEl = document.querySelector<HTMLElement>('.reader-subject');
         const readerSubject = readerSubjectEl?.textContent ?? '';
-        const selectedThread = selectedThreadId ? threads.find(x => x.id === selectedThreadId) : null;
+        const selectedThread = state.selectedThreadId ? state.threads.find(x => x.id === state.selectedThreadId) : null;
         const baseSubject = readerSubject || selectedThread?.subject || '';
         const fwdSubject = baseSubject.startsWith('Fwd:') ? baseSubject : baseSubject ? `Fwd: ${baseSubject}` : '';
         openComposeNew(fwdSubject);
@@ -1069,7 +1046,7 @@ function registerKeyboardShortcuts() {
       case 'Tab': {
         e.preventDefault();
         const viewOrder: ViewName[] = ['Inbox', 'Snoozed', 'Sent', 'Drafts', 'Starred', 'Scheduled'];
-        const curIdx = viewOrder.indexOf(currentView);
+        const curIdx = viewOrder.indexOf(state.currentView);
         const nextIdx = e.shiftKey
           ? (curIdx - 1 + viewOrder.length) % viewOrder.length
           : (curIdx + 1) % viewOrder.length;
@@ -1086,9 +1063,9 @@ function registerKeyboardShortcuts() {
 
       case 'g': {
         e.preventDefault();
-        gPending = true;
-        if (gTimeout !== null) clearTimeout(gTimeout);
-        gTimeout = setTimeout(() => { gPending = false; gTimeout = null; }, 1000);
+        state.gPending = true;
+        if (state.gTimeout !== null) clearTimeout(state.gTimeout);
+        state.gTimeout = setTimeout(() => { state.gPending = false; state.gTimeout = null; }, 1000);
         break;
       }
 
@@ -1102,15 +1079,15 @@ function registerKeyboardShortcuts() {
       case 'A': {
         if (!(e.ctrlKey || e.metaKey)) break;
         e.preventDefault();
-        if (!bulkMode) bulkMode = true;
-        getVisibleThreadIds().forEach(id => selectedIds.add(id));
+        if (!state.bulkMode) state.bulkMode = true;
+        getVisibleThreadIds().forEach(id => state.selectedIds.add(id));
         renderInbox();
         updateBulkBar();
         break;
       }
 
       case 'Escape': {
-        if (bulkMode) { exitBulkMode(); break; }
+        if (state.bulkMode) { exitBulkMode(); break; }
         const sheet = document.getElementById('kb-cheatsheet');
         if (sheet) { sheet.remove(); break; }
         const readerEl = document.querySelector<HTMLElement>('.reader-fullpage');
@@ -1157,45 +1134,45 @@ function scrollReaderMessage(direction: 1 | -1) {
 
 // ── Bulk select ───────────────────────────────────────────
 function toggleBulkMode() {
-  bulkMode = !bulkMode;
-  if (!bulkMode) {
-    selectedIds.clear();
+  state.bulkMode = !state.bulkMode;
+  if (!state.bulkMode) {
+    state.selectedIds.clear();
     removeBulkBar();
   }
   renderInbox();
 }
 
 function exitBulkMode() {
-  bulkMode = false;
-  selectedIds.clear();
+  state.bulkMode = false;
+  state.selectedIds.clear();
   removeBulkBar();
   renderInbox();
 }
 
 function toggleBulkSelection(id: string) {
-  if (selectedIds.has(id)) {
-    selectedIds.delete(id);
+  if (state.selectedIds.has(id)) {
+    state.selectedIds.delete(id);
   } else {
-    selectedIds.add(id);
+    state.selectedIds.add(id);
   }
   const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
   if (row) {
-    row.classList.toggle('bulk-selected', selectedIds.has(id));
+    row.classList.toggle('bulk-selected', state.selectedIds.has(id));
     const cb = row.querySelector<HTMLInputElement>('.bulk-checkbox');
-    if (cb) cb.checked = selectedIds.has(id);
+    if (cb) cb.checked = state.selectedIds.has(id);
   }
   updateBulkBar();
 }
 
 function updateBulkBar() {
   removeBulkBar();
-  if (selectedIds.size === 0) return;
+  if (state.selectedIds.size === 0) return;
 
   const bar = document.createElement('div');
   bar.id = 'bulk-bar';
   bar.className = 'bulk-bar';
   bar.innerHTML = `
-    <span class="bulk-count">${selectedIds.size} selected</span>
+    <span class="bulk-count">${state.selectedIds.size} selected</span>
     <button class="bulk-action-btn" id="bulk-archive">Archive All</button>
     <button class="bulk-action-btn" id="bulk-read">Mark Read</button>
     <button class="bulk-action-btn" id="bulk-snooze">Snooze All</button>
@@ -1204,9 +1181,9 @@ function updateBulkBar() {
   document.body.appendChild(bar);
 
   document.getElementById('bulk-archive')!.addEventListener('click', async () => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(state.selectedIds);
     for (const id of ids) {
-      const t = threads.find(x => x.id === id);
+      const t = state.threads.find(x => x.id === id);
       if (!t) continue;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
       if (row) await doArchive(t, row);
@@ -1215,9 +1192,9 @@ function updateBulkBar() {
   });
 
   document.getElementById('bulk-read')!.addEventListener('click', async () => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(state.selectedIds);
     for (const id of ids) {
-      const t = threads.find(x => x.id === id);
+      const t = state.threads.find(x => x.id === id);
       if (!t) continue;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
       if (row) await doMarkRead(t, row);
@@ -1226,8 +1203,8 @@ function updateBulkBar() {
   });
 
   document.getElementById('bulk-snooze')!.addEventListener('click', () => {
-    const ids = Array.from(selectedIds);
-    const firstThread = threads.find(x => x.id === ids[0]);
+    const ids = Array.from(state.selectedIds);
+    const firstThread = state.threads.find(x => x.id === ids[0]);
     if (!firstThread) return;
     // Use a synthetic row element just for picker positioning
     const fakeRow = document.querySelector<HTMLElement>(`.thread-row[data-id="${ids[0]}"]`) ?? document.body as HTMLElement;
@@ -1254,7 +1231,7 @@ function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement) {
   picker.className = 'snooze-picker';
   picker.innerHTML = `
     <div class="snooze-picker-header">
-      <span>Snooze ${ids.length} threads until…</span>
+      <span>Snooze ${ids.length} state.threads until…</span>
       <button class="btn-icon snooze-picker-close" aria-label="Close">✕</button>
     </div>
     <div class="snooze-presets">
@@ -1295,7 +1272,7 @@ function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement) {
 
   async function applyBulkSnooze(untilMs: number) {
     for (const id of ids) {
-      const t = threads.find(x => x.id === id);
+      const t = state.threads.find(x => x.id === id);
       if (!t) continue;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
       if (row) await doSnooze(t, row, untilMs);
@@ -1357,18 +1334,18 @@ function renderInbox() {
   const container = document.getElementById('inbox');
   if (!container) return;
 
-  if (threads.length === 0 && syncing) {
+  if (state.threads.length === 0 && state.syncing) {
     container.innerHTML = `<p class="sync-loading">Syncing inbox…</p>`;
     return;
   }
 
-  const { visible: focusedThreads, hiddenCount } = applyFocusFilter(threads);
+  const { visible: focusedThreads, hiddenCount } = applyFocusFilter(state.threads);
 
   // Apply inbox tab filter
   let tabFiltered = focusedThreads;
-  if (activeInboxTab === 'important') {
+  if (state.activeInboxTab === 'important') {
     tabFiltered = focusedThreads.filter(t => isKnownSender(t.senderEmail));
-  } else if (activeInboxTab === 'other') {
+  } else if (state.activeInboxTab === 'other') {
     tabFiltered = focusedThreads.filter(t => !isKnownSender(t.senderEmail));
   }
 
@@ -1377,23 +1354,23 @@ function renderInbox() {
   const otherCount = focusedThreads.filter(t => !isKnownSender(t.senderEmail) && t.isUnread).length;
 
   const tabBar = `<div class="inbox-tabs">
-    <button class="inbox-tab${activeInboxTab === 'all' ? ' active' : ''}" data-tab="all">All</button>
-    <button class="inbox-tab${activeInboxTab === 'important' ? ' active' : ''}" data-tab="important">Important${importantCount ? ` <span class="tab-badge">${importantCount}</span>` : ''}</button>
-    <button class="inbox-tab${activeInboxTab === 'other' ? ' active' : ''}" data-tab="other">Other${otherCount ? ` <span class="tab-badge">${otherCount}</span>` : ''}</button>
+    <button class="inbox-tab${state.activeInboxTab === 'all' ? ' active' : ''}" data-tab="all">All</button>
+    <button class="inbox-tab${state.activeInboxTab === 'important' ? ' active' : ''}" data-tab="important">Important${importantCount ? ` <span class="tab-badge">${importantCount}</span>` : ''}</button>
+    <button class="inbox-tab${state.activeInboxTab === 'other' ? ' active' : ''}" data-tab="other">Other${otherCount ? ` <span class="tab-badge">${otherCount}</span>` : ''}</button>
   </div>`;
 
   if (tabFiltered.length === 0) {
     container.innerHTML = tabBar + `
       <div class="empty-state">
         <div class="icon" style="color:var(--text-muted)">✉</div>
-        <div class="empty-text">${searchQuery ? 'No results' : focusMode ? 'No messages from known senders' : activeInboxTab === 'important' ? 'No important emails' : activeInboxTab === 'other' ? 'No other emails' : 'All caught up'}</div>
-        ${focusMode && hiddenCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus</div>` : ''}
+        <div class="empty-text">${state.searchQuery ? 'No results' : state.focusMode ? 'No messages from known senders' : state.activeInboxTab === 'important' ? 'No important emails' : state.activeInboxTab === 'other' ? 'No other emails' : 'All caught up'}</div>
+        ${state.focusMode && hiddenCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus</div>` : ''}
       </div>`;
     wireInboxTabs(container);
     return;
   }
 
-  const focusBanner = focusMode && hiddenCount > 0
+  const focusBanner = state.focusMode && hiddenCount > 0
     ? `<div class="focus-banner">Focus mode — ${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden</div>`
     : '';
 
@@ -1410,20 +1387,20 @@ function renderInbox() {
   container.innerHTML = html;
   wireInboxTabs(container);
   wireThreadRows(container, tabFiltered, false);
-  if (bulkMode) updateBulkBar();
+  if (state.bulkMode) updateBulkBar();
   // Restore keyboard selection highlight after re-render
-  if (selectedThreadId) {
-    const row = container.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+  if (state.selectedThreadId) {
+    const row = container.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
     if (row) row.classList.add('is-selected');
-    else selectedThreadId = null;
+    else state.selectedThreadId = null;
   }
 }
 
 function wireInboxTabs(container: HTMLElement) {
   container.querySelectorAll('.inbox-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      activeInboxTab = (btn as HTMLElement).dataset.tab as InboxTab;
-      localStorage.setItem('kept_inbox_tab', activeInboxTab);
+      state.activeInboxTab = (btn as HTMLElement).dataset.tab as InboxTab;
+      localStorage.setItem('kept_inbox_tab', state.activeInboxTab);
       renderInbox();
     });
   });
@@ -1431,15 +1408,15 @@ function wireInboxTabs(container: HTMLElement) {
 
 async function renderSnoozedView() {
   const container = document.getElementById('inbox');
-  if (!container || !account) return;
+  if (!container || !state.account) return;
 
-  const snoozed = await loadSnoozedThreads(account.id);
+  const snoozed = await loadSnoozedThreads(state.account.id);
 
   if (snoozed.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="icon" style="color:var(--lavender-accent)">🕐</div>
-        <div class="empty-text">No snoozed threads</div>
+        <div class="empty-text">No snoozed state.threads</div>
         <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Snoozed mail will appear here</div>
       </div>`;
     return;
@@ -1455,15 +1432,15 @@ async function renderSnoozedView() {
 
 async function renderStarredView() {
   const container = document.getElementById('inbox');
-  if (!container || !account) return;
+  if (!container || !state.account) return;
 
-  const starred = await loadStarredThreads(account.id);
+  const starred = await loadStarredThreads(state.account.id);
 
   if (starred.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="icon" style="color:var(--lavender-accent)">★</div>
-        <div class="empty-text">No starred threads</div>
+        <div class="empty-text">No starred state.threads</div>
         <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Star a thread with s or ☆ to save it here</div>
       </div>`;
     return;
@@ -1530,10 +1507,10 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
     if (!t) return;
     row.querySelector<HTMLElement>('.avatar-wrap')?.addEventListener('click', e => {
       e.stopPropagation();
-      if (!bulkMode) bulkMode = true;
+      if (!state.bulkMode) state.bulkMode = true;
       toggleBulkSelection(t.id);
-      if (selectedIds.size === 0) {
-        bulkMode = false;
+      if (state.selectedIds.size === 0) {
+        state.bulkMode = false;
         removeBulkBar();
         renderInbox();
       }
@@ -1541,7 +1518,7 @@ function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed: boole
     row.addEventListener('click', e => {
       if ((e.target as HTMLElement).closest('.thread-actions')) return;
       if ((e.target as HTMLElement).closest('.avatar-wrap')) return;
-      if (bulkMode) {
+      if (state.bulkMode) {
         toggleBulkSelection(t.id);
         return;
       }
@@ -1651,13 +1628,13 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
   const attachment = t.hasAttachment ? `<span class="attachment-icon" title="Has attachment">📎</span>` : '';
   const dot = `<span class="unread-dot${t.isUnread ? ' filled' : ''}"></span>`;
 
-  // KPT-037: account badge shown in unified mode
-  const acctIdx = unifiedMode ? accounts.findIndex(a => a.id === t.accountId) : -1;
+  // KPT-037: state.account badge shown in unified mode
+  const acctIdx = state.unifiedMode ? state.accounts.findIndex(a => a.id === t.accountId) : -1;
   const acctBadge = acctIdx >= 0
-    ? `<span class="account-badge" style="background:${ACCOUNT_BADGE_COLORS[acctIdx % ACCOUNT_BADGE_COLORS.length]}" title="${esc(accounts[acctIdx]?.email ?? '')}">${(accounts[acctIdx]?.email[0] ?? '?').toUpperCase()}</span>`
+    ? `<span class="state.account-badge" style="background:${ACCOUNT_BADGE_COLORS[acctIdx % ACCOUNT_BADGE_COLORS.length]}" title="${esc(state.accounts[acctIdx]?.email ?? '')}">${(state.accounts[acctIdx]?.email[0] ?? '?').toUpperCase()}</span>`
     : '';
 
-  // Clock indicator for snoozed threads
+  // Clock indicator for snoozed state.threads
   const clockIndicator = t.snoozedUntil
     ? `<span class="snooze-badge" title="Snoozed until ${formatDate(t.snoozedUntil)}">🕐 ${formatDate(t.snoozedUntil)}</span>`
     : '';
@@ -1682,12 +1659,12 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
          <button class="btn-action danger btn-block" title="Block sender">⊘</button>
        </div>`;
 
-  const bulkCheckbox = bulkMode
-    ? `<input type="checkbox" class="bulk-checkbox" ${selectedIds.has(t.id) ? 'checked' : ''} aria-label="Select thread" />`
+  const bulkCheckbox = state.bulkMode
+    ? `<input type="checkbox" class="bulk-checkbox" ${state.selectedIds.has(t.id) ? 'checked' : ''} aria-label="Select thread" />`
     : '';
 
   return `
-    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}${hasReminder ? ' awaiting-reply' : ''}${bulkMode && selectedIds.has(t.id) ? ' bulk-selected' : ''}${bulkMode ? ' bulk-mode' : ''}" data-id="${t.id}">
+    <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}${hasReminder ? ' awaiting-reply' : ''}${state.bulkMode && state.selectedIds.has(t.id) ? ' bulk-selected' : ''}${state.bulkMode ? ' bulk-mode' : ''}" data-id="${t.id}">
       ${bulkCheckbox}
       ${dot}
       <div class="avatar-wrap">
@@ -1709,9 +1686,9 @@ function threadRow(t: Thread, isSnoozed: boolean): string {
 // ── Inline reply ──────────────────────────────────────────
 function openInlineReply(t: Thread, row: HTMLElement) {
   // Close any existing inline reply
-  if (currentInlineReply) {
-    currentInlineReply.remove();
-    currentInlineReply = null;
+  if (state.currentInlineReply) {
+    state.currentInlineReply.remove();
+    state.currentInlineReply = null;
   }
 
   const replyEl = document.createElement('div');
@@ -1724,7 +1701,7 @@ function openInlineReply(t: Thread, row: HTMLElement) {
     </div>`;
 
   row.insertAdjacentElement('afterend', replyEl);
-  currentInlineReply = replyEl;
+  state.currentInlineReply = replyEl;
 
   const textarea = replyEl.querySelector<HTMLTextAreaElement>('.inline-reply-textarea')!;
   const sendBtn = replyEl.querySelector<HTMLButtonElement>('.inline-reply-send')!;
@@ -1734,18 +1711,18 @@ function openInlineReply(t: Thread, row: HTMLElement) {
 
   function collapse() {
     replyEl.remove();
-    if (currentInlineReply === replyEl) currentInlineReply = null;
+    if (state.currentInlineReply === replyEl) state.currentInlineReply = null;
   }
 
   cancelBtn.addEventListener('click', collapse);
 
   sendBtn.addEventListener('click', async () => {
     const body = textarea.value.trim();
-    if (!body || !account) return;
+    if (!body || !state.account) return;
     sendBtn.disabled = true;
     sendBtn.textContent = 'Sending…';
     try {
-      await sendEmail(account, {
+      await sendEmail(state.account, {
         to: t.senderEmail,
         subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
         body,
@@ -1757,7 +1734,7 @@ function openInlineReply(t: Thread, row: HTMLElement) {
         t.isUnread = false;
         row.classList.remove('unread');
         row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
-        markRead(account, t).catch(() => {});
+        markRead(state.account, t).catch(() => {});
       }
     } catch (e) {
       sendBtn.disabled = false;
@@ -1780,7 +1757,7 @@ async function doMarkRead(t: Thread, row: HTMLElement) {
   try {
     await markRead(acct, t);
     const fresh = await getAccountById(acct.id);
-    if (fresh && !unifiedMode) setAccount(fresh);
+    if (fresh && !state.unifiedMode) setAccount(fresh);
     t.isUnread = false;
     row.classList.remove('unread');
     row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
@@ -1831,15 +1808,15 @@ async function doArchive(t: Thread, row: HTMLElement) {
   try {
     await archiveThread(acct, t);
     const fresh = await getAccountById(acct.id);
-    if (fresh && !unifiedMode) setAccount(fresh);
+    if (fresh && !state.unifiedMode) setAccount(fresh);
     row.remove();
-    threads = threads.filter(x => x.id !== t.id);
+    state.threads = state.threads.filter(x => x.id !== t.id);
     showUndoToast('Archived', async () => {
       await unarchiveThread(acct, t);
-      if (unifiedMode) {
-        threads = await loadUnifiedThreads();
+      if (state.unifiedMode) {
+        state.threads = await loadUnifiedThreads();
       } else {
-        threads = await loadThreads(acct.id);
+        state.threads = await loadThreads(acct.id);
       }
       renderInbox();
     });
@@ -1856,14 +1833,14 @@ async function doBlock(t: Thread, _row: HTMLElement) {
   if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
   await blockSender(acct, t);
   const fresh = await getAccountById(acct.id);
-  if (fresh && !unifiedMode) setAccount(fresh);
-  threads = threads.filter(x => !(x.senderEmail === t.senderEmail && x.accountId === t.accountId));
+  if (fresh && !state.unifiedMode) setAccount(fresh);
+  state.threads = state.threads.filter(x => !(x.senderEmail === t.senderEmail && x.accountId === t.accountId));
   renderInbox();
   showUndoToast(`Blocked ${t.senderEmail}`, async () => {
-    if (unifiedMode) {
-      threads = await loadUnifiedThreads();
+    if (state.unifiedMode) {
+      state.threads = await loadUnifiedThreads();
     } else {
-      threads = await loadThreads(acct.id);
+      state.threads = await loadThreads(acct.id);
     }
     renderInbox();
   });
@@ -1874,10 +1851,10 @@ async function doUnsnooze(t: Thread, row: HTMLElement) {
   await unsnoozeThread(t);
   t.snoozedUntil = null;
   row.remove();
-  threads = threads.filter(x => x.id !== t.id);
+  state.threads = state.threads.filter(x => x.id !== t.id);
   showToast('Back in inbox', 3000);
   if (acct) {
-    threads = unifiedMode ? await loadUnifiedThreads() : await loadThreads(acct.id);
+    state.threads = state.unifiedMode ? await loadUnifiedThreads() : await loadThreads(acct.id);
   }
 }
 
@@ -1888,14 +1865,14 @@ async function doMute(t: Thread, row: HTMLElement) {
     await muteThread(acct, t);
     t.isMuted = true;
     row.remove();
-    threads = threads.filter(x => x.id !== t.id);
+    state.threads = state.threads.filter(x => x.id !== t.id);
     showUndoToast('Thread muted', async () => {
       await unmuteThread(t);
       t.isMuted = false;
-      if (unifiedMode) {
-        threads = await loadUnifiedThreads();
+      if (state.unifiedMode) {
+        state.threads = await loadUnifiedThreads();
       } else {
-        threads = await loadThreads(acct.id);
+        state.threads = await loadThreads(acct.id);
       }
       renderInbox();
     });
@@ -2125,26 +2102,26 @@ async function doSnooze(t: Thread, row: HTMLElement, untilMs: number) {
   row.classList.add('snoozing-out');
   setTimeout(() => {
     row.remove();
-    threads = threads.filter(x => x.id !== t.id);
+    state.threads = state.threads.filter(x => x.id !== t.id);
   }, 250);
-  const acct = account;
+  const acct = state.account;
   showUndoToast(`Snoozed until ${formatDate(untilMs)}`, async () => {
     await unsnoozeThread(t);
     t.snoozedUntil = null;
     if (acct) {
-      threads = await loadThreads(acct.id);
+      state.threads = await loadThreads(acct.id);
       renderInbox();
     }
   });
 }
 
 function setupSnoozeResurface() {
-  // Poll every 60s — re-render inbox if thread count changes (snoozed threads surfacing)
+  // Poll every 60s — re-render inbox if thread count changes (snoozed state.threads surfacing)
   setInterval(async () => {
-    if (!account) return;
-    const fresh = await loadThreads(account.id, searchQuery || undefined);
-    if (fresh.length !== threads.length) {
-      threads = fresh;
+    if (!state.account) return;
+    const fresh = await loadThreads(state.account.id, state.searchQuery || undefined);
+    if (fresh.length !== state.threads.length) {
+      state.threads = fresh;
       renderInbox();
     }
   }, 60_000);
@@ -2153,9 +2130,9 @@ function setupSnoozeResurface() {
   const isTauri = '__TAURI_INTERNALS__' in window;
   if (isTauri) {
     getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused && account) {
-        loadThreads(account.id, searchQuery || undefined).then(fresh => {
-          threads = fresh;
+      if (focused && state.account) {
+        loadThreads(state.account.id, state.searchQuery || undefined).then(fresh => {
+          state.threads = fresh;
           renderInbox();
         }).catch(() => {});
       }
@@ -2165,13 +2142,13 @@ function setupSnoozeResurface() {
 
 // ── Compose new email ─────────────────────────────────────
 async function openComposeNew(prefillSubject = '') {
-  if (!account) return;
+  if (!state.account) return;
   if (document.getElementById('compose-new-panel')) return; // prevent double-open
 
   // Load known sender emails for autocomplete (best-effort)
   let knownEmails: string[] = [];
   try {
-    knownEmails = await loadSenderEmails(account.id);
+    knownEmails = await loadSenderEmails(state.account.id);
   } catch { /* non-fatal */ }
 
   const overlay = document.createElement('div');
@@ -2378,7 +2355,7 @@ async function openComposeNew(prefillSubject = '') {
     const toList = toEl.value.split(',').map(s => s.trim()).filter(Boolean);
     const subject = subjectEl.value.trim();
     const body = bodyEl.value.trim();
-    if (!account) return;
+    if (!state.account) return;
 
     sendBtn.disabled = true;
     sendBtn.innerHTML = '<span class="compose-spinner"></span> Sending…';
@@ -2388,7 +2365,7 @@ async function openComposeNew(prefillSubject = '') {
     bodyEl.disabled = true;
 
     try {
-      await sendEmail(account, { to: toList.join(', '), subject: subject || '(no subject)', body });
+      await sendEmail(state.account, { to: toList.join(', '), subject: subject || '(no subject)', body });
       closeSafe();
       showToast('Message sent');
       showFollowupPrompt({ threadId: '', subject: subject || '(no subject)', sentTo: toList.join(', ') });
@@ -2408,13 +2385,13 @@ async function openComposeNew(prefillSubject = '') {
 
 // ── Thread reader ─────────────────────────────────────────
 async function openThread(t: Thread) {
-  if (!account) return;
+  if (!state.account) return;
   // track open thread for future reply/forward (see openThread)
   // Mark read — optimistic DOM update, revert on failure
   if (t.isUnread) {
     t.isUnread = false;
     document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.remove('unread');
-    markRead(account, t).catch(() => {
+    markRead(state.account, t).catch(() => {
       // Revert if API call failed
       t.isUnread = true;
       document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.add('unread');
@@ -2477,7 +2454,7 @@ async function openThread(t: Thread) {
 
   // Load messages
   try {
-    const result = await fetchMessageBody(account, t.gmailThreadId);
+    const result = await fetchMessageBody(state.account, t.gmailThreadId);
     const bodies = (result as any).bodies ?? (result as any).messages ?? result;
     lastMessageId = (result as any).lastMessageId ?? null;
     const bodyEl = reader.querySelector('.reader-body')!;
@@ -2493,7 +2470,7 @@ async function openThread(t: Thread) {
       // Parse sender name from "From" header
       const senderName = m.from.replace(/<.*>/, '').trim() || m.from;
 
-      // Collapsed header bar (always present for non-last messages in threads)
+      // Collapsed header bar (always present for non-last messages in state.threads)
       if (isThread && !isLast) {
         const headerBar = document.createElement('div');
         headerBar.className = 'thread-message-header';
@@ -2621,7 +2598,7 @@ async function openThread(t: Thread) {
       sendTimer = setTimeout(async () => {
         if (cancelled) return;
         try {
-          await sendEmail(account!, {
+          await sendEmail(state.account!, {
             to: t.senderEmail,
             subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
             body,
@@ -2660,12 +2637,12 @@ async function openThread(t: Thread) {
   });
   document.getElementById('btn-send')!.addEventListener('click', async () => {
     const body = textarea.value.trim();
-    if (!body || !account) return;
+    if (!body || !state.account) return;
     const btn = document.getElementById('btn-send') as HTMLButtonElement;
     btn.disabled = true;
     btn.textContent = 'Sending…';
     try {
-      await sendEmail(account, {
+      await sendEmail(state.account, {
         to: t.senderEmail,
         subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
         body,
@@ -2691,21 +2668,21 @@ async function openThread(t: Thread) {
   });
 
   document.getElementById('btn-archive-reader')!.addEventListener('click', async () => {
-    if (!account) return;
-    await archiveThread(account, t);
-    const fresh = account ? await getAccountById(account.id) : null;
+    if (!state.account) return;
+    await archiveThread(state.account, t);
+    const fresh = state.account ? await getAccountById(state.account.id) : null;
     if (fresh) setAccount(fresh);
-    threads = threads.filter(x => x.id !== t.id);
+    state.threads = state.threads.filter(x => x.id !== t.id);
     renderInbox();
     closeReader();
   });
   document.getElementById('btn-block-reader')!.addEventListener('click', async () => {
-    if (!account) return;
+    if (!state.account) return;
     if (!confirm(`Block all email from ${t.senderEmail}?`)) return;
-    await blockSender(account, t);
-    const fresh = account ? await getAccountById(account.id) : null;
+    await blockSender(state.account, t);
+    const fresh = state.account ? await getAccountById(state.account.id) : null;
     if (fresh) setAccount(fresh);
-    threads = threads.filter(x => x.senderEmail !== t.senderEmail);
+    state.threads = state.threads.filter(x => x.senderEmail !== t.senderEmail);
     renderInbox();
     closeReader();
   });
@@ -2742,38 +2719,38 @@ function renderCommandPalette() {
   const commands: PaletteCommand[] = [
     // Thread actions (only meaningful when a thread is selected)
     { id: 'archive',       label: 'Archive',           shortcut: 'e', icon: '▾', group: 'Thread', action: () => {
-      if (!selectedThreadId || !account) return;
-      const t = threads.find(x => x.id === selectedThreadId); if (!t) return;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+      if (!state.selectedThreadId || !state.account) return;
+      const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) doArchive(t, row);
     }},
     { id: 'star',          label: 'Star / Unstar',     shortcut: 's', icon: '★', group: 'Thread', action: () => {
-      if (!selectedThreadId || !account) return;
-      const t = threads.find(x => x.id === selectedThreadId); if (!t) return;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+      if (!state.selectedThreadId || !state.account) return;
+      const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) doToggleStar(t, row);
     }},
     { id: 'mute',          label: 'Mute',              shortcut: 'm', icon: '🔇', group: 'Thread', action: () => {
-      if (!selectedThreadId || !account) return;
-      const t = threads.find(x => x.id === selectedThreadId); if (!t) return;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+      if (!state.selectedThreadId || !state.account) return;
+      const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) doMute(t, row);
     }},
     { id: 'mark-unread',   label: 'Mark as Unread',    shortcut: 'Shift+U', icon: '●', group: 'Thread', action: () => {
-      if (!selectedThreadId || !account) return;
-      const t = threads.find(x => x.id === selectedThreadId); if (!t) return;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+      if (!state.selectedThreadId || !state.account) return;
+      const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) doMarkUnread(t, row);
     }},
     { id: 'snooze',        label: 'Snooze',            shortcut: 'h', icon: '🕐', group: 'Thread', action: () => {
-      if (!selectedThreadId || !account) return;
-      const t = threads.find(x => x.id === selectedThreadId); if (!t) return;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${selectedThreadId}"]`);
+      if (!state.selectedThreadId || !state.account) return;
+      const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) openSnoozePicker(t, row);
     }},
     { id: 'reply',         label: 'Reply',             shortcut: 'r', icon: '↩', group: 'Thread', action: () => {
-      if (!selectedThreadId) return;
-      const t = threads.find(x => x.id === selectedThreadId);
+      if (!state.selectedThreadId) return;
+      const t = state.threads.find(x => x.id === state.selectedThreadId);
       if (t) openThreadWithReply(t);
     }},
     // Compose
@@ -2791,13 +2768,13 @@ function renderCommandPalette() {
     }},
     { id: 'show-shortcuts',label: 'Show Shortcuts',    shortcut: '?', icon: '⌘', group: 'App', action: () => showCheatSheet() },
     { id: 'sign-out',      label: 'Sign Out',          icon: '→', group: 'App', action: async () => {
-      if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
-      for (const a of accounts) await removeAccount(a).catch(() => {});
+      if (!confirm('Sign out of all state.accounts? This will delete all local data.')) return;
+      for (const a of state.accounts) await removeAccount(a).catch(() => {});
       clearActiveAccountId();
-      account = null;
-      accounts = [];
-      threads = [];
-      syncing = false;
+      state.account = null;
+      state.accounts = [];
+      state.threads = [];
+      state.syncing = false;
       showAuth();
     }},
   ];
@@ -2851,7 +2828,7 @@ function renderCommandPalette() {
 
     if (searchMode) {
       if (!searchResults.length) {
-        list.innerHTML = '<div class="cmd-palette-empty">No threads found</div>';
+        list.innerHTML = '<div class="cmd-palette-empty">No state.threads found</div>';
         return;
       }
       searchResults.forEach((t, i) => {
@@ -2957,12 +2934,12 @@ function renderCommandPalette() {
     // Debounced thread search
     if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(async () => {
-      if (!account || !input.value.trim()) return;
+      if (!state.account || !input.value.trim()) return;
       const q2 = input.value.trim();
       // If nothing matched commands, switch to search mode
       if (filteredCommands(q2).length === 0) {
         searchMode = true;
-        const results = await loadThreads(account.id, q2);
+        const results = await loadThreads(state.account.id, q2);
         searchResults = results.slice(0, 20);
         renderList(q2);
       }
