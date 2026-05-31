@@ -187,7 +187,7 @@ export async function openThread(
       if (sanitized) {
         const iframe = document.createElement('iframe');
         iframe.setAttribute('sandbox', 'allow-scripts allow-popups-to-escape-sandbox');
-        iframe.style.cssText = 'width:100%; border:none; overflow:visible; min-height:200px;';
+        iframe.style.cssText = 'width:100%; border:none; overflow:visible; flex:1; min-height:60vh;';
         const isDark = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
         const bodyColor = isDark ? '#e8e8e8' : '#222';
         const bodyBg = isDark ? '#0a0a0a' : '#ffffff';
@@ -198,8 +198,9 @@ export async function openThread(
         const tableBorder = isDark ? '#2a2a2a' : '#eee';
         const preBg = isDark ? '#141414' : '#f5f5f5';
 
-        iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-          body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:${bodyColor};background:${bodyBg};margin:0;padding:0;line-height:1.5;word-break:break-word;}
+        iframe.srcdoc = `<!DOCTYPE html><html style="height:100%"><head><meta charset="utf-8"><style>
+          html,body{height:100%;min-height:100%;}
+          body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:${bodyColor};background:${bodyBg};margin:0;padding:16px;line-height:1.5;word-break:break-word;}
           a{color:${linkColor};}
           img[data-original-src]{background:${imgBg};min-height:20px;border-radius:4px;}
           blockquote{border-left:3px solid ${quoteBorder};margin:8px 0;padding-left:12px;color:${quoteColor};}

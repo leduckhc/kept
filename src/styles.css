@@ -580,6 +580,8 @@ body {
   font-size: 14px;
   line-height: 1.7;
   color: var(--text);
+  display: flex;
+  flex-direction: column;
 }
 .reader-body > * {
   max-width: 100%;
@@ -589,7 +591,8 @@ body {
 .reader-body iframe {
   width: 100%;
   border: none;
-  min-height: 200px;
+  flex: 1;
+  min-height: 60vh;
   display: block;
 }
 .reader-footer {
