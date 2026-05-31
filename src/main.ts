@@ -5,6 +5,7 @@ import { type Thread, syncInbox, loadThreads, loadSnoozedThreads, loadStarredThr
 import { sanitizeEmailHtml } from './sanitize';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
+import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 
 // ── State ─────────────────────────────────────────────────
 let account: Account | null = null;      // active account
@@ -16,7 +17,7 @@ let syncing = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 let knownSenders = new Set<string>();   // KPT-038: replied-to sender cache
 let focusMode = localStorage.getItem('focusMode') === 'true'; // KPT-050
-type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred';
+type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled';
 let currentView: ViewName = 'Inbox';
 let selectedThreadId: string | null = null;
 let kbRegistered = false;
@@ -27,11 +28,12 @@ let gPending = false;
 let gTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
-  { name: 'Inbox',   icon: '✉' },
-  { name: 'Snoozed', icon: '🕐' },
-  { name: 'Sent',    icon: '↗' },
-  { name: 'Drafts',  icon: '✏' },
-  { name: 'Starred', icon: '★' },
+  { name: 'Inbox',     icon: '✉' },
+  { name: 'Snoozed',   icon: '🕐' },
+  { name: 'Sent',      icon: '↗' },
+  { name: 'Drafts',    icon: '✏' },
+  { name: 'Starred',   icon: '★' },
+  { name: 'Scheduled', icon: '⏰' },
 ];
 function setAccount(a: Account) {
   account = a;
@@ -425,6 +427,8 @@ function switchView(view: ViewName) {
     renderSnoozedView();
   } else if (view === 'Starred') {
     renderStarredView();
+  } else if (view === 'Scheduled') {
+    renderScheduledView();
   } else {
     renderLabelView(view);
   }
@@ -1011,7 +1015,7 @@ function registerKeyboardShortcuts() {
 
       case 'Tab': {
         e.preventDefault();
-        const viewOrder: ViewName[] = ['Inbox', 'Snoozed', 'Sent', 'Drafts', 'Starred'];
+        const viewOrder: ViewName[] = ['Inbox', 'Snoozed', 'Sent', 'Drafts', 'Starred', 'Scheduled'];
         const curIdx = viewOrder.indexOf(currentView);
         const nextIdx = e.shiftKey
           ? (curIdx - 1 + viewOrder.length) % viewOrder.length
@@ -1388,6 +1392,51 @@ async function renderStarredView() {
   `;
 
   wireThreadRows(container, starred, false);
+}
+
+async function renderScheduledView() {
+  const container = document.getElementById('inbox');
+  if (!container) return;
+
+  const scheduled: ScheduledEmail[] = loadScheduled();
+
+  if (scheduled.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="icon" style="color:var(--lavender-accent)">⏰</div>
+        <div class="empty-text">No scheduled sends</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Emails you schedule will appear here</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="section-header">Scheduled <span class="section-badge">${scheduled.length}</span></div>
+    ${scheduled.map(e => `
+      <div class="thread-row" data-sched-id="${esc(e.id)}">
+        <div class="thread-mid">
+          <div class="thread-top">
+            <span class="thread-sender">${esc(e.to)}</span>
+            <span class="thread-date">${formatDate(e.scheduledAt)}</span>
+          </div>
+          <div class="thread-subject-line">${esc(e.subject)}</div>
+          <div class="thread-preview-line">⏰ Sends ${formatDate(e.scheduledAt)}</div>
+        </div>
+        <div class="thread-actions">
+          <button class="btn-action danger btn-cancel-sched" title="Cancel scheduled send">✕</button>
+        </div>
+      </div>`).join('')}
+  `;
+
+  container.querySelectorAll<HTMLButtonElement>('.btn-cancel-sched').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const row = btn.closest<HTMLElement>('.thread-row')!;
+      const id = row.dataset.schedId!;
+      cancelScheduled(id);
+      renderScheduledView();
+    });
+  });
 }
 
 // ── Wire row events ───────────────────────────────────────
