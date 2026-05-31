@@ -8,7 +8,7 @@ import { esc, formatDate } from './helpers';
 export async function openThread(
   t: Thread,
   renderInbox: () => void,
-  openSnippetPicker: (ta: HTMLTextAreaElement | null) => void,
+  openSnippetPicker: (ta: HTMLElement | null) => void,
   showFollowupPrompt: (opts: { threadId: string; subject: string; sentTo: string }) => void,
 ) {
   if (!state.account) return;
@@ -48,7 +48,18 @@ export async function openThread(
       <button class="btn-primary" id="btn-reply"${savedDraft ? ' style="display:none"' : ''}>Reply</button>
       <button class="btn-secondary danger" id="btn-block-reader">Block sender</button>
       <div class="compose-area" id="compose" style="display:${savedDraft ? 'flex' : 'none'}; flex:1; flex-direction:column; gap:8px;">
-        <textarea class="compose-textarea" id="compose-body" placeholder="Write your reply…">${savedDraft ? esc(savedDraft) : ''}</textarea>
+        <div class="compose-toolbar">
+          <button class="toolbar-btn" data-cmd="bold" title="Bold (⌘B)"><b>B</b></button>
+          <button class="toolbar-btn" data-cmd="italic" title="Italic (⌘I)"><i>I</i></button>
+          <button class="toolbar-btn" data-cmd="underline" title="Underline (⌘U)"><u>U</u></button>
+          <span class="toolbar-sep"></span>
+          <button class="toolbar-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
+          <button class="toolbar-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
+          <span class="toolbar-sep"></span>
+          <button class="toolbar-btn" data-cmd="createLink" title="Insert link">🔗</button>
+          <button class="toolbar-btn" data-cmd="removeFormat" title="Clear formatting">⊘</button>
+        </div>
+        <div id="compose-body" class="compose-editor" contenteditable="true" data-placeholder="Reply…"></div>
         <div style="display:flex; gap:8px;">
           <button class="btn-primary" id="btn-send">Send</button>
           <button class="btn-secondary" id="btn-cancel-compose">Cancel</button>
@@ -203,15 +214,32 @@ export async function openThread(
     reader.querySelector('.reader-body')!.innerHTML = `<p style="color:var(--text-muted)">Could not load messages. ${esc(String(err))}</p>`;
   }
 
-  const textarea = reader.querySelector<HTMLTextAreaElement>('#compose-body')!;
-  textarea.addEventListener('input', () => {
-    localStorage.setItem(draftKey, textarea.value);
+  const composeEditor = reader.querySelector<HTMLElement>('#compose-body')!;
+
+  // Restore saved draft
+  if (savedDraft) composeEditor.innerText = savedDraft;
+
+  composeEditor.addEventListener('input', () => {
+    localStorage.setItem(draftKey, composeEditor.innerText);
   });
-  textarea.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === '/' && textarea.value === '') {
+  composeEditor.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === '/' && composeEditor.innerText.trim() === '') {
       e.preventDefault();
-      openSnippetPicker(textarea);
+      openSnippetPicker(composeEditor);
     }
+  });
+
+  reader.querySelectorAll<HTMLElement>('.toolbar-btn').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const cmd = btn.dataset.cmd!;
+      if (cmd === 'createLink') {
+        const url = prompt('Enter URL:');
+        if (url) document.execCommand('createLink', false, url);
+      } else {
+        document.execCommand(cmd, false);
+      }
+    });
   });
 
   reader.querySelectorAll<HTMLButtonElement>('.reply-chip').forEach(chip => {
@@ -255,16 +283,16 @@ export async function openThread(
     const compose = document.getElementById('compose')!;
     compose.style.display = 'flex';
     document.getElementById('btn-reply')!.style.display = 'none';
-    textarea.focus();
+    composeEditor.focus();
   });
   document.getElementById('btn-cancel-compose')!.addEventListener('click', () => {
     localStorage.removeItem(draftKey);
-    textarea.value = '';
+    composeEditor.innerHTML = '';
     document.getElementById('compose')!.style.display = 'none';
     document.getElementById('btn-reply')!.style.display = '';
   });
   document.getElementById('btn-send')!.addEventListener('click', async () => {
-    const body = textarea.value.trim();
+    const body = composeEditor.innerText.trim();
     if (!body || !state.account) return;
     const btn = document.getElementById('btn-send') as HTMLButtonElement;
     btn.disabled = true;

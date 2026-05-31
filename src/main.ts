@@ -887,7 +887,7 @@ function renderCommandPalette() {
 }
 
 // ── Snippet picker ────────────────────────────────────────
-function openSnippetPicker(targetTextarea: HTMLTextAreaElement | null) {
+function openSnippetPicker(targetTextarea: HTMLElement | null) {
   document.getElementById('snippet-picker-backdrop')?.remove();
 
   const snippets = loadSnippets().sort((a, b) => b.usageCount - a.usageCount);
@@ -928,15 +928,22 @@ function openSnippetPicker(targetTextarea: HTMLTextAreaElement | null) {
     bumpUsage(s.id);
     close();
     if (!targetTextarea) return;
-    const start = targetTextarea.selectionStart ?? 0;
-    const end = targetTextarea.selectionEnd ?? 0;
-    const before = targetTextarea.value.slice(0, start);
-    const after = targetTextarea.value.slice(end);
-    targetTextarea.value = before + s.body + after;
-    const pos = start + s.body.length;
-    targetTextarea.setSelectionRange(pos, pos);
-    targetTextarea.focus();
-    targetTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+    if (targetTextarea.tagName === 'TEXTAREA') {
+      const ta = targetTextarea as HTMLTextAreaElement;
+      const start = ta.selectionStart ?? 0;
+      const end = ta.selectionEnd ?? 0;
+      const before = ta.value.slice(0, start);
+      const after = ta.value.slice(end);
+      ta.value = before + s.body + after;
+      const pos = start + s.body.length;
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      targetTextarea.focus();
+      document.execCommand('insertText', false, s.body);
+      targetTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   }
 
   function renderList(q: string) {
@@ -1020,7 +1027,7 @@ function openSnippetPicker(targetTextarea: HTMLTextAreaElement | null) {
 }
 
 // ── Snippet manager ───────────────────────────────────────
-function openSnippetManager(returnTarget: HTMLTextAreaElement | null) {
+function openSnippetManager(returnTarget: HTMLElement | null) {
   document.getElementById('snippet-manager-overlay')?.remove();
 
   const overlay = document.createElement('div');
