@@ -483,36 +483,41 @@ body {
 
 .attachment-icon { font-size: 11px; color: var(--text-muted); }
 
-/* Row actions (appear on hover) */
+/* Row actions (appear on hover, overlay the timestamp) */
 .thread-actions {
   display: none;
+  align-items: center;
   gap: 4px;
   position: absolute;
-  right: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 2px;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 2;
 }
 .thread-row:hover .thread-actions { display: flex; }
+.thread-row:hover .thread-date { display: none; }
 
 .btn-action {
-  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  padding: 3px 6px;
-  border-radius: 3px;
-  font-size: 12px;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 14px;
   font-family: var(--font);
   transition: color 0.1s, background 0.1s;
 }
-.btn-action:hover { color: var(--text); background: var(--border); }
+.btn-action:hover { color: var(--text); background: var(--surface-hover); }
 .btn-action.danger:hover { color: #c0392b; background: #fde8e6; }
 .btn-action.btn-star { color: var(--text-muted); }
 .btn-action.btn-star.starred { color: #f59e0b; }
-.btn-action.btn-star.starred:hover { color: #d97706; background: var(--border); }
+.btn-action.btn-star.starred:hover { color: #d97706; background: var(--surface-hover); }
 .thread-row.is-starred .unread-dot { border-color: #f59e0b; }
 
 /* ── Thread reader ──────────────────────────────────────── */

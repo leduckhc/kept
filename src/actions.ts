@@ -1,5 +1,5 @@
 import { type Account, getAccountById } from './auth';
-import { type Thread, markRead, markUnread, archiveThread, unarchiveThread, blockSender, unsnoozeThread, toggleStar, muteThread, unmuteThread, loadThreads } from './gmail';
+import { type Thread, markRead, markUnread, archiveThread, unarchiveThread, trashThread, blockSender, unsnoozeThread, toggleStar, muteThread, unmuteThread, loadThreads } from './gmail';
 import { setStatus } from './helpers';
 import { showToast, showUndoToast } from './toasts';
 import { state, setAccount } from './state';
@@ -84,6 +84,21 @@ export async function doArchive(t: Thread, row: HTMLElement, deps: ActionDeps) {
   } catch (e) {
     console.error('Archive failed:', e);
     setStatus('Archive failed');
+    deps.renderInbox();
+  }
+}
+
+export async function doTrash(t: Thread, row: HTMLElement, deps: ActionDeps) {
+  const acct = accountFor(t);
+  if (!acct) return;
+  try {
+    await trashThread(acct, t);
+    row.remove();
+    state.threads = state.threads.filter(x => x.id !== t.id);
+    showToast('Moved to trash', 3000);
+  } catch (e) {
+    console.error('Trash failed:', e);
+    setStatus('Trash failed');
     deps.renderInbox();
   }
 }

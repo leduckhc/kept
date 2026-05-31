@@ -1,7 +1,7 @@
 import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection } from './gmail';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 import { type InboxTab, state } from './state';
-import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze } from './actions';
+import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze } from './actions';
 import { openSnoozePicker } from './snooze';
 import { showContextMenu } from './contextMenu';
 import { avatarHtml, ACCOUNT_BADGE_COLORS } from './avatar';
@@ -38,7 +38,6 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
 
   const hasReminder = getActiveReminderThreadIds().has(t.id);
 
-  const starIcon = t.isStarred ? '★' : '☆';
   const starClass = t.isStarred ? 'btn-star starred' : 'btn-star';
 
   const actionsHtml = isSnoozed
@@ -47,13 +46,10 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
          <button class="btn-action btn-archive" title="Archive">⬇</button>
        </div>`
     : `<div class="thread-actions">
-         <button class="btn-action btn-reply" title="Quick reply">↩</button>
-         <button class="btn-action ${starClass}" title="${t.isStarred ? 'Unstar' : 'Star'}">${starIcon}</button>
-         <button class="btn-action btn-snooze" title="Snooze">🕐</button>
-         <button class="btn-action btn-read" title="Mark read">✓</button>
-         <button class="btn-action btn-mark-unread" title="Mark unread">✉</button>
-         <button class="btn-action btn-archive" title="Archive">⬇</button>
-         <button class="btn-action danger btn-block" title="Block sender">⊘</button>
+         <button class="btn-action btn-archive" title="Archive">📥</button>
+         <button class="btn-action btn-trash" title="Trash">🗑</button>
+         <button class="btn-action btn-snooze" title="Snooze">⏰</button>
+         <button class="btn-action ${starClass}" title="${t.isStarred ? 'Unstar' : 'Star'}">${t.isStarred ? '★' : '☆'}</button>
        </div>`;
 
   const bulkCheckbox = state.bulkMode
@@ -278,6 +274,7 @@ export function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed
     row.querySelector('.btn-mark-unread')?.addEventListener('click', e => { e.stopPropagation(); doMarkUnread(t, row); });
     row.querySelector('.btn-star')?.addEventListener('click', e => { e.stopPropagation(); doToggleStar(t, row); });
     row.querySelector('.btn-archive')?.addEventListener('click', e => { e.stopPropagation(); doArchive(t, row, deps.getActionDeps()); });
+    row.querySelector('.btn-trash')?.addEventListener('click', e => { e.stopPropagation(); doTrash(t, row, deps.getActionDeps()); });
     row.querySelector('.btn-block')?.addEventListener('click', e => { e.stopPropagation(); doBlock(t, row, deps.getActionDeps()); });
     row.querySelector('.btn-reply')?.addEventListener('click', e => { e.stopPropagation(); deps.openInlineReply(t, row); });
     if (isSnoozed) {
