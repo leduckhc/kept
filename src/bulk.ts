@@ -1,7 +1,10 @@
 import { state } from './state';
 import { snoozePresets, doSnooze } from './snooze';
-import { type ActionDeps, doArchive, doMarkRead, doTrash } from './actions';
+import { type ActionDeps, doMarkRead, accountFor } from './actions';
 import { formatDate, toDatetimeLocal } from './helpers';
+import { archiveThread, unarchiveThread, trashThread, untrashThread, loadThreads } from './gmail';
+import { pushUndo } from './undoStack';
+import { showToast } from './toasts';
 
 export function toggleBulkMode(renderInbox: () => void) {
   state.bulkMode = !state.bulkMode;
@@ -66,23 +69,47 @@ export function updateBulkBar(
 
   document.getElementById('bulk-archive')!.addEventListener('click', async () => {
     const ids = Array.from(state.selectedIds);
-    for (const id of ids) {
-      const t = state.threads.find(x => x.id === id);
-      if (!t) continue;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doArchive(t, row, getActionDeps());
+    const threads = ids.map(id => state.threads.find(x => x.id === id)).filter(Boolean) as typeof state.threads;
+    const deps = getActionDeps();
+    for (const t of threads) {
+      const acct = accountFor(t);
+      if (!acct) continue;
+      await archiveThread(acct, t);
+      document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.remove();
+      state.threads = state.threads.filter(x => x.id !== t.id);
     }
+    pushUndo(`Archived ${threads.length} thread${threads.length !== 1 ? 's' : ''}`, async () => {
+      for (const t of threads) {
+        const acct = accountFor(t);
+        if (acct) await unarchiveThread(acct, t);
+      }
+      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(state.account!.id);
+      deps.renderInbox();
+    });
+    showToast(`Archived ${threads.length} thread${threads.length !== 1 ? 's' : ''}`);
     exitBulkModeFn();
   });
 
   document.getElementById('bulk-trash')!.addEventListener('click', async () => {
     const ids = Array.from(state.selectedIds);
-    for (const id of ids) {
-      const t = state.threads.find(x => x.id === id);
-      if (!t) continue;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doTrash(t, row, getActionDeps());
+    const threads = ids.map(id => state.threads.find(x => x.id === id)).filter(Boolean) as typeof state.threads;
+    const deps = getActionDeps();
+    for (const t of threads) {
+      const acct = accountFor(t);
+      if (!acct) continue;
+      await trashThread(acct, t);
+      document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.remove();
+      state.threads = state.threads.filter(x => x.id !== t.id);
     }
+    pushUndo(`Trashed ${threads.length} thread${threads.length !== 1 ? 's' : ''}`, async () => {
+      for (const t of threads) {
+        const acct = accountFor(t);
+        if (acct) await untrashThread(acct, t);
+      }
+      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(state.account!.id);
+      deps.renderInbox();
+    });
+    showToast(`Moved ${threads.length} thread${threads.length !== 1 ? 's' : ''} to trash`);
     exitBulkModeFn();
   });
 

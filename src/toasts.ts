@@ -1,3 +1,5 @@
+import { pushUndo } from './undoStack';
+
 export function showToast(msg: string, durationMs = 2000) {
   const existing = document.getElementById('kept-toast');
   if (existing) existing.remove();
@@ -32,7 +34,9 @@ export function showUndoToast(msg: string, undoFn: () => Promise<void> | void) {
   `;
   document.body.appendChild(toast);
 
-  const DURATION = 5000;
+  pushUndo(msg, undoFn);
+
+  const DURATION = 7000;
 
   function dismiss() {
     if (_undoToastTimer !== null) { clearTimeout(_undoToastTimer); _undoToastTimer = null; }

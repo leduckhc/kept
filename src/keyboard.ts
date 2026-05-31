@@ -1,6 +1,8 @@
 import { type Thread } from './gmail';
 import { type ViewName, state } from './state';
 import { type ActionDeps } from './actions';
+import { popUndo } from './undoStack';
+import { showToast } from './toasts';
 
 export interface KeyboardDeps {
   renderInbox: () => void;
@@ -156,6 +158,17 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
     if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       deps.renderCommandPalette();
+    }
+  });
+
+  document.addEventListener('keydown', async (e: KeyboardEvent) => {
+    if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !isInputFocused()) {
+      e.preventDefault();
+      const entry = popUndo();
+      if (entry) {
+        await entry.undoFn();
+        showToast(`Undone: ${entry.label}`);
+      }
     }
   });
 

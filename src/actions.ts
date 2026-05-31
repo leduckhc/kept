@@ -1,5 +1,5 @@
 import { type Account, getAccountById } from './auth';
-import { type Thread, markRead, markUnread, archiveThread, unarchiveThread, trashThread, blockSender, unsnoozeThread, toggleStar, muteThread, unmuteThread, loadThreads } from './gmail';
+import { type Thread, markRead, markUnread, archiveThread, unarchiveThread, trashThread, untrashThread, blockSender, unsnoozeThread, toggleStar, muteThread, unmuteThread, loadThreads } from './gmail';
 import { setStatus } from './helpers';
 import { showToast, showUndoToast } from './toasts';
 import { state, setAccount } from './state';
@@ -95,7 +95,11 @@ export async function doTrash(t: Thread, row: HTMLElement, deps: ActionDeps) {
     await trashThread(acct, t);
     row.remove();
     state.threads = state.threads.filter(x => x.id !== t.id);
-    showToast('Moved to trash', 3000);
+    showUndoToast('Moved to trash', async () => {
+      await untrashThread(acct, t);
+      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+      deps.renderInbox();
+    });
   } catch (e) {
     console.error('Trash failed:', e);
     setStatus('Trash failed');
