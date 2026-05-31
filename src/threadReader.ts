@@ -378,7 +378,7 @@ document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(functi
     if (!body || !state.account) return;
     const btn = document.getElementById('btn-send') as HTMLButtonElement;
     btn.disabled = true;
-    btn.textContent = 'Sending…';
+    btn.innerHTML = '<span class="send-spinner"></span> Sending…';
     try {
       await sendEmail(state.account, {
         to: t.senderEmail,
@@ -387,20 +387,19 @@ document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(functi
         threadId: t.gmailThreadId,
         inReplyTo: lastMessageId ?? undefined,
       });
-      localStorage.removeItem(draftKey);
-      closeReader();
-      showFollowupPrompt({ threadId: t.id, subject: t.subject, sentTo: t.senderEmail });
+      btn.innerHTML = '✓ Sent';
+      btn.classList.add('send-success');
+      setTimeout(() => {
+        localStorage.removeItem(draftKey);
+        closeReader();
+        showFollowupPrompt({ threadId: t.id, subject: t.subject, sentTo: t.senderEmail });
+      }, 1000);
     } catch (e) {
-      const errDiv = document.getElementById('reply-send-error') ?? (() => {
-        const d = document.createElement('div');
-        d.id = 'reply-send-error';
-        d.style.cssText = 'font-size:12px;color:var(--danger,#dc2626);padding:4px 0;';
-        btn.parentElement!.insertBefore(d, btn);
-        return d;
-      })();
-      errDiv.textContent = `Send failed: ${e instanceof Error ? e.message : String(e)}`;
+      btn.innerHTML = 'Send';
       btn.disabled = false;
-      btn.textContent = 'Send';
+      btn.classList.add('send-error');
+      setTimeout(() => btn.classList.remove('send-error'), 2000);
+      showToast(`Failed to send: ${e instanceof Error ? e.message : String(e)}`, 4000);
     }
   });
 
