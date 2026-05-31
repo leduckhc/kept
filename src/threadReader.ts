@@ -187,7 +187,7 @@ export async function openThread(
       if (sanitized) {
         const iframe = document.createElement('iframe');
         iframe.setAttribute('sandbox', 'allow-scripts allow-popups-to-escape-sandbox');
-        iframe.style.cssText = 'width:100%; border:none; overflow:auto; min-height:200px;';
+        iframe.style.cssText = 'width:100%; border:none; overflow:visible; min-height:200px;';
         iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
           body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:#222;margin:0;padding:0;line-height:1.5;word-break:break-word;}
           a{color:#5B4EDB;}
@@ -209,8 +209,18 @@ document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(functi
 <\/script></body></html>`;
 
         const resizeIframe = () => {
-          const h = iframe.contentDocument?.body?.scrollHeight;
-          if (h) iframe.style.height = h + 4 + 'px';
+          const doc = iframe.contentDocument;
+          if (!doc) return;
+          // Use the max of scrollHeight and offsetHeight for full content height
+          const body = doc.body;
+          const html = doc.documentElement;
+          const h = Math.max(
+            body?.scrollHeight ?? 0,
+            body?.offsetHeight ?? 0,
+            html?.scrollHeight ?? 0,
+            html?.offsetHeight ?? 0
+          );
+          if (h > 0) iframe.style.height = h + 'px';
         };
 
         const loadImgBtn = document.createElement('button');
@@ -229,9 +239,11 @@ document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(functi
         });
         iframe.addEventListener('load', () => {
           resizeIframe();
-          // Re-check height after images/fonts load
+          // Re-check height as content settles (images, fonts, lazy rendering)
+          setTimeout(resizeIframe, 100);
           setTimeout(resizeIframe, 300);
           setTimeout(resizeIframe, 1000);
+          setTimeout(resizeIframe, 3000);
           const blocked = iframe.contentDocument?.querySelectorAll('img[data-original-src]');
           if (blocked && blocked.length > 0) loadImgBtn.style.display = 'inline-block';
         });
