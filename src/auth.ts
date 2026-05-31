@@ -20,11 +20,12 @@ export interface Account {
   accessToken: string;
   refreshToken: string;
   tokenExpiry: number;
+  signature: string;
 }
 
 type AccountRow = {
   id: string; email: string; access_token: string;
-  refresh_token: string; token_expiry: number;
+  refresh_token: string; token_expiry: number; signature: string | null;
 };
 
 function rowToAccount(r: AccountRow): Account {
@@ -34,6 +35,7 @@ function rowToAccount(r: AccountRow): Account {
     accessToken: r.access_token,
     refreshToken: r.refresh_token,
     tokenExpiry: r.token_expiry,
+    signature: r.signature ?? '',
   };
 }
 
@@ -82,9 +84,9 @@ export async function removeAccount(account: Account): Promise<void> {
 export async function saveAccount(account: Account): Promise<void> {
   const db = await getDb();
   await db.execute(
-    `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry)
-     VALUES (?, ?, ?, ?, ?)`,
-    [account.id, account.email, account.accessToken, account.refreshToken, account.tokenExpiry]
+    `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [account.id, account.email, account.accessToken, account.refreshToken, account.tokenExpiry, account.signature ?? '']
   );
 }
 
@@ -175,6 +177,7 @@ async function exchangeCode(code: string, verifier: string, redirectUri: string)
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     tokenExpiry: Date.now() + tokens.expires_in * 1000,
+    signature: '',
   };
   await saveAccount(account);
   return account;

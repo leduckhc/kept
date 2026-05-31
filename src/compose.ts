@@ -155,6 +155,12 @@ export async function openComposeNew(
     subjectEl.value = prefillSubject;
   }
 
+  // Auto-append signature for new compose
+  const sig = state.account?.signature;
+  if (sig && !bodyEl.value) {
+    bodyEl.value = `\n\n-- \n${sig}`;
+  }
+
   bodyEl.addEventListener('input', updateSendState);
   bodyEl.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === '/' && bodyEl.value === '') {

@@ -135,4 +135,7 @@ async function migrate(db: Database): Promise<void> {
 
   // KPT-040: thread mute
   await db.execute(`ALTER TABLE threads ADD COLUMN is_muted INTEGER DEFAULT 0`).catch(() => {});
+
+  // KPT-074: per-account email signature
+  await db.execute(`ALTER TABLE accounts ADD COLUMN signature TEXT`).catch(() => {});
 }

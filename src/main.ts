@@ -1,5 +1,5 @@
 // main.ts — Kept inbox UI
-import { getAllAccounts, removeAccount, startOAuth } from './auth';
+import { getAllAccounts, removeAccount, saveAccount, startOAuth } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
 import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, hasSyncedBefore, groupBySection } from './gmail';
 
@@ -248,6 +248,16 @@ function showShell() {
               </button>
             </div>
           </div>
+          <div class="settings-divider"></div>
+          <div class="settings-section" id="settings-signature-section">
+            <div class="settings-section-label">Email Signature</div>
+            <textarea class="settings-signature-ta" id="settings-signature-ta"
+              placeholder="Your signature…" rows="4"></textarea>
+            <div class="signature-preview" id="settings-signature-preview" style="display:none"></div>
+            <div class="settings-signature-actions">
+              <button class="btn-primary settings-signature-save" id="settings-signature-save">Save</button>
+            </div>
+          </div>
           <div class="settings-footer">
             <button class="settings-signout" id="settings-signout">Sign out</button>
           </div>
@@ -370,6 +380,36 @@ function openSettings() {
       showAuth();
     }
   }, { once: true });
+
+  // Load and wire signature editor
+  const sigTa = document.getElementById('settings-signature-ta') as HTMLTextAreaElement;
+  const sigPreview = document.getElementById('settings-signature-preview') as HTMLElement;
+  const sigSaveBtn = document.getElementById('settings-signature-save') as HTMLButtonElement;
+  if (sigTa && state.account) {
+    sigTa.value = state.account.signature ?? '';
+    if (sigTa.value) {
+      sigPreview.textContent = sigTa.value;
+      sigPreview.style.display = 'block';
+    }
+    sigTa.addEventListener('input', () => {
+      if (sigTa.value.trim()) {
+        sigPreview.textContent = sigTa.value;
+        sigPreview.style.display = 'block';
+      } else {
+        sigPreview.style.display = 'none';
+      }
+    });
+    sigSaveBtn.addEventListener('click', async () => {
+      if (!state.account) return;
+      const updated = { ...state.account, signature: sigTa.value };
+      await saveAccount(updated);
+      state.account = updated;
+      const idx = state.accounts.findIndex(a => a.id === updated.id);
+      if (idx >= 0) state.accounts[idx] = updated;
+      sigSaveBtn.textContent = 'Saved';
+      setTimeout(() => { sigSaveBtn.textContent = 'Save'; }, 1500);
+    });
+  }
 
   // Wire add state.account (once: true prevents duplicate OAuth launches on repeated open/close)
   document.getElementById('settings-add-state.account')!.addEventListener('click', async () => {

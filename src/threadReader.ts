@@ -291,7 +291,15 @@ document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(functi
   const composeEditor = reader.querySelector<HTMLElement>('#compose-body')!;
 
   // Restore saved draft
-  if (savedDraft) composeEditor.innerText = savedDraft;
+  if (savedDraft) {
+    composeEditor.innerText = savedDraft;
+  } else {
+    // Auto-append signature if account has one
+    const sig = state.account?.signature;
+    if (sig) {
+      composeEditor.innerHTML = `<br><div class="signature-block" contenteditable="true" style="color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px;margin-top:8px;font-size:13px;white-space:pre-wrap;">-- \n${sig.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+    }
+  }
 
   composeEditor.addEventListener('input', () => {
     localStorage.setItem(draftKey, composeEditor.innerText);
