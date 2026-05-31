@@ -34,6 +34,7 @@ import {
   renderSnoozedView as _renderSnoozedView,
   renderStarredView as _renderStarredView,
   renderScheduledView,
+  // renderEmptyState is used internally by threadList
   threadRow,
   wireThreadRows,
 } from './threadList';
