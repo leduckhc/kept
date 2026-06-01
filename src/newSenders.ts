@@ -80,7 +80,7 @@ function renderCard(sender: NewSenderInfo): string {
 }
 
 /** Render the new senders section into the given container (prepends). Returns the element or null. */
-export function renderNewSendersSection(container: HTMLElement, actionDeps: ActionDeps): void {
+export function renderNewSendersSection(container: HTMLElement, actionDeps: ActionDeps, openThread?: (t: Thread) => void): void {
   // Remove existing section
   container.querySelector('.new-senders-section')?.remove();
   document.querySelector('.new-senders-fullscreen')?.remove();
@@ -101,19 +101,25 @@ export function renderNewSendersSection(container: HTMLElement, actionDeps: Acti
   `;
 
   container.prepend(section);
-  wireCards(section, senders, actionDeps, container);
+  wireCards(section, senders, actionDeps, container, openThread);
 
   // Wire expand button
   section.querySelector('.new-senders-expand')!.addEventListener('click', () => {
-    openFullscreen(senders, actionDeps, container);
+    openFullscreen(senders, actionDeps, container, openThread);
   });
 }
 
-function wireCards(root: HTMLElement, senders: NewSenderInfo[], actionDeps: ActionDeps, inboxContainer: HTMLElement) {
+function wireCards(root: HTMLElement, senders: NewSenderInfo[], actionDeps: ActionDeps, inboxContainer: HTMLElement, openThread?: (t: Thread) => void) {
   root.querySelectorAll<HTMLElement>('.new-sender-card').forEach(card => {
     const email = card.dataset.email!;
     const sender = senders.find(s => s.email === email);
     if (!sender) return;
+
+    // Click card to open the thread
+    card.addEventListener('click', () => {
+      if (openThread) openThread(sender.thread);
+    });
+    card.style.cursor = 'pointer';
 
     card.querySelector('.new-sender-accept')!.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -155,7 +161,7 @@ function updateCount(inboxContainer: HTMLElement) {
   if (label) label.textContent = `New senders (${remaining})`;
 }
 
-function openFullscreen(senders: NewSenderInfo[], actionDeps: ActionDeps, inboxContainer: HTMLElement) {
+function openFullscreen(senders: NewSenderInfo[], actionDeps: ActionDeps, inboxContainer: HTMLElement, openThread?: (t: Thread) => void) {
   document.querySelector('.new-senders-fullscreen')?.remove();
 
   // Filter to only senders still showing (not yet accepted/blocked)
@@ -193,5 +199,5 @@ function openFullscreen(senders: NewSenderInfo[], actionDeps: ActionDeps, inboxC
     dismissOverlay();
   });
 
-  wireCards(overlay, currentSenders, actionDeps, inboxContainer);
+  wireCards(overlay, currentSenders, actionDeps, inboxContainer, openThread);
 }

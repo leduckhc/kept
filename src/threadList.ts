@@ -158,7 +158,7 @@ export function renderInbox(deps: ThreadListDeps) {
   if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
 
   // Render new senders section above thread list
-  renderNewSendersSection(container, deps.getActionDeps());
+  renderNewSendersSection(container, deps.getActionDeps(), deps.openThread);
 }
 
 function prependSearchBar(container: HTMLElement, barHtml: string, value: string, _deps: ThreadListDeps) {
