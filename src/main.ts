@@ -60,7 +60,7 @@ async function refreshKnownSenders() {
 
 function toggleFocusMode() {
   state.focusMode = !state.focusMode;
-  localStorage.setItem('state.focusMode', String(state.focusMode));
+  localStorage.setItem('focusMode', String(state.focusMode));
   const btn = document.getElementById('btn-focus');
   if (btn) btn.classList.toggle('focus-active', state.focusMode);
   renderInbox();
