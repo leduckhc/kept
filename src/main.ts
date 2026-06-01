@@ -41,6 +41,7 @@ import {
 } from './threadList';
 import './search'; // search module self-registers
 import { showSearchBar } from './search';
+import { initResizeHandle } from './resizeHandle';
 
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
@@ -278,6 +279,9 @@ function showShell() {
   document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view as ViewName));
   });
+
+  // Resizable pane handle
+  initResizeHandle();
 
   // ⋮ menu
   document.getElementById('btn-menu')!.addEventListener('click', () => showToolbarMenu());
