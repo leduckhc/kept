@@ -1,2 +1,21 @@
+packages:
+  - '.'
+
+# --- Supply Chain Hardening ---
+
+# Only these packages may run install/build scripts
 allowBuilds:
   esbuild: true
+  '@tauri-apps/cli': true
+
+# Fail if unreviewed packages have install scripts
+strictDepBuilds: true
+
+# Block git/tarball URLs in transitive dependencies
+blockExoticSubdeps: true
+
+# 3-day cooldown (minutes) — blocks freshly published malware
+minimumReleaseAge: 4320
+
+# Reject packages whose trust attestation level decreased
+trustPolicy: no-downgrade
