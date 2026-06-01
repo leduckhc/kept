@@ -3,9 +3,10 @@
 import { start, cancel } from '@fabianlars/tauri-plugin-oauth';
 import { open } from '@tauri-apps/plugin-shell';
 import { getDb } from './db';
+import { saveTokensToKeychain, getTokensFromKeychain, deleteTokensFromKeychain } from './keychain';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
-const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? '';
+const GOOGLE_CLIENT_ID = 'REPLACED_CLIENT_ID';
+const GOOGLE_CLIENT_SECRET = 'REPLACED_CLIENT_SECRET';
 const SCOPES = [
   'openid',
   'email',
@@ -28,7 +29,20 @@ type AccountRow = {
   refresh_token: string; token_expiry: number; signature: string | null;
 };
 
-function rowToAccount(r: AccountRow): Account {
+async function rowToAccount(r: AccountRow): Promise<Account> {
+  // Try keychain first — tokens in SQLite are legacy fallback
+  const keychainTokens = await getTokensFromKeychain(r.email);
+  if (keychainTokens) {
+    return {
+      id: r.id,
+      email: r.email,
+      accessToken: keychainTokens.accessToken,
+      refreshToken: keychainTokens.refreshToken,
+      tokenExpiry: keychainTokens.tokenExpiry,
+      signature: r.signature ?? '',
+    };
+  }
+  // Fallback: use SQLite tokens (pre-migration accounts)
   return {
     id: r.id,
     email: r.email,
@@ -51,7 +65,7 @@ export async function getAccount(): Promise<Account | null> {
 export async function getAllAccounts(): Promise<Account[]> {
   const db = await getDb();
   const rows = await db.select<AccountRow[]>('SELECT * FROM accounts ORDER BY created_at ASC');
-  return rows.map(rowToAccount);
+  return Promise.all(rows.map(rowToAccount));
 }
 
 /** Return a specific account by id, or null if not found. */
@@ -73,6 +87,9 @@ export async function removeAccount(account: Account): Promise<void> {
     });
   } catch { /* ignore */ }
 
+  // Remove tokens from OS keychain
+  await deleteTokensFromKeychain(account.email);
+
   const db = await getDb();
   await db.execute('DELETE FROM threads WHERE account_id = ?', [account.id]);
   await db.execute('DELETE FROM messages WHERE account_id = ?', [account.id]);
@@ -82,11 +99,19 @@ export async function removeAccount(account: Account): Promise<void> {
 }
 
 export async function saveAccount(account: Account): Promise<void> {
+  // Store tokens in OS keychain (encrypted by the OS)
+  await saveTokensToKeychain(account.email, {
+    accessToken: account.accessToken,
+    refreshToken: account.refreshToken,
+    tokenExpiry: account.tokenExpiry,
+  });
+
+  // Store only metadata in SQLite — no secrets
   const db = await getDb();
   await db.execute(
     `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [account.id, account.email, account.accessToken, account.refreshToken, account.tokenExpiry, account.signature ?? '']
+     VALUES (?, ?, '', '', 0, ?)`,
+    [account.id, account.email, account.signature ?? '']
   );
 }
 
@@ -229,6 +254,32 @@ async function _doRefreshToken(account: Account): Promise<Account> {
   };
   await saveAccount(updated);
   return updated;
+}
+
+// ── Migration ────────────────────────────────────────────
+/**
+ * One-time migration: move tokens from SQLite → OS keychain.
+ * Call on boot. If tokens exist in SQLite, save to keychain and clear them from DB.
+ */
+export async function migrateTokensToKeychain(): Promise<void> {
+  const db = await getDb();
+  const rows = await db.select<AccountRow[]>(
+    "SELECT * FROM accounts WHERE access_token != '' AND access_token IS NOT NULL"
+  );
+  for (const row of rows) {
+    if (row.access_token && row.refresh_token) {
+      await saveTokensToKeychain(row.email, {
+        accessToken: row.access_token,
+        refreshToken: row.refresh_token,
+        tokenExpiry: row.token_expiry,
+      });
+      // Clear secrets from SQLite
+      await db.execute(
+        "UPDATE accounts SET access_token = '', refresh_token = '', token_expiry = 0 WHERE id = ?",
+        [row.id]
+      );
+    }
+  }
 }
 
 // ── PKCE ─────────────────────────────────────────────────

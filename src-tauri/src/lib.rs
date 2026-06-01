@@ -50,6 +50,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_oauth::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_keyring::init())
         .manage(UnreadState(Mutex::new(0)))
         .invoke_handler(tauri::generate_handler![update_unread_badge])
         .setup(|app: &mut tauri::App| {

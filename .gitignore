@@ -8,3 +8,6 @@ src-tauri/gen/
 # OS stuffs
 .DS_Store
 .worktrees/
+
+# E2E test database
+e2e/kept.db

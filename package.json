@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:e2e": "VITE_E2E=1 vite",
+    "seed:e2e": "npx tsx e2e/seed.ts",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
@@ -20,11 +22,14 @@
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-sql": "2.4.0",
     "dompurify": "^3.4.7",
-    "lucide-static": "^1.17.0"
+    "lucide-static": "^1.17.0",
+    "tauri-plugin-keyring-api": "^0.1.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@types/better-sqlite3": "^7.6.13",
     "@vitest/browser": "^4.1.7",
+    "better-sqlite3": "^12.10.0",
     "happy-dom": "^20.9.0",
     "typescript": "~5.6.2",
     "vite": "^8.0.14",

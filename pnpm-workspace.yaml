@@ -7,6 +7,7 @@ packages:
 allowBuilds:
   esbuild: true
   '@tauri-apps/cli': true
+  better-sqlite3: true
 
 # Fail if unreviewed packages have install scripts
 strictDepBuilds: true

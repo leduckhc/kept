@@ -1,5 +1,5 @@
 // main.ts — Kept inbox UI
-import { getAllAccounts, removeAccount, saveAccount, startOAuth } from './auth';
+import { getAllAccounts, removeAccount, saveAccount, startOAuth, migrateTokensToKeychain } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
 import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, loadAllSenderEmails, hasSyncedBefore, groupBySection, invalidateSectionCache, getGroupedSenders, getGroupedDomains } from './gmail';
 
@@ -125,14 +125,20 @@ async function boot() {
   // Show auth screen immediately — don't block on DB
   showAuth();
 
+  // E2E mode: skip OAuth and sync, just render from pre-seeded DB
+  const isE2E = import.meta.env.VITE_E2E === '1';
+
   // Check if we're inside a real Tauri window
   const isTauri = '__TAURI_INTERNALS__' in window;
-  if (!isTauri) {
+  if (!isTauri && !isE2E) {
     // Browser-only dev: just show the login screen, no DB
     return;
   }
 
   try {
+    // One-time migration: move tokens from SQLite → OS keychain
+    await migrateTokensToKeychain();
+
     state.accounts = await getAllAccounts();
     state.account = await resolveActiveAccount();
     if (state.account) {
@@ -655,6 +661,12 @@ async function refreshAll() {
   // Request notification permission early (non-blocking)
   ensureNotificationPermission().catch(() => {});
 
+  // E2E mode: skip network sync entirely, DB is pre-seeded
+  if (import.meta.env.VITE_E2E === '1') {
+    setStatus(`E2E mode — ${state.threads.length} threads loaded`);
+    return;
+  }
+
   // Parallel sync — one per state.account, errors are non-fatal per state.account
   const allAccts = await getAllAccounts();
   const syncPromises = allAccts.map(acct =>
@@ -692,6 +704,19 @@ function getActionDeps(): ActionDeps {
 
 async function syncAndRender() {
   if (state.syncing || !state.account) return;
+
+  // E2E mode: just reload from DB, no network
+  if (import.meta.env.VITE_E2E === '1') {
+    if (state.unifiedMode) {
+      state.threads = await loadUnifiedThreads();
+    } else {
+      state.threads = await loadThreads(state.account.id);
+    }
+    renderInbox();
+    setStatus(`E2E mode — ${state.threads.length} threads`);
+    return;
+  }
+
   state.syncing = true;
   setStatus('Syncing…');
   const btn = document.getElementById('btn-sync');

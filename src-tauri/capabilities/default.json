@@ -13,6 +13,9 @@
     "sql:allow-execute",
     "sql:allow-select",
     "notification:default",
+    "keyring:allow-get-password",
+    "keyring:allow-set-password",
+    "keyring:allow-delete-password",
     {
       "identifier": "http:default",
       "allow": [
