@@ -99,20 +99,35 @@ export async function removeAccount(account: Account): Promise<void> {
 }
 
 export async function saveAccount(account: Account): Promise<void> {
-  // Store tokens in OS keychain (encrypted by the OS)
-  await saveTokensToKeychain(account.email, {
-    accessToken: account.accessToken,
-    refreshToken: account.refreshToken,
-    tokenExpiry: account.tokenExpiry,
-  });
+  // Try OS keychain first (encrypted by OS). Fall back to SQLite if unavailable.
+  let keychainOk = false;
+  try {
+    await saveTokensToKeychain(account.email, {
+      accessToken: account.accessToken,
+      refreshToken: account.refreshToken,
+      tokenExpiry: account.tokenExpiry,
+    });
+    keychainOk = true;
+  } catch (e) {
+    console.warn('Keychain unavailable, falling back to SQLite for token storage:', e);
+  }
 
-  // Store only metadata in SQLite — no secrets
   const db = await getDb();
-  await db.execute(
-    `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature)
-     VALUES (?, ?, '', '', 0, ?)`,
-    [account.id, account.email, account.signature ?? '']
-  );
+  if (keychainOk) {
+    // Keychain has the secrets — SQLite stores only metadata
+    await db.execute(
+      `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature)
+       VALUES (?, ?, '', '', 0, ?)`,
+      [account.id, account.email, account.signature ?? '']
+    );
+  } else {
+    // Fallback: store tokens in SQLite (same as before keychain feature)
+    await db.execute(
+      `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [account.id, account.email, account.accessToken, account.refreshToken, account.tokenExpiry, account.signature ?? '']
+    );
+  }
 }
 
 export async function startOAuth(): Promise<Account> {
@@ -263,21 +278,29 @@ async function _doRefreshToken(account: Account): Promise<Account> {
  */
 export async function migrateTokensToKeychain(): Promise<void> {
   const db = await getDb();
-  const rows = await db.select<AccountRow[]>(
-    "SELECT * FROM accounts WHERE access_token != '' AND access_token IS NOT NULL"
-  );
+  let rows: AccountRow[];
+  try {
+    rows = await db.select<AccountRow[]>(
+      "SELECT * FROM accounts WHERE access_token != '' AND access_token IS NOT NULL"
+    );
+  } catch { return; }
+
   for (const row of rows) {
     if (row.access_token && row.refresh_token) {
-      await saveTokensToKeychain(row.email, {
-        accessToken: row.access_token,
-        refreshToken: row.refresh_token,
-        tokenExpiry: row.token_expiry,
-      });
-      // Clear secrets from SQLite
-      await db.execute(
-        "UPDATE accounts SET access_token = '', refresh_token = '', token_expiry = 0 WHERE id = ?",
-        [row.id]
-      );
+      try {
+        await saveTokensToKeychain(row.email, {
+          accessToken: row.access_token,
+          refreshToken: row.refresh_token,
+          tokenExpiry: row.token_expiry,
+        });
+        // Clear secrets from SQLite only if keychain write succeeded
+        await db.execute(
+          "UPDATE accounts SET access_token = '', refresh_token = '', token_expiry = 0 WHERE id = ?",
+          [row.id]
+        );
+      } catch {
+        // Keychain unavailable — leave tokens in SQLite, they'll work via fallback
+      }
     }
   }
 }
