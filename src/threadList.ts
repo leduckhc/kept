@@ -1,6 +1,6 @@
 import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection } from './gmail';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
-import { type InboxTab, state } from './state';
+import { state } from './state';
 import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze } from './actions';
 import { openSnoozePicker } from './snooze';
 import { showContextMenu } from './contextMenu';
@@ -27,7 +27,6 @@ export interface ThreadListDeps {
   getActionDeps: () => ActionDeps;
   renderInbox: () => void;
   renderScheduledView: () => void;
-  isKnownSender: (email: string) => boolean;
   applyFocusFilter: (list: Thread[]) => { visible: Thread[]; hiddenCount: number };
 }
 
@@ -85,16 +84,6 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
     </div>`;
 }
 
-export function wireInboxTabs(container: HTMLElement, renderInbox: () => void) {
-  container.querySelectorAll('.inbox-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.activeInboxTab = (btn as HTMLElement).dataset.tab as InboxTab;
-      localStorage.setItem('kept_inbox_tab', state.activeInboxTab);
-      renderInbox();
-    });
-  });
-}
-
 export function renderInbox(deps: ThreadListDeps) {
   const container = document.getElementById('inbox');
   if (!container) return;
@@ -114,24 +103,8 @@ export function renderInbox(deps: ThreadListDeps) {
 
   const { visible: focusedThreads, hiddenCount } = deps.applyFocusFilter(state.threads);
 
-  let tabFiltered = focusedThreads;
-  if (state.activeInboxTab === 'important') {
-    tabFiltered = focusedThreads.filter(t => deps.isKnownSender(t.senderEmail));
-  } else if (state.activeInboxTab === 'other') {
-    tabFiltered = focusedThreads.filter(t => !deps.isKnownSender(t.senderEmail));
-  }
-
-  // Apply inline search filter on top of other filters
-  const searchFiltered = isSearchActive() ? getFilteredThreads(tabFiltered) : tabFiltered;
-
-  const importantCount = focusedThreads.filter(t => deps.isKnownSender(t.senderEmail) && t.isUnread).length;
-  const otherCount = focusedThreads.filter(t => !deps.isKnownSender(t.senderEmail) && t.isUnread).length;
-
-  const tabBar = isSearchActive() ? '' : `<div class="inbox-tabs">
-    <button class="inbox-tab${state.activeInboxTab === 'all' ? ' active' : ''}" data-tab="all">All</button>
-    <button class="inbox-tab${state.activeInboxTab === 'important' ? ' active' : ''}" data-tab="important">Important${importantCount ? ` <span class="tab-badge">${importantCount}</span>` : ''}</button>
-    <button class="inbox-tab${state.activeInboxTab === 'other' ? ' active' : ''}" data-tab="other">Other${otherCount ? ` <span class="tab-badge">${otherCount}</span>` : ''}</button>
-  </div>`;
+  // Apply inline search filter
+  const searchFiltered = isSearchActive() ? getFilteredThreads(focusedThreads) : focusedThreads;
 
   if (searchFiltered.length === 0) {
     let emptyTitle: string;
@@ -144,15 +117,10 @@ export function renderInbox(deps: ThreadListDeps) {
     } else if (state.focusMode) {
       emptyIcon = '◎'; emptyTitle = 'No messages from known senders';
       emptySubtitle = hiddenCount > 0 ? `${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus` : 'Focus mode is on.';
-    } else if (state.activeInboxTab === 'important') {
-      emptyIcon = '⭐'; emptyTitle = 'No important emails'; emptySubtitle = 'Important messages from known senders appear here.';
-    } else if (state.activeInboxTab === 'other') {
-      emptyIcon = '📬'; emptyTitle = 'No other emails'; emptySubtitle = 'Messages from unknown senders appear here.';
     } else {
       emptyIcon = '🎉'; emptyTitle = 'All caught up'; emptySubtitle = 'No new messages. Go enjoy your day.';
     }
-    container.innerHTML = tabBar + renderEmptyState(emptyIcon, emptyTitle, emptySubtitle);
-    if (!isSearchActive()) wireInboxTabs(container, deps.renderInbox);
+    container.innerHTML = renderEmptyState(emptyIcon, emptyTitle, emptySubtitle);
     if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
     return;
   }
@@ -164,10 +132,10 @@ export function renderInbox(deps: ThreadListDeps) {
   let html: string;
   if (isSearchActive() && getSearchQuery().trim()) {
     // Flat list — no sections while searching
-    html = tabBar + focusBanner + searchFiltered.map(t => threadRow(t, false)).join('');
+    html = focusBanner + searchFiltered.map(t => threadRow(t, false)).join('');
   } else {
     const sections = groupBySection(searchFiltered);
-    html = tabBar + focusBanner + sections.map(s => {
+    html = focusBanner + sections.map(s => {
       const unread = s.threads.filter(t => t.isUnread).length;
       const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
       return `
@@ -178,7 +146,6 @@ export function renderInbox(deps: ThreadListDeps) {
   }
 
   container.innerHTML = html;
-  if (!isSearchActive()) wireInboxTabs(container, deps.renderInbox);
   wireThreadRows(container, searchFiltered, false, deps);
   if (state.bulkMode) deps.updateBulkBar();
   if (state.selectedThreadId) {

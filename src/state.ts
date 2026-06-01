@@ -3,7 +3,6 @@ import type { Thread } from './gmail';
 import { setActiveAccountId } from './accountContext';
 
 export type LayoutMode = '3-pane' | '2-pane';
-export type InboxTab = 'all' | 'important' | 'other';
 export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled';
 
 export const state = {
@@ -15,7 +14,6 @@ export const state = {
   syncing: false,
   knownSenders: new Set<string>(),
   focusMode: localStorage.getItem('focusMode') === 'true',
-  activeInboxTab: ((localStorage.getItem('kept_inbox_tab') as InboxTab) || 'all') as InboxTab,
   currentView: 'Inbox' as ViewName,
   selectedThreadId: null as string | null,
   kbRegistered: false,

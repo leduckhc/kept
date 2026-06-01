@@ -907,7 +907,6 @@ function getThreadListDeps() {
     getActionDeps,
     renderInbox,
     renderScheduledView,
-    isKnownSender,
     applyFocusFilter,
   };
 }
