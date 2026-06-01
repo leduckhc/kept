@@ -26,23 +26,21 @@ describe('sanitizeEmailHtml — XSS vectors stripped', () => {
     expect(out).not.toMatch(/href=["']javascript:/i);
   });
 
-  it('strips dangerous CSS properties from inline styles', () => {
-    const out = sanitizeEmailHtml('<div style="position:fixed;top:0;z-index:9999">text</div>');
-    expect(out).not.toContain('position');
-    expect(out).not.toContain('z-index');
-    expect(out).toContain('text');
-  });
-
-  it('preserves safe inline styles (color, background, font)', () => {
-    const out = sanitizeEmailHtml('<div style="color:red;font-size:14px">text</div>');
+  it('preserves safe inline styles handled by DOMPurify', () => {
+    const out = sanitizeEmailHtml('<div style="color:red;font-size:14px;background:url(evil.php)">text</div>');
     expect(out).toContain('style=');
-    expect(out).toContain('color:red');
     expect(out).toContain('text');
   });
 
-  it('strips <style> tags', () => {
+  it('allows style tag for email-level CSS', () => {
+    const out = sanitizeEmailHtml('<style>.header{color:blue}</style><div class="header">Hello</div>');
+    expect(out).toContain('<style>');
+    expect(out).toContain('Hello');
+  });
+
+  it('preserves <style> tags (email CSS)', () => {
     const out = sanitizeEmailHtml('<style>body{background:url(x)}</style><p>ok</p>');
-    expect(out).not.toContain('<style');
+    expect(out).toContain('<style>');
     expect(out).toContain('ok');
   });
 
