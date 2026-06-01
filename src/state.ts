@@ -26,7 +26,9 @@ export const state = {
   // Newsletters & Updates + Group by Sender
   categoryFilter: null as string | null,
   senderFilter: null as string | null,
+  domainFilter: null as string | null,
   groupedSenders: [] as string[],
+  groupedDomains: [] as string[],
 };
 
 export function setAccount(a: Account) {

@@ -1,4 +1,4 @@
-import { type Thread, unmuteThread, addGroupedSender, removeGroupedSender } from './gmail';
+import { type Thread, unmuteThread, addGroupedSender, removeGroupedSender, addGroupedDomain, removeGroupedDomain } from './gmail';
 import { setStatus } from './helpers';
 import { doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute, type ActionDeps } from './actions';
 import { openSnoozePicker } from './snooze';
@@ -56,6 +56,26 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
       }).catch(() => setStatus('Group failed'));
     }
   }});
+  const senderDomain = t.senderEmail.split('@')[1] ?? '';
+  if (senderDomain) {
+    const isDomainGrouped = state.groupedDomains.includes(senderDomain);
+    items.push({ label: `${icon.globe('16px')}  ${isDomainGrouped ? 'Ungroup' : 'Group'} emails from ${senderDomain}`, action: () => {
+      menu.remove();
+      const accountId = state.account?.id;
+      if (!accountId) return;
+      if (isDomainGrouped) {
+        removeGroupedDomain(accountId, senderDomain).then(() => {
+          state.groupedDomains = state.groupedDomains.filter(d => d !== senderDomain);
+          deps.renderInbox();
+        }).catch(() => setStatus('Ungroup domain failed'));
+      } else {
+        addGroupedDomain(accountId, senderDomain).then(() => {
+          state.groupedDomains = [...state.groupedDomains, senderDomain];
+          deps.renderInbox();
+        }).catch(() => setStatus('Group domain failed'));
+      }
+    }});
+  }
   items.push({ label: `${icon.close('16px')}  Block sender`, action: () => { menu.remove(); doBlock(t, row, deps); }, cls: 'ctx-menu-item--danger' });
 
   const actionItems = items.filter((x): x is MenuItem => x !== 'divider');

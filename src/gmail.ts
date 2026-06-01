@@ -771,10 +771,11 @@ export function invalidateSectionCache() {
   _cachedSectionsKey = '';
 }
 
-export function groupBySection(threads: Thread[], groupedSenders?: string[]): Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]> }> {
+export function groupBySection(threads: Thread[], groupedSenders?: string[], groupedDomains?: string[]): Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> {
   // Fast cache key: length + boundary timestamps + boundary unread states
   const gsKey = groupedSenders?.join(',') ?? '';
-  const key = `${threads.length}:${threads[0]?.receivedAt}:${threads[threads.length-1]?.receivedAt}:${threads[0]?.isUnread}:${threads[threads.length-1]?.isUnread}:${threads[0]?.isStarred}:${threads[threads.length-1]?.isStarred}:${gsKey}`;
+  const gdKey = groupedDomains?.join(',') ?? '';
+  const key = `${threads.length}:${threads[0]?.receivedAt}:${threads[threads.length-1]?.receivedAt}:${threads[0]?.isUnread}:${threads[threads.length-1]?.isUnread}:${threads[0]?.isStarred}:${threads[threads.length-1]?.isStarred}:${gsKey}:${gdKey}`;
   if (_cachedSectionsKey === key && _cachedSections) return _cachedSections;
 
   const now = new Date();
@@ -789,6 +790,7 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[]): Ar
     'July', 'August', 'September', 'October', 'November', 'December'];
 
   const groupedSet = new Set(groupedSenders ?? []);
+  const domainSet = new Set(groupedDomains ?? []);
 
   const newSenders: Thread[] = [];
   const todayGroup: Thread[] = [];
@@ -833,19 +835,25 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[]): Ar
     (byYear[year] ??= []).push(t);
   }
 
-  // Helper: split threads into grouped senders and remaining
-  function splitGrouped(list: Thread[]): { remaining: Thread[]; groups: Record<string, Thread[]> } {
-    if (groupedSet.size === 0) return { remaining: list, groups: {} };
+  // Helper: split threads into grouped senders, grouped domains, and remaining
+  function splitGrouped(list: Thread[]): { remaining: Thread[]; groups: Record<string, Thread[]>; domainGroups: Record<string, Thread[]> } {
+    if (groupedSet.size === 0 && domainSet.size === 0) return { remaining: list, groups: {}, domainGroups: {} };
     const remaining: Thread[] = [];
     const groups: Record<string, Thread[]> = {};
+    const dGroups: Record<string, Thread[]> = {};
     for (const t of list) {
       if (groupedSet.has(t.senderEmail)) {
         (groups[t.senderEmail] ??= []).push(t);
       } else {
-        remaining.push(t);
+        const domain = t.senderEmail.split('@')[1] ?? '';
+        if (domain && domainSet.has(domain)) {
+          (dGroups[domain] ??= []).push(t);
+        } else {
+          remaining.push(t);
+        }
       }
     }
-    return { remaining, groups };
+    return { remaining, groups, domainGroups: dGroups };
   }
 
   const todaySplit = splitGrouped(todayGroup);
@@ -855,24 +863,24 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[]): Ar
   const thisMonthSplit = splitGrouped(thisMonth);
   const lastMonthSplit = splitGrouped(lastMonth);
 
-  const sections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]> }> = [
+  const sections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> = [
     { label: 'New senders', threads: newSenders },
-    { label: 'Today', threads: todaySplit.remaining, categoryThreads: { newsletters: todayNewsletters, updates: todayUpdates }, senderGroups: todaySplit.groups },
-    { label: 'Yesterday', threads: yesterdaySplit.remaining, senderGroups: yesterdaySplit.groups },
-    { label: 'This week', threads: thisWeekSplit.remaining, senderGroups: thisWeekSplit.groups },
-    { label: 'Last week', threads: lastWeekSplit.remaining, senderGroups: lastWeekSplit.groups },
-    { label: MONTH_NAMES[now.getMonth()], threads: thisMonthSplit.remaining, senderGroups: thisMonthSplit.groups },
-    { label: MONTH_NAMES[(now.getMonth() - 1 + 12) % 12], threads: lastMonthSplit.remaining, senderGroups: lastMonthSplit.groups },
+    { label: 'Today', threads: todaySplit.remaining, categoryThreads: { newsletters: todayNewsletters, updates: todayUpdates }, senderGroups: todaySplit.groups, domainGroups: todaySplit.domainGroups },
+    { label: 'Yesterday', threads: yesterdaySplit.remaining, senderGroups: yesterdaySplit.groups, domainGroups: yesterdaySplit.domainGroups },
+    { label: 'This week', threads: thisWeekSplit.remaining, senderGroups: thisWeekSplit.groups, domainGroups: thisWeekSplit.domainGroups },
+    { label: 'Last week', threads: lastWeekSplit.remaining, senderGroups: lastWeekSplit.groups, domainGroups: lastWeekSplit.domainGroups },
+    { label: MONTH_NAMES[now.getMonth()], threads: thisMonthSplit.remaining, senderGroups: thisMonthSplit.groups, domainGroups: thisMonthSplit.domainGroups },
+    { label: MONTH_NAMES[(now.getMonth() - 1 + 12) % 12], threads: lastMonthSplit.remaining, senderGroups: lastMonthSplit.groups, domainGroups: lastMonthSplit.domainGroups },
   ];
 
   // Add year groups sorted descending
   const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
   for (const y of years) {
     const split = splitGrouped(byYear[y]);
-    sections.push({ label: String(y), threads: split.remaining, senderGroups: split.groups });
+    sections.push({ label: String(y), threads: split.remaining, senderGroups: split.groups, domainGroups: split.domainGroups });
   }
 
-  const result = sections.filter(s => s.threads.length > 0 || (s.categoryThreads && (s.categoryThreads.newsletters.length > 0 || s.categoryThreads.updates.length > 0)) || (s.senderGroups && Object.keys(s.senderGroups).length > 0));
+  const result = sections.filter(s => s.threads.length > 0 || (s.categoryThreads && (s.categoryThreads.newsletters.length > 0 || s.categoryThreads.updates.length > 0)) || (s.senderGroups && Object.keys(s.senderGroups).length > 0) || (s.domainGroups && Object.keys(s.domainGroups).length > 0));
   _cachedSectionsKey = key;
   _cachedSections = result;
   return result;
@@ -917,5 +925,31 @@ export async function removeGroupedSender(accountId: string, email: string): Pro
   await db.execute(
     'DELETE FROM grouped_senders WHERE email = ? AND account_id = ?',
     [email, accountId]
+  );
+}
+
+// ── Grouped Domains ───────────────────────────────────────
+export async function getGroupedDomains(accountId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ email: string }>>(
+    "SELECT email FROM grouped_senders WHERE account_id = ? AND group_type = 'domain'",
+    [accountId]
+  );
+  return rows.map(r => r.email);
+}
+
+export async function addGroupedDomain(accountId: string, domain: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT OR REPLACE INTO grouped_senders (email, account_id, group_type) VALUES (?, ?, 'domain')",
+    [domain, accountId]
+  );
+}
+
+export async function removeGroupedDomain(accountId: string, domain: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "DELETE FROM grouped_senders WHERE email = ? AND account_id = ? AND group_type = 'domain'",
+    [domain, accountId]
   );
 }

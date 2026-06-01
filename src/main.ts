@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { getAllAccounts, removeAccount, saveAccount, startOAuth } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, loadAllSenderEmails, hasSyncedBefore, groupBySection, invalidateSectionCache } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, loadAllSenderEmails, hasSyncedBefore, groupBySection, invalidateSectionCache, getGroupedSenders, getGroupedDomains } from './gmail';
 
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
@@ -640,6 +640,10 @@ function renderLabelView(view: ViewName) {
 /** On boot: load active state.account state.threads, then kick off parallel sync for all state.accounts. */
 async function refreshAll() {
   if (!state.account) return;
+
+  // Reload grouped senders & domains for current account
+  state.groupedSenders = await getGroupedSenders(state.account.id);
+  state.groupedDomains = await getGroupedDomains(state.account.id);
 
   if (state.unifiedMode) {
     state.threads = await loadUnifiedThreads();

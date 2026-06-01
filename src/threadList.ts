@@ -154,6 +154,31 @@ export function senderGroupRow(senderEmail: string, senderName: string, threads:
   </div>`;
 }
 
+export function domainGroupRow(domain: string, threads: Thread[]): string {
+  const latest = threads[0];
+  const hasUnread = threads.some(t => t.isUnread);
+  const dot = `<span class="unread-dot${hasUnread ? ' filled' : ''}"></span>`;
+  const date = formatDate(latest.receivedAt);
+  // Show unique sender count for context
+  const uniqueSenders = new Set(threads.map(t => t.senderName || t.senderEmail)).size;
+  const countLabel = uniqueSenders > 1 ? `${threads.length} from ${uniqueSenders} senders` : `#${threads.length}`;
+
+  return `<div class="thread-row domain-group-row${hasUnread ? ' unread' : ''}" data-domain="${esc(domain)}">
+    ${dot}
+    <div class="avatar-wrap"><div class="domain-avatar">${icon.globe('16px')}</div></div>
+    <span class="thread-sender">${esc(domain)} <span class="sender-group-count">${countLabel}</span></span>
+    <div class="thread-mid">
+      <span class="thread-subject-line">${esc(latest.subject)}</span>
+      <span class="thread-preview-line">${esc(latest.snippet)}</span>
+    </div>
+    <span class="thread-date">${date}</span>
+    <div class="thread-actions">
+      <button class="btn-action btn-archive" title="Archive all">${icon.archive('16px')}</button>
+      <button class="btn-action btn-trash" title="Delete all">${icon.trash('16px')}</button>
+    </div>
+  </div>`;
+}
+
 function filterBackHeader(label: string): string {
   return `<div class="filter-back-header">
     <button class="btn-filter-back">${icon.arrowLeft('18px')}</button>
@@ -213,20 +238,24 @@ export function renderInbox(deps: ThreadListDeps) {
   const container = document.getElementById('inbox');
   if (!container) return;
 
-  // Filtered view mode (category or sender filter)
-  if (state.categoryFilter || state.senderFilter) {
+  // Filtered view mode (category, sender, or domain filter)
+  if (state.categoryFilter || state.senderFilter || state.domainFilter) {
     const filterLabel = state.categoryFilter
       ? (state.categoryFilter === 'newsletters' ? 'Newsletters' : 'Updates')
-      : state.senderFilter!;
+      : state.domainFilter
+        ? state.domainFilter
+        : state.senderFilter!;
     const filtered = state.threads.filter(t => {
       if (state.categoryFilter) return t.category === state.categoryFilter;
       if (state.senderFilter) return t.senderEmail === state.senderFilter;
+      if (state.domainFilter) return t.senderEmail.endsWith('@' + state.domainFilter);
       return true;
     });
     container.innerHTML = filterBackHeader(filterLabel) + filtered.map(t => threadRow(t, false)).join('');
     container.querySelector('.btn-filter-back')?.addEventListener('click', () => {
       state.categoryFilter = null;
       state.senderFilter = null;
+      state.domainFilter = null;
       deps.renderInbox();
     });
     wireThreadRows(container, filtered, false, deps);
@@ -279,7 +308,7 @@ export function renderInbox(deps: ThreadListDeps) {
     // Flat list — no sections while searching
     html = focusBanner + searchFiltered.map(t => threadRow(t, false)).join('');
   } else {
-    const sections = groupBySection(searchFiltered, state.groupedSenders);
+    const sections = groupBySection(searchFiltered, state.groupedSenders, state.groupedDomains);
 
     // Try incremental DOM patching first (skip if searching or focus banner changed)
     const allThreads = sections.flatMap(s => s.threads);
@@ -322,10 +351,21 @@ export function renderInbox(deps: ThreadListDeps) {
         }
       }
 
+      // Domain group rows
+      let domainGroupHtml = '';
+      if (s.domainGroups) {
+        for (const [domain, groupThreads] of Object.entries(s.domainGroups)) {
+          if (groupThreads.length > 0) {
+            domainGroupHtml += domainGroupRow(domain, groupThreads);
+          }
+        }
+      }
+
       return `
       <div class="section-header">${s.label}${badge}</div>
       ${categoryHtml}
       ${senderGroupHtml}
+      ${domainGroupHtml}
       ${s.threads.map(t => threadRow(t, false)).join('')}
     `;
     }).join('');
@@ -404,6 +444,18 @@ function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadListDeps) 
       if ((e.target as HTMLElement).closest('.thread-actions')) return;
       if (email) {
         state.senderFilter = email;
+        deps.renderInbox();
+      }
+    });
+  });
+
+  // Wire domain group rows
+  container.querySelectorAll<HTMLElement>('.domain-group-row').forEach(row => {
+    const domain = row.dataset.domain;
+    row.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.thread-actions')) return;
+      if (domain) {
+        state.domainFilter = domain;
         deps.renderInbox();
       }
     });

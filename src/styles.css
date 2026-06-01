@@ -2667,6 +2667,28 @@ body {
   vertical-align: middle;
 }
 
+/* ── Domain group rows ──────────────────────────────────── */
+.domain-group-row .sender-group-count {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  padding: 1px 5px;
+  border-radius: 8px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.domain-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+}
+
 /* ── Filter back header ─────────────────────────────────── */
 .filter-back-header {
   display: flex;
