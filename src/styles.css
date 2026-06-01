@@ -2482,25 +2482,13 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
+  margin-top: 4px;
 }
 
 .new-sender-count {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.new-sender-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.new-sender-divider {
-  height: 1px;
-  background: var(--border);
+  flex-shrink: 0;
 }
 
 .new-sender-actions {
@@ -2512,13 +2500,15 @@ body {
 .new-sender-block {
   border: none;
   border-radius: 20px;
-  padding: 6px 16px;
+  padding: 7px 24px;
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   font-size: 13px;
   font-weight: 500;
+  flex: 1;
   transition: background 120ms ease;
 }
 

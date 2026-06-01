@@ -66,7 +66,7 @@ function avatarColor(str: string): string {
 function renderCard(sender: NewSenderInfo): string {
   const initial = (sender.name[0] || '?').toUpperCase();
   const color = avatarColor(sender.email);
-  const countLabel = `<span class="new-sender-count">${icon.email('12px')} ${sender.count}</span>`;
+  const countExtra = sender.count > 1 ? ` <span class="new-sender-count">+${sender.count - 1}</span>` : '';
   return `
     <div class="new-sender-card" data-email="${esc(sender.email)}">
       <div class="new-sender-top">
@@ -74,11 +74,9 @@ function renderCard(sender: NewSenderInfo): string {
         <div class="new-sender-info">
           <div class="new-sender-name" title="${esc(sender.name)}">${esc(sender.name)}</div>
           <div class="new-sender-email" title="${esc(sender.email)}">${esc(sender.email)}</div>
+          <div class="new-sender-subject" title="${esc(sender.subject)}">${icon.email('12px')} ${esc(sender.subject)}${countExtra}</div>
         </div>
       </div>
-      <div class="new-sender-subject" title="${esc(sender.subject)}">${esc(sender.subject)}</div>
-      <div class="new-sender-meta">${countLabel}</div>
-      <div class="new-sender-divider"></div>
       <div class="new-sender-actions">
         <button class="new-sender-accept" title="Accept sender">${icon.thumbUp('14px')} Accept</button>
         <button class="new-sender-block" title="Block sender">${icon.thumbDown('14px')} Block</button>
