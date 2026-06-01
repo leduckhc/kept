@@ -16,6 +16,7 @@ import { openComposeNew as _openComposeNew } from './compose';
 import { openThread as _openThread } from './threadReader';
 import { renderCommandPalette as _renderCommandPalette } from './commandPalette';
 import { icon } from './icons';
+import { NOISE_PREFIXES } from './newSenders';
 import {
   registerKeyboardShortcuts as _registerKeyboardShortcuts,
   showCheatSheet,
@@ -357,7 +358,7 @@ function openSettings() {
     smartNotifToggle.setAttribute('aria-checked', String(smartOn));
     smartNotifToggle.classList.toggle('on', smartOn);
   }
-  if (smartNotifSub) smartNotifSub.textContent = smartOn ? 'Only notify for known senders' : 'Notify for all new state.threads';
+  if (smartNotifSub) smartNotifSub.textContent = smartOn ? 'Only notify for known senders' : 'Notify for all new threads';
 
   // Wire back button
   document.getElementById('settings-back')!.addEventListener('click', closeSettings, { once: true });
@@ -370,7 +371,7 @@ function openSettings() {
     smartNotifToggle.setAttribute('aria-checked', String(next));
     smartNotifToggle.classList.toggle('on', next);
     const subEl = document.getElementById('settings-smartnotif-sub');
-    if (subEl) subEl.textContent = next ? 'Only notify for known senders' : 'Notify for all new state.threads';
+    if (subEl) subEl.textContent = next ? 'Only notify for known senders' : 'Notify for all new threads';
   }, { once: true });
 
   // Wire dark mode toggle (once: true prevents listener accumulation on repeated open/close)
@@ -469,7 +470,7 @@ function openSettings() {
       }
       renderSettingsAccounts();
     } catch (e) {
-      setStatus(`Add state.account failed: ${e}`);
+      setStatus(`Add account failed: ${e}`);
     }
     setTimeout(() => setStatus(''), 5000);
   });
@@ -540,7 +541,7 @@ function renderSettingsAccounts() {
         }
       } catch (err) {
         console.error('Remove account error:', err);
-        setStatus('Failed to remove state.account');
+        setStatus('Failed to remove account');
       }
     });
   });
@@ -667,7 +668,7 @@ async function syncAndRender() {
       ));
       state.threads = await loadUnifiedThreads();
       renderInbox();
-      setStatus(`Synced — ${state.threads.length} state.threads`);
+      setStatus(`Synced — ${state.threads.length} threads`);
     } else {
       // Capture thread IDs known before sync to detect new arrivals
       const preSync = await loadThreads(state.account.id);
@@ -675,10 +676,10 @@ async function syncAndRender() {
       // Gate: only send notifications on second+ sync (historyId already set)
       const isSubsequentSync = await hasSyncedBefore(state.account.id);
 
-      await syncInbox(state.account, n => setStatus(`Syncing… ${n} state.threads`));
+      await syncInbox(state.account, n => setStatus(`Syncing… ${n} threads`));
       state.threads = await loadThreads(state.account.id);
       renderInbox();
-      setStatus(`Synced — ${state.threads.length} state.threads`);
+      setStatus(`Synced — ${state.threads.length} threads`);
 
       // Refresh known-senders after sync (SENT folder may have grown)
       refreshKnownSenders().catch(() => {});
