@@ -1922,17 +1922,13 @@ body {
 }
 
 .bulk-bar {
-  height: 36px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  margin-left: auto;
   font-size: 13px;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .bulk-count {

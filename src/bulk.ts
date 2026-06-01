@@ -55,15 +55,15 @@ export function updateBulkBar(
   bar.className = 'bulk-bar';
   bar.innerHTML = `
     <span class="bulk-count">${state.selectedIds.size} selected</span>
-    <button class="bulk-action-btn" id="bulk-archive">Archive All</button>
-    <button class="bulk-action-btn" id="bulk-trash">Trash All</button>
+    <button class="bulk-action-btn" id="bulk-archive">Archive</button>
+    <button class="bulk-action-btn" id="bulk-trash">Trash</button>
     <button class="bulk-action-btn" id="bulk-read">Mark Read</button>
     <button class="bulk-cancel-btn" id="bulk-cancel">${icon.close('16px')}</button>
   `;
 
-  const inbox = document.getElementById('inbox');
-  if (inbox) {
-    inbox.prepend(bar);
+  const toolbar = document.querySelector('.toolbar');
+  if (toolbar) {
+    toolbar.appendChild(bar);
   } else {
     document.body.appendChild(bar);
   }
