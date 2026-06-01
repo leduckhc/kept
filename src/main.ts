@@ -712,7 +712,7 @@ async function syncAndRender() {
         <div class="empty-state" style="color:var(--text-muted)">
           <div style="font-size:24px">⚠</div>
           <div>Sync failed</div>
-          <div style="font-size:12px; margin-top:4px; max-width:320px; word-break:break-all">${msg}</div>
+          <div style="font-size:12px; margin-top:4px; max-width:320px; word-break:break-all">${esc(msg)}</div>
         </div>`;
     }
   } finally {
