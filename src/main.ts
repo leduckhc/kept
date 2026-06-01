@@ -67,7 +67,6 @@ function toggleFocusMode() {
   renderInbox();
 }
 
-const NOISE_PREFIXES = ['noreply@', 'no-reply@', 'newsletter@', 'marketing@', 'donotreply@', 'notifications@', 'updates@', 'news@', 'info@', 'hello@', 'support@', 'mailer@'];
 
 function isKnownSender(email: string): boolean {
   const lower = email.toLowerCase();
