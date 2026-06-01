@@ -157,8 +157,22 @@ function openFullscreen(senders: NewSenderInfo[], actionDeps: ActionDeps, inboxC
 
   document.body.appendChild(overlay);
 
-  overlay.querySelector('.new-senders-back')!.addEventListener('click', () => {
+  const dismissOverlay = () => {
     overlay.remove();
+    document.removeEventListener('keydown', onEscape);
+  };
+
+  const onEscape = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      dismissOverlay();
+    }
+  };
+
+  document.addEventListener('keydown', onEscape);
+
+  overlay.querySelector('.new-senders-back')!.addEventListener('click', () => {
+    dismissOverlay();
   });
 
   wireCards(overlay, currentSenders, actionDeps, inboxContainer);
