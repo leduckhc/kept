@@ -375,6 +375,16 @@ export async function loadRepliedToSenders(accountId: string): Promise<string[]>
   return rows.map(r => r.sender_email);
 }
 
+/** Load all unique sender emails from inbox history (for baseline seeding) */
+export async function loadAllSenderEmails(accountId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ sender_email: string }>>(
+    `SELECT DISTINCT sender_email FROM threads WHERE account_id = ?`,
+    [accountId]
+  );
+  return rows.map(r => r.sender_email);
+}
+
 export async function loadSnoozedThreads(accountId: string): Promise<Thread[]> {
   const db = await getDb();
   const nowMs = Date.now();

@@ -11,12 +11,18 @@ export const NOISE_PREFIXES = [
   'notifications@', 'updates@', 'news@', 'info@', 'hello@', 'support@', 'mailer@',
 ];
 
-/** Determine if an email is from a new (unknown, non-noise) sender */
+/** How many days back a sender counts as "new" */
+const NEW_SENDER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Determine if an email is from a new (unknown, non-noise, recent) sender */
 export function isNewSender(email: string): boolean {
   const lower = email.toLowerCase();
   if (state.knownSenders.has(lower)) return false;
   if (NOISE_PREFIXES.some(p => lower.startsWith(p))) return false;
-  return true;
+  // Must have a thread received within the last 7 days
+  const cutoff = Date.now() - NEW_SENDER_WINDOW_MS;
+  const hasRecent = state.threads.some(t => t.senderEmail.toLowerCase() === lower && t.receivedAt >= cutoff);
+  return hasRecent;
 }
 
 interface NewSenderInfo {

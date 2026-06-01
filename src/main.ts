@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { getAllAccounts, removeAccount, saveAccount, startOAuth } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, hasSyncedBefore, groupBySection } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, loadAllSenderEmails, hasSyncedBefore, groupBySection } from './gmail';
 
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
@@ -55,10 +55,29 @@ const VIEWS: Array<{ name: ViewName; icon: string }> = [
 
 async function refreshKnownSenders() {
   if (!state.accounts.length) return;
+
+  const BASELINE_KEY = 'kept-known-senders-seeded';
+  const ACCEPTED_KEY = 'kept-accepted-senders';
+
+  // On first run, seed ALL existing senders as known baseline
+  if (!localStorage.getItem(BASELINE_KEY)) {
+    const allSenders = await Promise.all(
+      state.accounts.map(a => loadAllSenderEmails(a.id).catch(() => [] as string[]))
+    );
+    const baseline = allSenders.flat().map(e => e.toLowerCase());
+    // Store as accepted so they persist across sessions
+    const existing: string[] = JSON.parse(localStorage.getItem(ACCEPTED_KEY) || '[]');
+    const merged = [...new Set([...existing, ...baseline])];
+    localStorage.setItem(ACCEPTED_KEY, JSON.stringify(merged));
+    localStorage.setItem(BASELINE_KEY, '1');
+  }
+
+  // Load replied-to senders from DB
   const allEmails = await Promise.all(state.accounts.map(a => loadRepliedToSenders(a.id).catch(() => [] as string[])));
   state.knownSenders = new Set(allEmails.flat().map(e => e.toLowerCase()));
-  // Merge in accepted senders from localStorage
-  const accepted: string[] = JSON.parse(localStorage.getItem('kept-accepted-senders') || '[]');
+
+  // Merge in accepted/baseline senders from localStorage
+  const accepted: string[] = JSON.parse(localStorage.getItem(ACCEPTED_KEY) || '[]');
   for (const email of accepted) {
     state.knownSenders.add(email.toLowerCase());
   }
