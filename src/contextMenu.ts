@@ -2,6 +2,7 @@ import { type Thread, unmuteThread } from './gmail';
 import { setStatus } from './helpers';
 import { doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute, type ActionDeps } from './actions';
 import { openSnoozePicker } from './snooze';
+import { icon } from './icons';
 
 export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSnoozed: boolean, deps: ActionDeps) {
   document.getElementById('kept-ctx-menu')?.remove();
@@ -16,16 +17,16 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
   const items: Array<MenuItem | 'divider'> = [];
 
   if (!isSnoozed) {
-    items.push({ label: '🕐  Snooze…', action: () => { menu.remove(); openSnoozePicker(t, row); }, cls: 'ctx-menu-item--snooze' });
+    items.push({ label: `${icon.snooze('16px')}  Snooze…`, action: () => { menu.remove(); openSnoozePicker(t, row); }, cls: 'ctx-menu-item--snooze' });
   } else {
-    items.push({ label: '↑  Wake up now', action: () => { menu.remove(); doUnsnooze(t, row, deps); }, cls: 'ctx-menu-item--snooze' });
+    items.push({ label: `${icon.unsnooze('16px')}  Wake up now`, action: () => { menu.remove(); doUnsnooze(t, row, deps); }, cls: 'ctx-menu-item--snooze' });
   }
-  items.push({ label: `${t.isStarred ? '★  Unstar' : '☆  Star'}`, action: () => { menu.remove(); doToggleStar(t, row); } });
-  items.push({ label: '✉  Mark as unread', action: () => { menu.remove(); doMarkUnread(t, row); } });
+  items.push({ label: `${t.isStarred ? icon.star('16px') + '  Unstar' : icon.starOutline('16px') + '  Star'}`, action: () => { menu.remove(); doToggleStar(t, row); } });
+  items.push({ label: `${icon.emailOpen('16px')}  Mark as unread`, action: () => { menu.remove(); doMarkUnread(t, row); } });
   items.push('divider');
-  items.push({ label: '📂  Archive', action: () => { menu.remove(); doArchive(t, row, deps); } });
-  items.push({ label: '✓  Mark read', action: () => { menu.remove(); doMarkRead(t, row, deps); } });
-  items.push({ label: t.isMuted ? '🔔  Unmute thread' : '🔇  Mute thread', action: () => {
+  items.push({ label: `${icon.archive('16px')}  Archive`, action: () => { menu.remove(); doArchive(t, row, deps); } });
+  items.push({ label: `${icon.check('16px')}  Mark read`, action: () => { menu.remove(); doMarkRead(t, row, deps); } });
+  items.push({ label: t.isMuted ? `${icon.bell('16px')}  Unmute thread` : `${icon.mute('16px')}  Mute thread`, action: () => {
     menu.remove();
     if (t.isMuted) {
       unmuteThread(t).then(() => {
@@ -37,7 +38,7 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
     }
   }});
   items.push('divider');
-  items.push({ label: '🚫  Block sender', action: () => { menu.remove(); doBlock(t, row, deps); }, cls: 'ctx-menu-item--danger' });
+  items.push({ label: `${icon.close('16px')}  Block sender`, action: () => { menu.remove(); doBlock(t, row, deps); }, cls: 'ctx-menu-item--danger' });
 
   const actionItems = items.filter((x): x is MenuItem => x !== 'divider');
   menu.innerHTML = items.map((item) =>

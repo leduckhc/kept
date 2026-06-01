@@ -5,6 +5,7 @@ import { formatDate, toDatetimeLocal } from './helpers';
 import { archiveThread, unarchiveThread, trashThread, untrashThread, loadThreads } from './gmail';
 import { pushUndo } from './undoStack';
 import { showToast } from './toasts';
+import { icon } from './icons';
 
 export function toggleBulkMode(renderInbox: () => void) {
   state.bulkMode = !state.bulkMode;
@@ -57,7 +58,7 @@ export function updateBulkBar(
     <button class="bulk-action-btn" id="bulk-archive">Archive All</button>
     <button class="bulk-action-btn" id="bulk-trash">Trash All</button>
     <button class="bulk-action-btn" id="bulk-read">Mark Read</button>
-    <button class="bulk-cancel-btn" id="bulk-cancel">✕</button>
+    <button class="bulk-cancel-btn" id="bulk-cancel">${icon.close('16px')}</button>
   `;
 
   const inbox = document.getElementById('inbox');
@@ -141,7 +142,7 @@ export function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement, exit
   picker.innerHTML = `
     <div class="snooze-picker-header">
       <span>Snooze ${ids.length} threads until…</span>
-      <button class="btn-icon snooze-picker-close" aria-label="Close">✕</button>
+      <button class="btn-icon snooze-picker-close" aria-label="Close">${icon.close('16px')}</button>
     </div>
     <div class="snooze-presets">
       ${presets.map((p, i) => `

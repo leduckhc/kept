@@ -8,10 +8,11 @@ import { avatarHtml, ACCOUNT_BADGE_COLORS } from './avatar';
 import { getActiveReminderThreadIds } from './followupReminders';
 import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
+import { icon } from './icons';
 
-export function renderEmptyState(icon: string, title: string, subtitle: string): string {
+export function renderEmptyState(emptyIcon: string, title: string, subtitle: string): string {
   return `<div class="empty-state">
-    <div class="empty-state-icon">${icon}</div>
+    <div class="empty-state-icon">${emptyIcon}</div>
     <div class="empty-state-title">${title}</div>
     <div class="empty-state-subtitle">${subtitle}</div>
   </div>`;
@@ -43,7 +44,7 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
     : '';
 
   const clockIndicator = t.snoozedUntil
-    ? `<span class="snooze-badge" title="Snoozed until ${formatDate(t.snoozedUntil)}">🕐 ${formatDate(t.snoozedUntil)}</span>`
+    ? `<span class="snooze-badge" title="Snoozed until ${formatDate(t.snoozedUntil)}">${icon.clock('14px')} ${formatDate(t.snoozedUntil)}</span>`
     : '';
 
   const hasReminder = getActiveReminderThreadIds().has(t.id);
@@ -52,14 +53,14 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
 
   const actionsHtml = isSnoozed
     ? `<div class="thread-actions">
-         <button class="btn-action btn-unsnooze" title="Wake up now">↑</button>
-         <button class="btn-action btn-archive" title="Archive">⬇</button>
+         <button class="btn-action btn-unsnooze" title="Wake up now">${icon.unsnooze('16px')}</button>
+         <button class="btn-action btn-archive" title="Archive">${icon.archive('16px')}</button>
        </div>`
     : `<div class="thread-actions">
-         <button class="btn-action btn-archive" title="Archive">📥</button>
-         <button class="btn-action btn-trash" title="Trash">🗑</button>
-         <button class="btn-action btn-snooze" title="Snooze">⏰</button>
-         <button class="btn-action ${starClass}" title="${t.isStarred ? 'Unstar' : 'Star'}">${t.isStarred ? '★' : '☆'}</button>
+         <button class="btn-action btn-archive" title="Archive">${icon.archive('16px')}</button>
+         <button class="btn-action btn-trash" title="Trash">${icon.trash('16px')}</button>
+         <button class="btn-action btn-snooze" title="Snooze">${icon.snooze('16px')}</button>
+         <button class="btn-action ${starClass}" title="${t.isStarred ? 'Unstar' : 'Star'}">${t.isStarred ? icon.star('16px') : icon.starOutline('16px')}</button>
        </div>`;
 
   const bulkCheckbox = state.bulkMode
@@ -222,7 +223,7 @@ export async function renderSnoozedView(deps: ThreadListDeps) {
   const snoozed = await loadSnoozedThreads(state.account.id);
 
   if (snoozed.length === 0) {
-    container.innerHTML = renderEmptyState('💤', 'No snoozed threads', 'Snooze an email to see it later.');
+    container.innerHTML = renderEmptyState(icon.snooze(), 'No snoozed threads', 'Snooze an email to see it later.');
     return;
   }
 
@@ -241,7 +242,7 @@ export async function renderStarredView(deps: ThreadListDeps) {
   const starred = await loadStarredThreads(state.account.id);
 
   if (starred.length === 0) {
-    container.innerHTML = renderEmptyState('⭐', 'No starred messages', 'Star a thread with s or ☆ to save it here.');
+    container.innerHTML = renderEmptyState(icon.star(), 'No starred messages', 'Star a thread with s or the star button to save it here.');
     return;
   }
 
@@ -260,7 +261,7 @@ export async function renderScheduledView() {
   const scheduled: ScheduledEmail[] = loadScheduled();
 
   if (scheduled.length === 0) {
-    container.innerHTML = renderEmptyState('⏰', 'No scheduled sends', 'Emails you schedule will appear here.');
+    container.innerHTML = renderEmptyState(icon.calendar(), 'No scheduled sends', 'Emails you schedule will appear here.');
     return;
   }
 
@@ -274,10 +275,10 @@ export async function renderScheduledView() {
             <span class="thread-date">${formatDate(e.scheduledAt)}</span>
           </div>
           <div class="thread-subject-line">${esc(e.subject)}</div>
-          <div class="thread-preview-line">⏰ Sends ${formatDate(e.scheduledAt)}</div>
+          <div class="thread-preview-line">${icon.calendar('14px')} Sends ${formatDate(e.scheduledAt)}</div>
         </div>
         <div class="thread-actions">
-          <button class="btn-action danger btn-cancel-sched" title="Cancel scheduled send">✕</button>
+          <button class="btn-action danger btn-cancel-sched" title="Cancel scheduled send">${icon.close('16px')}</button>
         </div>
       </div>`).join('')}
   `;
@@ -336,10 +337,10 @@ export function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed
 
     const archiveBg = document.createElement('div');
     archiveBg.className = 'swipe-bg swipe-bg-archive';
-    archiveBg.innerHTML = '<span class="swipe-bg-icon">📥</span>';
+    archiveBg.innerHTML = `<span class="swipe-bg-icon">${icon.archive('28px')}</span>`;
     const snoozeBg = document.createElement('div');
     snoozeBg.className = 'swipe-bg swipe-bg-snooze';
-    snoozeBg.innerHTML = '<span class="swipe-bg-icon">🕐</span>';
+    snoozeBg.innerHTML = `<span class="swipe-bg-icon">${icon.snooze('28px')}</span>`;
     row.prepend(archiveBg, snoozeBg);
 
     let touchStartX = 0;
