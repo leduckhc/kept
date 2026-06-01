@@ -26,9 +26,17 @@ describe('sanitizeEmailHtml — XSS vectors stripped', () => {
     expect(out).not.toMatch(/href=["']javascript:/i);
   });
 
-  it('strips inline style attributes (CSS-based attacks)', () => {
-    const out = sanitizeEmailHtml('<div style="background:url(evil.php)">text</div>');
-    expect(out).not.toContain('style=');
+  it('strips dangerous CSS properties from inline styles', () => {
+    const out = sanitizeEmailHtml('<div style="position:fixed;top:0;z-index:9999">text</div>');
+    expect(out).not.toContain('position');
+    expect(out).not.toContain('z-index');
+    expect(out).toContain('text');
+  });
+
+  it('preserves safe inline styles (color, background, font)', () => {
+    const out = sanitizeEmailHtml('<div style="color:red;font-size:14px">text</div>');
+    expect(out).toContain('style=');
+    expect(out).toContain('color:red');
     expect(out).toContain('text');
   });
 
@@ -109,8 +117,8 @@ describe('sanitizeEmailHtml — normal HTML preserved', () => {
     expect(out).toContain('<blockquote>Quoted text</blockquote>');
   });
 
-  it('returns empty string for HTML exceeding 200 KB cap', () => {
-    const huge = '<p>' + 'x'.repeat(200_001) + '</p>';
+  it('returns empty string for HTML exceeding 500 KB cap', () => {
+    const huge = '<p>' + 'x'.repeat(500_001) + '</p>';
     const out = sanitizeEmailHtml(huge);
     expect(out).toBe('');
   });

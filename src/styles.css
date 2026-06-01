@@ -580,18 +580,65 @@ body {
   font-size: 14px;
   line-height: 1.7;
   color: var(--text);
-  display: flex;
-  flex-direction: column;
 }
 .reader-body > * {
   max-width: 100%;
 }
 .reader-body iframe {
-  width: 100%;
-  border: none;
-  flex: 1;
-  min-height: calc(100vh - 160px);
-  display: block;
+  display: none; /* deprecated — using direct rendering now */
+}
+
+/* ── Email body direct rendering (scoped styles) ─────────── */
+.email-body-rendered {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  padding: 16px;
+}
+.email-body-rendered a {
+  color: var(--accent, #5B4EDB);
+}
+.email-body-rendered img {
+  max-width: 100%;
+  height: auto;
+}
+.email-body-rendered img[data-original-src] {
+  background: var(--surface, #1a1a1a);
+  min-height: 20px;
+  border-radius: 4px;
+}
+.email-body-rendered blockquote {
+  border-left: 3px solid var(--border, #333);
+  margin: 8px 0;
+  padding-left: 12px;
+  color: var(--text-muted, #999);
+}
+.email-body-rendered table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+.email-body-rendered td,
+.email-body-rendered th {
+  padding: 4px 8px;
+  border: 1px solid var(--border, #2a2a2a);
+}
+.email-body-rendered pre {
+  background: var(--surface, #141414);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+.email-body-rendered h1,
+.email-body-rendered h2,
+.email-body-rendered h3 {
+  color: var(--text);
+  margin: 16px 0 8px;
+}
+.email-body-rendered p {
+  margin: 0 0 8px;
 }
 .reader-footer {
   position: sticky;
@@ -627,9 +674,6 @@ body {
   border-bottom: 1px solid var(--border);
   padding: 0;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
 }
 .thread-message:last-child { border-bottom: none; }
 .thread-message-header {
@@ -692,9 +736,6 @@ body {
 .thread-message-collapsed .thread-message-content { display: none; }
 .thread-message-content {
   padding: 0 16px 16px 16px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
 }
 .thread-msg-meta {
   display: none;

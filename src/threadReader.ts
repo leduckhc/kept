@@ -185,81 +185,42 @@ export async function openThread(
       const sanitized = rawHtml ? sanitizeEmailHtml(rawHtml) : '';
 
       if (sanitized) {
-        const iframe = document.createElement('iframe');
-        iframe.setAttribute('sandbox', 'allow-scripts allow-popups-to-escape-sandbox');
-        iframe.style.cssText = 'width:100%; border:none; overflow:visible; flex:1; min-height:calc(100vh - 160px);';
-        const isDark = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const bodyColor = isDark ? '#e8e8e8' : '#222';
-        const bodyBg = isDark ? '#0a0a0a' : '#ffffff';
-        const linkColor = isDark ? '#8b7cf7' : '#5B4EDB';
-        const imgBg = isDark ? '#1a1a1a' : '#f0f0f0';
-        const quoteBorder = isDark ? '#333' : '#ddd';
-        const quoteColor = isDark ? '#999' : '#666';
-        const tableBorder = isDark ? '#2a2a2a' : '#eee';
-        const preBg = isDark ? '#141414' : '#f5f5f5';
+        // Direct sanitized HTML rendering (no iframe) — like Gmail, Outlook Web, Apple Mail
+        const emailBodyDiv = document.createElement('div');
+        emailBodyDiv.className = 'email-body-rendered';
+        emailBodyDiv.innerHTML = sanitized;
 
-        iframe.srcdoc = `<!DOCTYPE html><html style="height:100%"><head><meta charset="utf-8"><style>
-          html,body{height:100%;min-height:100%;}
-          body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;color:${bodyColor};background:${bodyBg};margin:0;padding:16px;line-height:1.5;word-break:break-word;}
-          a{color:${linkColor};}
-          img[data-original-src]{background:${imgBg};min-height:20px;border-radius:4px;}
-          blockquote{border-left:3px solid ${quoteBorder};margin:8px 0;padding-left:12px;color:${quoteColor};}
-          table{border-collapse:collapse;max-width:100%;}
-          td,th{padding:4px 8px;border:1px solid ${tableBorder};}
-          pre{background:${preBg};padding:8px;border-radius:4px;overflow-x:auto;}
-          img{max-width:100%;height:auto;}
-        </style></head><body>${sanitized}<script>
-document.querySelectorAll("blockquote,.gmail_quote,.gmail_extra").forEach(function(el){
-  el.style.display="none";
-  var btn=document.createElement("button");
-  btn.textContent="··· Show trimmed content";
-  btn.style.cssText="background:none;border:none;color:#7c6ce0;cursor:pointer;font-size:12px;padding:4px 0;";
-  btn.addEventListener("click",function(){el.style.display="block";btn.remove();});
-  el.parentNode.insertBefore(btn,el);
-});
-<\/script></body></html>`;
+        // Hide quoted/trimmed content (gmail_quote, blockquotes after main content)
+        emailBodyDiv.querySelectorAll('blockquote, .gmail_quote, .gmail_extra').forEach(el => {
+          (el as HTMLElement).classList.add('quoted-hidden');
+          const btn = document.createElement('button');
+          btn.className = 'btn-show-trimmed';
+          btn.textContent = '··· Show trimmed content';
+          btn.addEventListener('click', () => {
+            (el as HTMLElement).classList.remove('quoted-hidden');
+            btn.remove();
+          });
+          el.parentNode?.insertBefore(btn, el);
+        });
 
-        const resizeIframe = () => {
-          const doc = iframe.contentDocument;
-          if (!doc) return;
-          // Use the max of scrollHeight and offsetHeight for full content height
-          const body = doc.body;
-          const html = doc.documentElement;
-          const h = Math.max(
-            body?.scrollHeight ?? 0,
-            body?.offsetHeight ?? 0,
-            html?.scrollHeight ?? 0,
-            html?.offsetHeight ?? 0
-          );
-          if (h > 0) iframe.style.height = h + 'px';
-        };
-
+        // Load images button
         const loadImgBtn = document.createElement('button');
         loadImgBtn.className = 'btn-load-images';
         loadImgBtn.textContent = '🖼 Load images';
         loadImgBtn.style.cssText = 'display:none; margin-top:6px; font-size:12px;';
         loadImgBtn.addEventListener('click', () => {
-          const imgs = iframe.contentDocument?.querySelectorAll<HTMLImageElement>('img[data-original-src]');
-          imgs?.forEach(img => {
+          emailBodyDiv.querySelectorAll<HTMLImageElement>('img[data-original-src]').forEach(img => {
             const orig = img.getAttribute('data-original-src')!;
             img.setAttribute('src', orig);
             img.removeAttribute('data-original-src');
           });
           loadImgBtn.remove();
-          resizeIframe();
-        });
-        iframe.addEventListener('load', () => {
-          resizeIframe();
-          // Re-check height as content settles (images, fonts, lazy rendering)
-          setTimeout(resizeIframe, 100);
-          setTimeout(resizeIframe, 300);
-          setTimeout(resizeIframe, 1000);
-          setTimeout(resizeIframe, 3000);
-          const blocked = iframe.contentDocument?.querySelectorAll('img[data-original-src]');
-          if (blocked && blocked.length > 0) loadImgBtn.style.display = 'inline-block';
         });
 
-        contentWrap.appendChild(iframe);
+        const blockedImgs = emailBodyDiv.querySelectorAll('img[data-original-src]');
+        if (blockedImgs.length > 0) loadImgBtn.style.display = 'inline-block';
+
+        contentWrap.appendChild(emailBodyDiv);
         contentWrap.appendChild(loadImgBtn);
       } else {
         const plainText: string = m.body ?? '';
