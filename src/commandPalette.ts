@@ -1,7 +1,7 @@
 import { type Thread, loadThreads } from './gmail';
 import { type Account } from './auth';
 import { type ViewName, state } from './state';
-import { esc } from './helpers';
+import { esc, toggleLayoutMode } from './helpers';
 import { icon } from './icons';
 
 export interface CommandPaletteDeps {
@@ -88,9 +88,12 @@ export function renderCommandPalette(deps: CommandPaletteDeps) {
     { id: 'go-sent',       label: 'Go to Sent',        icon: icon.send('16px'), group: 'Navigate', action: () => deps.switchView('Sent') },
     { id: 'go-drafts',     label: 'Go to Drafts',      icon: icon.pencil('16px'), group: 'Navigate', action: () => deps.switchView('Drafts') },
     { id: 'go-starred',    label: 'Go to Starred',     icon: icon.star('16px'), group: 'Navigate', action: () => deps.switchView('Starred') },
-    { id: 'toggle-theme',  label: 'Toggle Dark Mode',  icon: icon.theme('16px'), group: 'App', action: () => {
+        { id: 'toggle-theme',  label: 'Toggle Dark Mode',  icon: icon.theme('16px'), group: 'App', action: () => {
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
       deps.applyTheme(isDark ? 'light' : 'dark');
+    }},
+    { id: 'toggle-layout', label: 'Toggle Layout (2-pane / 3-pane)', icon: icon.email('16px'), group: 'App', action: () => {
+      toggleLayoutMode();
     }},
     { id: 'show-shortcuts',label: 'Show Shortcuts',    shortcut: '?', icon: icon.keyboard('16px'), group: 'App', action: () => deps.showCheatSheet() },
     { id: 'sign-out',      label: 'Sign Out',          icon: icon.logout('16px'), group: 'App', action: async () => {

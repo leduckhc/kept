@@ -216,6 +216,13 @@ body {
 .reader-pane-empty-icon { font-size: 32px; opacity: 0.3; }
 .reader-pane-empty-text { font-size: 13px; }
 
+/* ── 2-pane layout: hide reader pane, inbox expands ────── */
+#app-shell.layout-2pane .reader-pane { display: none; }
+#app-shell.layout-2pane .inbox { flex: 1; width: auto; max-width: none; }
+#app-shell.layout-2pane .resize-handle { display: none; }
+#app-shell.layout-2pane.reader-open .inbox { display: none; }
+#app-shell.layout-2pane.reader-open .reader-pane { display: flex; flex: 1; }
+
 /* reader-fullpage inside the pane: fills it, not position:absolute */
 .reader-pane .reader-fullpage {
   position: static;

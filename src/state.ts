@@ -2,6 +2,7 @@ import type { Account } from './auth';
 import type { Thread } from './gmail';
 import { setActiveAccountId } from './accountContext';
 
+export type LayoutMode = '3-pane' | '2-pane';
 export type InboxTab = 'all' | 'important' | 'other';
 export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled';
 
@@ -23,6 +24,7 @@ export const state = {
   selectedIds: new Set<string>(),
   gPending: false,
   gTimeout: null as ReturnType<typeof setTimeout> | null,
+  layoutMode: (localStorage.getItem('kept.layoutMode') || '3-pane') as LayoutMode,
 };
 
 export function setAccount(a: Account) {

@@ -6,7 +6,7 @@ import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, hasSyncedBef
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
 import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
-import { applyTheme, setStatus, esc } from './helpers';
+import { applyTheme, applyLayoutMode, toggleLayoutMode, setStatus, esc } from './helpers';
 import { type ViewName, state, setAccount } from './state';
 import { ACCOUNT_BADGE_COLORS } from './avatar';
 import { openSnoozePicker, setupSnoozeResurface } from './snooze';
@@ -86,6 +86,7 @@ function applyFocusFilter(list: Thread[]): { visible: Thread[]; hiddenCount: num
 // ── Boot ──────────────────────────────────────────────────
 async function boot() {
   applyTheme(localStorage.getItem('theme') ?? 'light');
+  applyLayoutMode(state.layoutMode);
 
   // Show auth screen immediately — don't block on DB
   showAuth();
@@ -188,7 +189,7 @@ function showAuth() {
 // ── App shell ─────────────────────────────────────────────
 function showShell() {
   document.getElementById('app')!.innerHTML = `
-    <div id="app-shell">
+    <div id="app-shell" class="${state.layoutMode === '2-pane' ? 'layout-2pane' : ''}">
       <div class="toolbar">
         <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">${icon.pencil('18px')}</button>
         ${VIEWS.map(v => `<button class="tab-btn mobile-tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
@@ -236,6 +237,15 @@ function showShell() {
                 <div class="settings-row-sub" id="settings-darkmode-sub">Switch to dark theme</div>
               </div>
               <button class="settings-toggle" id="settings-darkmode-toggle" role="switch" aria-checked="false">
+                <span class="settings-toggle-thumb"></span>
+              </button>
+            </div>
+            <div class="settings-row" id="settings-layout-row">
+              <div class="settings-row-text">
+                <div class="settings-row-label">2-pane layout</div>
+                <div class="settings-row-sub" id="settings-layout-sub">Hide email preview pane</div>
+              </div>
+              <button class="settings-toggle" id="settings-layout-toggle" role="switch" aria-checked="false">
                 <span class="settings-toggle-thumb"></span>
               </button>
             </div>
@@ -367,6 +377,26 @@ function openSettings() {
     toggle.classList.toggle('on', !nowDark);
     const subEl = document.getElementById('settings-darkmode-sub');
     if (subEl) subEl.textContent = !nowDark ? 'Currently using dark theme' : 'Switch to dark theme';
+  }, { once: true });
+
+  // Sync layout toggle state
+  const layoutToggle = document.getElementById('settings-layout-toggle') as HTMLButtonElement;
+  const layoutSub = document.getElementById('settings-layout-sub');
+  const is2Pane = state.layoutMode === '2-pane';
+  if (layoutToggle) {
+    layoutToggle.setAttribute('aria-checked', String(is2Pane));
+    layoutToggle.classList.toggle('on', is2Pane);
+  }
+  if (layoutSub) layoutSub.textContent = is2Pane ? 'Showing list only, click to read' : 'Hide email preview pane';
+
+  // Wire layout toggle
+  layoutToggle?.addEventListener('click', () => {
+    toggleLayoutMode();
+    const nowIs2 = state.layoutMode === '2-pane';
+    layoutToggle.setAttribute('aria-checked', String(nowIs2));
+    layoutToggle.classList.toggle('on', nowIs2);
+    const subEl = document.getElementById('settings-layout-sub');
+    if (subEl) subEl.textContent = nowIs2 ? 'Showing list only, click to read' : 'Hide email preview pane';
   }, { once: true });
 
   // Wire sign out (once: true prevents duplicate confirm dialogs on repeated open/close)

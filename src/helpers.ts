@@ -1,7 +1,24 @@
+import { state, type LayoutMode } from './state';
+
 export function applyTheme(theme: string) {
   document.documentElement.setAttribute('data-theme', theme);
   document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
   localStorage.setItem('theme', theme);
+}
+
+export function applyLayoutMode(mode: LayoutMode) {
+  state.layoutMode = mode;
+  localStorage.setItem('kept.layoutMode', mode);
+  const shell = document.getElementById('app-shell');
+  if (shell) {
+    shell.classList.toggle('layout-2pane', mode === '2-pane');
+  }
+}
+
+export function toggleLayoutMode() {
+  const next: LayoutMode = state.layoutMode === '3-pane' ? '2-pane' : '3-pane';
+  applyLayoutMode(next);
+  // If switching to 2-pane while reader is open, keep it; if to 3-pane, keep it too
 }
 
 export function setStatus(msg: string) {

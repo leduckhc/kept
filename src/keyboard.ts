@@ -78,7 +78,7 @@ export function showCheatSheet() {
         <div class="kb-category">
           <div class="kb-cat-title">Navigation</div>
           <table class="kb-table">
-            <tr><td><kbd class="kb-key">j</kbd> <kbd class="kb-key">k</kbd></td><td>Navigate threads</td></tr>
+            <tr><td><kbd class="kb-key">j</kbd> <kbd class="kb-key">k</kbd></td><td>Navigate threads (+ switch in reader)</td></tr>
             <tr><td><kbd class="kb-key">o</kbd> <kbd class="kb-key">Enter</kbd></td><td>Open thread</td></tr>
             <tr><td><kbd class="kb-key">Escape</kbd></td><td>Back to list</td></tr>
             <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">i</kbd></td><td>Go to Inbox</td></tr>
@@ -198,16 +198,28 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
 
     switch (e.key) {
       case 'j':
-      case 'ArrowDown':
+      case 'ArrowDown': {
         e.preventDefault();
+        const readerOpen = !!document.querySelector('.reader-fullpage');
         moveSelection(1);
+        if (readerOpen && state.selectedThreadId) {
+          const t = state.threads.find(x => x.id === state.selectedThreadId);
+          if (t) deps.openThread(t);
+        }
         break;
+      }
 
       case 'k':
-      case 'ArrowUp':
+      case 'ArrowUp': {
         e.preventDefault();
+        const readerOpen = !!document.querySelector('.reader-fullpage');
         moveSelection(-1);
+        if (readerOpen && state.selectedThreadId) {
+          const t = state.threads.find(x => x.id === state.selectedThreadId);
+          if (t) deps.openThread(t);
+        }
         break;
+      }
 
       case 'Enter':
       case 'o': {
