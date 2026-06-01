@@ -541,6 +541,9 @@ body {
   top: 50%;
   transform: translateY(-50%);
   z-index: 2;
+  background: var(--bg);
+  padding: 2px 4px;
+  border-radius: 6px;
 }
 .thread-row:hover .thread-actions { display: flex; }
 .thread-row:hover .thread-date { display: none; }
