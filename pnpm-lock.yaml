@@ -11,12 +11,6 @@ importers:
       '@fabianlars/tauri-plugin-oauth':
         specifier: ^2.0.0
         version: 2.0.0
-      '@iconify/icons-mdi':
-        specifier: ^1.2.48
-        version: 1.2.48
-      '@iconify/icons-mdi-light':
-        specifier: ^1.2.5
-        version: 1.2.5
       '@tauri-apps/api':
         specifier: ^2.11.0
         version: 2.11.0
@@ -38,6 +32,9 @@ importers:
       dompurify:
         specifier: ^3.4.7
         version: 3.4.7
+      lucide-static:
+        specifier: ^1.17.0
+        version: 1.17.0
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2
@@ -221,15 +218,6 @@ packages:
 
   '@fabianlars/tauri-plugin-oauth@2.0.0':
     resolution: {integrity: sha512-I1s08ZXrsFuYfNWusAcpLyiCfr5TCvaBrRuKfTG+XQrcaqnAcwjdWH0U5J9QWuMDLwCUMnVxdobtMJzPR8raxQ==}
-
-  '@iconify/icons-mdi-light@1.2.5':
-    resolution: {integrity: sha512-8v8af/vCChwjhc+grZJnsPecT4Al01ydxnH8EeOSXfKE9CfrL4QSXAg6q+15hRIfciSIcBV1ZaAm9I31Frgo8w==}
-
-  '@iconify/icons-mdi@1.2.48':
-    resolution: {integrity: sha512-1Tiq+iX1d2MzrdDiw45Tc9HuhNgg8H4vvaKNV+kF+jmr/kPG+YyeLMyXUKp4bwv+gheIAgNpZPjuqAPRkmMieA==}
-
-  '@iconify/types@2.0.0':
-    resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
@@ -578,6 +566,9 @@ packages:
     resolution: {integrity: sha512-GZZ9mKe8r646NUAf/zemnGbjYh4Bt8/MqASJY+pSm5ZDtc3YQox+4gsLI7yi1hba6o+eCsGxpHn5+iEVn31/FQ==}
     engines: {node: '>=20.0.0'}
 
+  lucide-static@1.17.0:
+    resolution: {integrity: sha512-VORJmPqi4DZ5lf4/n2qqcIz1nTKGFReS83DJINcK5nXY7z+4P3G6CW/7SXpzlGllEI0vHKFH24eSM+aMFaK5zw==}
+
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -847,16 +838,6 @@ snapshots:
   '@fabianlars/tauri-plugin-oauth@2.0.0':
     dependencies:
       '@tauri-apps/api': 2.11.0
-
-  '@iconify/icons-mdi-light@1.2.5':
-    dependencies:
-      '@iconify/types': 2.0.0
-
-  '@iconify/icons-mdi@1.2.48':
-    dependencies:
-      '@iconify/types': 2.0.0
-
-  '@iconify/types@2.0.0': {}
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -1155,6 +1136,8 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  lucide-static@1.17.0: {}
 
   magic-string@0.30.21:
     dependencies:

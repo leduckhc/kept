@@ -13,15 +13,14 @@
   },
   "dependencies": {
     "@fabianlars/tauri-plugin-oauth": "^2.0.0",
-    "@iconify/icons-mdi": "^1.2.48",
-    "@iconify/icons-mdi-light": "^1.2.5",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-sql": "2.4.0",
-    "dompurify": "^3.4.7"
+    "dompurify": "^3.4.7",
+    "lucide-static": "^1.17.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
