@@ -2,6 +2,7 @@ import { type Thread, fetchMessageBody, sendEmail, markRead, archiveThread, bloc
 import { getAccountById } from './auth';
 import { state, setAccount } from './state';
 import { sanitizeEmailHtml } from './sanitize';
+import { getDb } from './db';
 import { showToast, showUndoToast } from './toasts';
 import { esc, formatDate } from './helpers';
 
@@ -182,7 +183,16 @@ export async function openThread(
       contentWrap.appendChild(metaDiv);
 
       const rawHtml: string | null = (m as any).htmlBody ?? null;
-      const sanitized = rawHtml ? sanitizeEmailHtml(rawHtml) : '';
+      const cachedSanitized: string | null = (m as any).sanitizedHtml ?? null;
+      const sanitized = cachedSanitized || (rawHtml ? sanitizeEmailHtml(rawHtml) : '');
+
+      // Cache sanitized HTML back to DB (fire and forget)
+      if (sanitized && !cachedSanitized && (m as any).gmailMessageId) {
+        getDb().then(db => db.execute(
+          'UPDATE messages SET sanitized_html = ? WHERE gmail_message_id = ?',
+          [sanitized, (m as any).gmailMessageId]
+        )).catch(() => {});
+      }
 
       if (sanitized) {
         // Direct sanitized HTML rendering (no iframe) — like Gmail, Outlook Web, Apple Mail

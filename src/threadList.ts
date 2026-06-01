@@ -11,6 +11,9 @@ import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dism
 import { icon } from './icons';
 import { renderNewSendersSection } from './newSenders';
 
+const MAX_INITIAL_RENDER = 100;
+const LAZY_CHUNK_SIZE = 50;
+
 export function renderEmptyState(emptyIcon: string, title: string, subtitle: string): string {
   return `<div class="empty-state">
     <div class="empty-state-icon">${emptyIcon}</div>
@@ -85,6 +88,54 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
     </div>`;
 }
 
+/** Attempt in-place DOM patching for minor changes. Returns true if patched, false to fall back to full rebuild. */
+function patchThreadList(container: HTMLElement, newThreads: Thread[]): boolean {
+  const existingRows = new Map<string, HTMLElement>();
+  container.querySelectorAll<HTMLElement>('.thread-row[data-id]').forEach(el => {
+    existingRows.set(el.getAttribute('data-id')!, el);
+  });
+
+  if (existingRows.size === 0) return false;
+
+  const newIds = new Set(newThreads.map(t => t.id));
+  const addedCount = newThreads.filter(t => !existingRows.has(t.id)).length;
+  const removedCount = [...existingRows.keys()].filter(id => !newIds.has(id)).length;
+
+  // If more than 50% rows changed, full rebuild is cheaper
+  if (addedCount + removedCount > Math.max(newThreads.length * 0.5, 10)) {
+    return false;
+  }
+
+  // Remove stale rows
+  for (const [id, row] of existingRows) {
+    if (!newIds.has(id)) {
+      row.remove();
+    }
+  }
+
+  // Update existing rows' state
+  for (const t of newThreads) {
+    const existing = existingRows.get(t.id);
+    if (existing) {
+      const wasUnread = existing.classList.contains('unread');
+      const wasStarred = existing.classList.contains('is-starred');
+      if (wasUnread !== t.isUnread) existing.classList.toggle('unread', t.isUnread);
+      if (wasStarred !== t.isStarred) existing.classList.toggle('is-starred', t.isStarred);
+      existing.classList.toggle('is-selected', t.id === state.selectedThreadId);
+      // Update snippet if changed
+      const snippetEl = existing.querySelector('.thread-preview-line');
+      if (snippetEl && !t.snoozedUntil) {
+        const newSnippet = esc(t.snippet);
+        if (snippetEl.textContent !== t.snippet) {
+          snippetEl.innerHTML = newSnippet;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
 export function renderInbox(deps: ThreadListDeps) {
   const container = document.getElementById('inbox');
   if (!container) return;
@@ -136,6 +187,22 @@ export function renderInbox(deps: ThreadListDeps) {
     html = focusBanner + searchFiltered.map(t => threadRow(t, false)).join('');
   } else {
     const sections = groupBySection(searchFiltered);
+
+    // Try incremental DOM patching first (skip if searching or focus banner changed)
+    const allThreads = sections.flatMap(s => s.threads);
+    if (container.children.length > 0 && !focusBanner && patchThreadList(container, allThreads)) {
+      // Patched in place — just update selection highlight
+      container.querySelectorAll<HTMLElement>('.thread-row.is-selected').forEach(el => el.classList.remove('is-selected'));
+      if (state.selectedThreadId) {
+        const row = container.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
+        if (row) row.classList.add('is-selected');
+      }
+      if (state.bulkMode) deps.updateBulkBar();
+      if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
+      renderNewSendersSection(container, deps.getActionDeps(), deps.openThread);
+      return;
+    }
+
     html = focusBanner + sections.map(s => {
       const unread = s.threads.filter(t => t.isUnread).length;
       const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
@@ -146,7 +213,34 @@ export function renderInbox(deps: ThreadListDeps) {
     }).join('');
   }
 
-  container.innerHTML = html;
+  // Capped initial render for large lists (Fix 3)
+  const rowHtmls = html.split(/(?=<div class="thread-row)/);
+  if (rowHtmls.length > MAX_INITIAL_RENDER) {
+    container.innerHTML = rowHtmls.slice(0, MAX_INITIAL_RENDER).join('');
+    let loaded = MAX_INITIAL_RENDER;
+    const loadMore = () => {
+      if (loaded >= rowHtmls.length) return;
+      const chunk = rowHtmls.slice(loaded, loaded + LAZY_CHUNK_SIZE).join('');
+      container.insertAdjacentHTML('beforeend', chunk);
+      const newRows = container.querySelectorAll<HTMLElement>('.thread-row[data-id]:not([data-wired])');
+      wireNewRows(newRows, searchFiltered, false, deps);
+      loaded += LAZY_CHUNK_SIZE;
+      if (loaded < rowHtmls.length) {
+        if ('requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(loadMore);
+        } else {
+          setTimeout(loadMore, 16);
+        }
+      }
+    };
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(loadMore);
+    } else {
+      setTimeout(loadMore, 16);
+    }
+  } else {
+    container.innerHTML = html;
+  }
   wireThreadRows(container, searchFiltered, false, deps);
   if (state.bulkMode) deps.updateBulkBar();
   if (state.selectedThreadId) {
@@ -379,5 +473,47 @@ export function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed
 
       swipeActive = false;
     }, { passive: true });
+  });
+}
+
+/** Wire event listeners on a NodeList of newly added rows (for lazy-loaded chunks). */
+function wireNewRows(rows: NodeListOf<HTMLElement>, list: Thread[], isSnoozed: boolean, deps: ThreadListDeps) {
+  rows.forEach(row => {
+    const id = row.dataset.id!;
+    if (row.hasAttribute('data-wired')) return;
+    row.setAttribute('data-wired', '1');
+    const t = list.find(x => x.id === id);
+    if (!t) return;
+    row.querySelector<HTMLElement>('.avatar-wrap')?.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!state.bulkMode) state.bulkMode = true;
+      deps.toggleBulkSelection(t.id);
+      if (state.selectedIds.size === 0) {
+        state.bulkMode = false;
+        deps.removeBulkBar();
+        deps.renderInbox();
+      }
+    });
+    row.addEventListener('click', e => {
+      if ((e.target as HTMLElement).closest('.thread-actions')) return;
+      if ((e.target as HTMLElement).closest('.avatar-wrap')) return;
+      if (state.bulkMode) {
+        deps.toggleBulkSelection(t.id);
+        return;
+      }
+      deps.openThread(t);
+    });
+    row.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, t, row, isSnoozed, deps.getActionDeps());
+    });
+    row.querySelector('.btn-star')?.addEventListener('click', e => { e.stopPropagation(); doToggleStar(t, row); });
+    row.querySelector('.btn-archive')?.addEventListener('click', e => { e.stopPropagation(); doArchive(t, row, deps.getActionDeps()); });
+    row.querySelector('.btn-trash')?.addEventListener('click', e => { e.stopPropagation(); doTrash(t, row, deps.getActionDeps()); });
+    if (isSnoozed) {
+      row.querySelector('.btn-unsnooze')?.addEventListener('click', e => { e.stopPropagation(); doUnsnooze(t, row, deps.getActionDeps()); });
+    } else {
+      row.querySelector('.btn-snooze')?.addEventListener('click', e => { e.stopPropagation(); openSnoozePicker(t, row); });
+    }
   });
 }

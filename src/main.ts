@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { getAllAccounts, removeAccount, saveAccount, startOAuth } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, loadAllSenderEmails, hasSyncedBefore, groupBySection } from './gmail';
+import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, loadAllSenderEmails, hasSyncedBefore, groupBySection, invalidateSectionCache } from './gmail';
 
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
@@ -12,11 +12,17 @@ import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { initSwipeGestures } from './swipe';
 import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute } from './actions';
 import { openInlineReply } from './inlineReply';
-import { openComposeNew as _openComposeNew } from './compose';
-import { openThread as _openThread } from './threadReader';
-import { renderCommandPalette as _renderCommandPalette } from './commandPalette';
 import { icon } from './icons';
 import { NOISE_PREFIXES } from './newSenders';
+
+// Lazy-loaded modules (not needed on startup — code splitting)
+let _composeModule: typeof import('./compose') | null = null;
+let _threadReaderModule: typeof import('./threadReader') | null = null;
+let _commandPaletteModule: typeof import('./commandPalette') | null = null;
+
+async function getCompose() { return _composeModule ??= await import('./compose'); }
+async function getThreadReader() { return _threadReaderModule ??= await import('./threadReader'); }
+async function getCommandPalette() { return _commandPaletteModule ??= await import('./commandPalette'); }
 import {
   registerKeyboardShortcuts as _registerKeyboardShortcuts,
   showCheatSheet,
@@ -656,6 +662,7 @@ async function refreshAll() {
   setStatus('Syncing…');
   await Promise.all(syncPromises);
   if (btn) btn.style.opacity = '';
+  invalidateSectionCache();
   if (state.unifiedMode) {
     state.threads = await loadUnifiedThreads();
   } else {
@@ -804,15 +811,15 @@ function renderSnoozedView() { return _renderSnoozedView(getThreadListDeps()); }
 function renderStarredView() { return _renderStarredView(getThreadListDeps()); }
 
 function openComposeNew(prefillSubject = '') {
-  return _openComposeNew(prefillSubject, openSnippetPicker, showFollowupPrompt);
+  return getCompose().then(m => m.openComposeNew(prefillSubject, openSnippetPicker, showFollowupPrompt));
 }
 
 function openThread(t: Thread) {
-  return _openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt);
+  return getThreadReader().then(m => m.openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt));
 }
 
 function renderCommandPalette() {
-  _renderCommandPalette({
+  getCommandPalette().then(m => m.renderCommandPalette({
     openThread,
     openThreadWithReply,
     openComposeNew,
@@ -829,7 +836,7 @@ function renderCommandPalette() {
     applyTheme,
     syncAndRender,
     openSettings,
-  });
+  }));
 }
 
 // ── Snippet picker ────────────────────────────────────────

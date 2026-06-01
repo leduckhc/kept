@@ -87,7 +87,7 @@ async function syncFull(account: Account, accountId: string, label: string = 'IN
     if (!data.threads) break;
 
     const threadIds = data.threads.map((t: { id: string }) => t.id);
-    const BATCH = 10;
+    const BATCH = 50;
     for (let i = 0; i < threadIds.length; i += BATCH) {
       await Promise.all(threadIds.slice(i, i + BATCH).map((id: string) => syncThread(account, id, accountId, label)));
       total += Math.min(BATCH, threadIds.length - i);
@@ -141,11 +141,10 @@ async function trySyncIncremental(
       for (const m of h.messages ?? []) changedThreadIds.add(m.threadId);
     }
 
-    let n = 0;
-    for (const threadId of changedThreadIds) {
-      await syncThread(account, threadId, account.id);
-      n++;
-      onProgress?.(n);
+    const ids = Array.from(changedThreadIds);
+    for (let i = 0; i < ids.length; i += 50) {
+      await Promise.all(ids.slice(i, i + 50).map(id => syncThread(account, id, account.id)));
+      onProgress?.(Math.min(i + 50, ids.length));
     }
 
     // Store the new historyId returned by the history API
@@ -583,12 +582,19 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
 
 // ── Fetch full message body ───────────────────────────────
 export async function fetchMessageBody(account: Account, gmailThreadId: string): Promise<{
-  messages: Array<{ from: string; body: string; htmlBody: string | null; receivedAt: number; gmailMessageId: string }>;
+  messages: Array<{ from: string; body: string; htmlBody: string | null; sanitizedHtml: string | null; receivedAt: number; gmailMessageId: string }>;
   lastMessageId: string | null;
 }> {
   const a = await ensureFreshToken(account);
-  // schema needs gmail_thread_id + position columns on messages table for caching
-  // (cache read/write skipped until migration adds those columns)
+  const db = await getDb();
+
+  // Check for cached sanitized HTML for messages in this thread
+  const cachedRows = await db.select<Array<{ gmail_message_id: string; sanitized_html: string | null }>>(
+    'SELECT gmail_message_id, sanitized_html FROM messages WHERE thread_id = ? AND sanitized_html IS NOT NULL',
+    [gmailThreadId]
+  ).catch(() => [] as Array<{ gmail_message_id: string; sanitized_html: string | null }>);
+  const sanitizedCache = new Map(cachedRows.map(r => [r.gmail_message_id, r.sanitized_html]));
+
   const data = await gmailGet(a, `/users/me/threads/${gmailThreadId}?format=full`) as {
     messages: Array<{
       id: string;
@@ -603,7 +609,8 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
       const getH = (n: string) => msg.payload.headers.find(h => h.name.toLowerCase() === n)?.value ?? '';
       const body = extractTextBody(msg.payload);
       const htmlBody = extractHtmlBody(msg.payload);
-      return { from: getH('from'), body, htmlBody, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
+      const sanitizedHtml = sanitizedCache.get(msg.id) ?? null;
+      return { from: getH('from'), body, htmlBody, sanitizedHtml, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
     }),
     lastMessageId,
   };
@@ -744,7 +751,19 @@ function parseFrom(raw: string): { name: string; email: string } {
   return { name: '', email: raw.trim() };
 }
 
+let _cachedSections: Array<{ label: string; threads: Thread[] }> | null = null;
+let _cachedSectionsKey = '';
+
+export function invalidateSectionCache() {
+  _cachedSections = null;
+  _cachedSectionsKey = '';
+}
+
 export function groupBySection(threads: Thread[]): Array<{ label: string; threads: Thread[] }> {
+  // Fast cache key: length + boundary timestamps + boundary unread states
+  const key = `${threads.length}:${threads[0]?.receivedAt}:${threads[threads.length-1]?.receivedAt}:${threads[0]?.isUnread}:${threads[threads.length-1]?.isUnread}:${threads[0]?.isStarred}:${threads[threads.length-1]?.isStarred}`;
+  if (_cachedSectionsKey === key && _cachedSections) return _cachedSections;
+
   const now = new Date();
   const today = startOf('day', now);
   const yesterday = new Date(today.getTime() - 86_400_000);
@@ -802,7 +821,10 @@ export function groupBySection(threads: Thread[]): Array<{ label: string; thread
     sections.push({ label: String(y), threads: byYear[y] });
   }
 
-  return sections.filter(s => s.threads.length > 0);
+  const result = sections.filter(s => s.threads.length > 0);
+  _cachedSectionsKey = key;
+  _cachedSections = result;
+  return result;
 }
 
 function startOf(unit: 'day' | 'week' | 'month', d: Date): Date {
