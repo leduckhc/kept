@@ -2,6 +2,31 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --bg: #ffffff;
+  --surface: #f8f8f8;
+  --surface-hover: #f0f0f0;
+  --surface-active: #e8e8f4;
+  --border: #e2e2e2;
+  --text: #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted: #888888;
+  --text-disabled: #bbbbbb;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --danger: #dc2626;
+  --radius: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --lavender-tint: #f5f3ff;
+  --lavender-accent: #7c3aed;
+  --lavender-text: #6d28d9;
+  --lavender-border: #e9e5f5;
+  --unread-dot: var(--accent);
+  --danger-bg: rgba(220,38,38,0.08);
+  --hover: rgba(0,0,0,0.04);
+  color-scheme: light dark;
+}
+
+[data-theme="dark"] {
   --bg: #0a0a0a;
   --surface: #111111;
   --surface-hover: #1a1a1a;
@@ -14,8 +39,6 @@
   --accent: #4a9eff;
   --accent-hover: #6bb3ff;
   --danger: #ff4444;
-  --radius: 6px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --lavender-tint: #1a1830;
   --lavender-accent: #7c6fd4;
   --lavender-text: #a89de0;
@@ -25,13 +48,9 @@
   --hover: rgba(255,255,255,0.05);
 }
 
-[data-theme="dark"] {
-  /* root is already dark — no overrides needed */
-}
-
 /* ── Custom scrollbar ───────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 body {
@@ -103,8 +122,8 @@ body {
 .sidebar {
   width: 48px;
   flex-shrink: 0;
-  background: #0a0a0a;
-  border-right: 1px solid #1e1e1e;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -147,8 +166,8 @@ body {
 .inbox {
   width: 320px;
   flex-shrink: 0;
-  background: #0f0f0f;
-  border-right: 1px solid #1e1e1e;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
   overflow-y: auto;
   padding: 0;
 }
@@ -663,34 +682,42 @@ body {
   margin: 0 0 8px;
 }
 /* Force readable text — override inline styles from senders that assume light backgrounds */
-/* Also force backgrounds to transparent so white sections don't clash with dark theme */
-.email-body-rendered *:not(a):not(img) {
+/* Dark mode: force light text + transparent bg so content is visible against #0a0a0a */
+/* Light mode: let emails render naturally (most are designed for white backgrounds) */
+[data-theme="dark"] .email-body-rendered *:not(a):not(img) {
   color: var(--text) !important;
   background-color: transparent !important;
   background: transparent !important;
 }
-.email-body-rendered a {
-  color: var(--accent, #5B4EDB) !important;
+[data-theme="dark"] .email-body-rendered a {
+  color: var(--accent, #4a9eff) !important;
   background-color: transparent !important;
 }
+/* Light mode: minimal override — just cap max contrast and ensure readability */
+:root .email-body-rendered *:not(a):not(img) {
+  /* Let email inline styles show naturally on white background */
+}
+:root .email-body-rendered a {
+  color: var(--accent, #2563eb);
+}
 /* Preserve CTA button backgrounds (explicit colored bg, not white) */
-.email-body-rendered a[style*="background:"],
-.email-body-rendered a[style*="background-color:"],
-.email-body-rendered td[bgcolor]:not([bgcolor="#FFFFFF"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]) a {
+[data-theme="dark"] .email-body-rendered a[style*="background:"],
+[data-theme="dark"] .email-body-rendered a[style*="background-color:"],
+[data-theme="dark"] .email-body-rendered td[bgcolor]:not([bgcolor="#FFFFFF"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]) a {
   background: revert !important;
   background-color: revert !important;
   color: #ffffff !important;
 }
-.email-body-rendered td[bgcolor]:not([bgcolor="#FFFFFF"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]) {
+[data-theme="dark"] .email-body-rendered td[bgcolor]:not([bgcolor="#FFFFFF"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]) {
   background-color: revert !important;
   background: revert !important;
 }
 /* Preserve button text colors where senders set explicit white-on-color */
-.email-body-rendered a[style*="color: #fff"],
-.email-body-rendered a[style*="color:#fff"],
-.email-body-rendered a[style*="color: #ffffff"],
-.email-body-rendered a[style*="color:#ffffff"],
-.email-body-rendered a[style*="color: rgb(255"] {
+[data-theme="dark"] .email-body-rendered a[style*="color: #fff"],
+[data-theme="dark"] .email-body-rendered a[style*="color:#fff"],
+[data-theme="dark"] .email-body-rendered a[style*="color: #ffffff"],
+[data-theme="dark"] .email-body-rendered a[style*="color:#ffffff"],
+[data-theme="dark"] .email-body-rendered a[style*="color: rgb(255"] {
   color: #ffffff !important;
 }
 .reader-footer {
@@ -1620,16 +1647,16 @@ body {
   overflow-y: auto;
 }
 .kb-modal {
-  background: #1a1a1a;
-  border: 1px solid #2e2e2e;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 28px 32px 24px;
   max-width: 860px;
   width: 100%;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-  color: #e8e8e8;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+  color: var(--text);
 }
 .kb-modal-header {
   font-size: 13px;
@@ -1668,12 +1695,12 @@ body {
 }
 .kb-key {
   display: inline-block;
-  font-family: ui-monospace, 'SF Mono', monospace;
+    font-family: ui-monospace, 'SF Mono', monospace;
   font-size: 11px;
   font-style: normal;
-  color: #e8e8e8;
-  background: #2a2a2a;
-  border: 1px solid #3e3e3e;
+  color: var(--text);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
   border-bottom-width: 2px;
   border-radius: 5px;
   padding: 1px 6px;
