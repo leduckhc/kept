@@ -164,7 +164,7 @@ body {
 
 /* ── Thread list (inbox) ────────────────────────────────── */
 .inbox {
-  width: 320px;
+  width: 440px;
   flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);

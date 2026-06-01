@@ -2,8 +2,8 @@
 // Persists width to localStorage so it survives navigation and restarts.
 
 const STORAGE_KEY = 'kept.threadListWidth';
-const MIN_WIDTH = 220;
-const MAX_WIDTH = 600;
+const MIN_WIDTH = 440;
+const MAX_WIDTH = 900;
 
 export function initResizeHandle(): void {
   const inbox = document.querySelector<HTMLElement>('.inbox');
