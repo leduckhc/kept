@@ -2597,49 +2597,33 @@ body {
 }
 
 /* ── Category rows (Newsletters / Updates) ──────────────── */
-.category-row {
+/* ── Category rows (Newsletters/Updates — uses thread-row grid) ── */
+.category-row .category-senders {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+  overflow: hidden;
+}
+
+.category-row .thread-mid {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  min-height: 48px;
-  border-bottom: 1px solid var(--border);
-  position: relative;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.category-row:hover { background: var(--surface-hover); }
-
-.category-label {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.category-count {
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--surface-hover);
-  padding: 2px 6px;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-
-.category-senders {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
+}
+
+.category-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
 }
 
 .sender-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: 12px;
   background: var(--surface-hover);
   font-size: 12px;
@@ -2650,26 +2634,25 @@ body {
 }
 .sender-badge:hover { background: var(--border); }
 
+.sender-badge-avatar {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .sender-count {
   font-size: 10px;
   color: var(--text-muted);
 }
 
-.category-actions {
+/* Category actions use the same thread-actions show-on-hover */
+.category-row .category-actions {
   display: none;
-  align-items: center;
-  gap: 4px;
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 2;
-  background: var(--bg);
-  padding: 2px 4px;
-  border-radius: 6px;
 }
 .category-row:hover .category-actions { display: flex; }
-.category-row:hover .category-senders { opacity: 0.5; }
+.category-row:hover .thread-mid { opacity: 0.5; }
+.category-row .thread-date { display: none; }
 
 /* ── Sender group rows ──────────────────────────────────── */
 .sender-group-row .sender-group-count {

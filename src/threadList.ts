@@ -90,29 +90,38 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
 
 export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]): string {
   const label = type === 'newsletters' ? 'Newsletters' : 'Updates';
-  const count = threads.length;
+  const categoryIcon = type === 'newsletters'
+    ? `<div class="avatar category-avatar" style="background:#7c3aed" data-initial="📰"></div>`
+    : `<div class="avatar category-avatar" style="background:#0891b2" data-initial="🔔"></div>`;
 
   // Group by sender for badges
-  const bySender: Record<string, { name: string; count: number }> = {};
+  const bySender: Record<string, { name: string; email: string; count: number }> = {};
   for (const t of threads) {
     const key = t.senderEmail;
     if (!bySender[key]) {
       const name = t.senderName || t.senderEmail.split('@')[1] || t.senderEmail;
-      bySender[key] = { name, count: 0 };
+      bySender[key] = { name, email: t.senderEmail, count: 0 };
     }
     bySender[key].count++;
   }
   const sortedSenders = Object.entries(bySender).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
 
-  const badges = sortedSenders.map(([email, info]) =>
-    `<span class="sender-badge" data-sender-email="${esc(email)}">${esc(info.name)} <span class="sender-count">#${info.count}</span></span>`
-  ).join('');
+  const badges = sortedSenders.map(([email, info]) => {
+    const domain = email.split('@')[1] ?? '';
+    const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
+    const miniAvatar = faviconUrl
+      ? `<img class="sender-badge-avatar" src="${faviconUrl}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : '';
+    return `<span class="sender-badge" data-sender-email="${esc(email)}">${miniAvatar}${esc(info.name)} <span class="sender-count">#${info.count}</span></span>`;
+  }).join('');
 
-  return `<div class="category-row" data-category="${type}">
-    <span class="category-label">${label}</span>
-    <span class="category-count">#${count}</span>
-    <div class="category-senders">${badges}</div>
-    <div class="category-actions">
+  return `<div class="thread-row category-row" data-category="${type}">
+    <div class="avatar-wrap">${categoryIcon}</div>
+    <span class="thread-sender">${label}</span>
+    <div class="thread-mid">
+      <div class="category-senders">${badges}</div>
+    </div>
+    <div class="thread-actions category-actions">
       <button class="btn-action btn-archive-all" title="Archive all">${icon.archive('16px')}</button>
       <button class="btn-action btn-trash-all" title="Delete all">${icon.trash('16px')}</button>
       <button class="btn-action btn-read-all" title="Mark all read">${icon.markRead('16px')}</button>
