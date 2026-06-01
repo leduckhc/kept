@@ -145,7 +145,7 @@ function checkOverdueReminders() {
     markReminderNotified(r.id);
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = `⏰ No reply from <b>${r.sentTo}</b> — "${r.subject}" <a class="toast-dismiss">dismiss</a>`;
+    toast.innerHTML = `⏰ No reply from <b>${esc(r.sentTo)}</b> — "${esc(r.subject)}" <a class="toast-dismiss">dismiss</a>`;
     toast.querySelector('.toast-dismiss')?.addEventListener('click', () => { dismissReminder(r.id); toast.remove(); });
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 8000);
