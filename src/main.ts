@@ -16,6 +16,7 @@ import { openInlineReply } from './inlineReply';
 import { openComposeNew as _openComposeNew } from './compose';
 import { openThread as _openThread } from './threadReader';
 import { renderCommandPalette as _renderCommandPalette } from './commandPalette';
+import { icon } from './icons';
 import {
   registerKeyboardShortcuts as _registerKeyboardShortcuts,
   showCheatSheet,
@@ -44,12 +45,12 @@ import { showSearchBar } from './search';
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
-  { name: 'Inbox',     icon: '✉' },
-  { name: 'Snoozed',   icon: '🕐' },
-  { name: 'Sent',      icon: '↗' },
-  { name: 'Drafts',    icon: '✏' },
-  { name: 'Starred',   icon: '★' },
-  { name: 'Scheduled', icon: '⏰' },
+  { name: 'Inbox',     icon: icon.email('18px') },
+  { name: 'Snoozed',   icon: icon.clock('18px') },
+  { name: 'Sent',      icon: icon.send('18px') },
+  { name: 'Drafts',    icon: icon.pencil('18px') },
+  { name: 'Starred',   icon: icon.star('18px') },
+  { name: 'Scheduled', icon: icon.calendar('18px') },
 ];
 
 async function refreshKnownSenders() {
@@ -188,7 +189,7 @@ function showShell() {
   document.getElementById('app')!.innerHTML = `
     <div id="app-shell">
       <div class="toolbar">
-        <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">✏</button>
+        <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">${icon.pencil('18px')}</button>
         ${VIEWS.map(v => `<button class="tab-btn mobile-tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
@@ -202,7 +203,7 @@ function showShell() {
         <div class="inbox" id="inbox"></div>
         <div class="reader-pane" id="reader-pane">
           <div class="reader-pane-empty">
-            <div class="reader-pane-empty-icon">✉</div>
+            <div class="reader-pane-empty-icon">${icon.email()}</div>
             <div class="reader-pane-empty-text">Select a conversation</div>
           </div>
         </div>

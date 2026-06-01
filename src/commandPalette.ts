@@ -2,6 +2,7 @@ import { type Thread, loadThreads } from './gmail';
 import { type Account } from './auth';
 import { type ViewName, state } from './state';
 import { esc } from './helpers';
+import { icon } from './icons';
 
 export interface CommandPaletteDeps {
   openThread: (t: Thread) => void;
@@ -46,53 +47,53 @@ export function renderCommandPalette(deps: CommandPaletteDeps) {
   }
 
   const commands: PaletteCommand[] = [
-    { id: 'archive',       label: 'Archive',           shortcut: 'e', icon: '▾', group: 'Thread', action: () => {
+    { id: 'archive',       label: 'Archive',           shortcut: 'e', icon: icon.archive('16px'), group: 'Thread', action: () => {
       if (!state.selectedThreadId || !state.account) return;
       const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) deps.doArchive(t, row);
     }},
-    { id: 'star',          label: 'Star / Unstar',     shortcut: 's', icon: '★', group: 'Thread', action: () => {
+    { id: 'star',          label: 'Star / Unstar',     shortcut: 's', icon: icon.star('16px'), group: 'Thread', action: () => {
       if (!state.selectedThreadId || !state.account) return;
       const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) deps.doToggleStar(t, row);
     }},
-    { id: 'mute',          label: 'Mute',              shortcut: 'm', icon: '🔇', group: 'Thread', action: () => {
+    { id: 'mute',          label: 'Mute',              shortcut: 'm', icon: icon.mute('16px'), group: 'Thread', action: () => {
       if (!state.selectedThreadId || !state.account) return;
       const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) deps.doMute(t, row);
     }},
-    { id: 'mark-unread',   label: 'Mark as Unread',    shortcut: 'Shift+U', icon: '●', group: 'Thread', action: () => {
+    { id: 'mark-unread',   label: 'Mark as Unread',    shortcut: 'Shift+U', icon: icon.emailOpen('16px'), group: 'Thread', action: () => {
       if (!state.selectedThreadId || !state.account) return;
       const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) deps.doMarkUnread(t, row);
     }},
-    { id: 'snooze',        label: 'Snooze',            shortcut: 'h', icon: '🕐', group: 'Thread', action: () => {
+    { id: 'snooze',        label: 'Snooze',            shortcut: 'h', icon: icon.snooze('16px'), group: 'Thread', action: () => {
       if (!state.selectedThreadId || !state.account) return;
       const t = state.threads.find(x => x.id === state.selectedThreadId); if (!t) return;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
       if (row) deps.openSnoozePicker(t, row);
     }},
-    { id: 'reply',         label: 'Reply',             shortcut: 'r', icon: '↩', group: 'Thread', action: () => {
+    { id: 'reply',         label: 'Reply',             shortcut: 'r', icon: icon.reply('16px'), group: 'Thread', action: () => {
       if (!state.selectedThreadId) return;
       const t = state.threads.find(x => x.id === state.selectedThreadId);
       if (t) deps.openThreadWithReply(t);
     }},
-    { id: 'compose',       label: 'Compose New',       shortcut: 'c', icon: '✏', group: 'Compose', action: () => deps.openComposeNew() },
-    { id: 'go-inbox',      label: 'Go to Inbox',       icon: '✉', group: 'Navigate', action: () => deps.switchView('Inbox') },
-    { id: 'go-snoozed',    label: 'Go to Snoozed',     icon: '🕐', group: 'Navigate', action: () => deps.switchView('Snoozed') },
-    { id: 'go-sent',       label: 'Go to Sent',        icon: '↗', group: 'Navigate', action: () => deps.switchView('Sent') },
-    { id: 'go-drafts',     label: 'Go to Drafts',      icon: '✏', group: 'Navigate', action: () => deps.switchView('Drafts') },
-    { id: 'go-starred',    label: 'Go to Starred',     icon: '★', group: 'Navigate', action: () => deps.switchView('Starred') },
-    { id: 'toggle-theme',  label: 'Toggle Dark Mode',  icon: '◐', group: 'App', action: () => {
+    { id: 'compose',       label: 'Compose New',       shortcut: 'c', icon: icon.pencil('16px'), group: 'Compose', action: () => deps.openComposeNew() },
+    { id: 'go-inbox',      label: 'Go to Inbox',       icon: icon.email('16px'), group: 'Navigate', action: () => deps.switchView('Inbox') },
+    { id: 'go-snoozed',    label: 'Go to Snoozed',     icon: icon.clock('16px'), group: 'Navigate', action: () => deps.switchView('Snoozed') },
+    { id: 'go-sent',       label: 'Go to Sent',        icon: icon.send('16px'), group: 'Navigate', action: () => deps.switchView('Sent') },
+    { id: 'go-drafts',     label: 'Go to Drafts',      icon: icon.pencil('16px'), group: 'Navigate', action: () => deps.switchView('Drafts') },
+    { id: 'go-starred',    label: 'Go to Starred',     icon: icon.star('16px'), group: 'Navigate', action: () => deps.switchView('Starred') },
+    { id: 'toggle-theme',  label: 'Toggle Dark Mode',  icon: icon.theme('16px'), group: 'App', action: () => {
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
       deps.applyTheme(isDark ? 'light' : 'dark');
     }},
-    { id: 'show-shortcuts',label: 'Show Shortcuts',    shortcut: '?', icon: '⌘', group: 'App', action: () => deps.showCheatSheet() },
-    { id: 'sign-out',      label: 'Sign Out',          icon: '→', group: 'App', action: async () => {
+    { id: 'show-shortcuts',label: 'Show Shortcuts',    shortcut: '?', icon: icon.keyboard('16px'), group: 'App', action: () => deps.showCheatSheet() },
+    { id: 'sign-out',      label: 'Sign Out',          icon: icon.logout('16px'), group: 'App', action: async () => {
       if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
       for (const a of state.accounts) await deps.removeAccount(a).catch(() => {});
       deps.clearActiveAccountId();
@@ -116,7 +117,7 @@ export function renderCommandPalette(deps: CommandPaletteDeps) {
 
   const inputWrap = document.createElement('div');
   inputWrap.className = 'cmd-palette-input-wrap';
-  inputWrap.innerHTML = '<span class="cmd-palette-icon">⌘</span>';
+  inputWrap.innerHTML = `<span class="cmd-palette-icon">${icon.keyboard('16px')}</span>`;
 
   const input = document.createElement('input');
   input.id = 'cmd-palette-input';

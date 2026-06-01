@@ -3,6 +3,7 @@ import { state } from './state';
 import { showToast } from './toasts';
 import { avatarColor } from './avatar';
 import { esc } from './helpers';
+import { icon } from './icons';
 
 export async function openComposeNew(
   prefillSubject = '',
@@ -26,7 +27,7 @@ export async function openComposeNew(
     <div class="compose-new-panel" id="${panelId}" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
       <div class="compose-new-header">
         <span class="compose-new-title" id="${titleId}">New Message</span>
-        <button class="btn-icon compose-new-close-btn" id="compose-new-close" aria-label="Close">✕</button>
+        <button class="btn-icon compose-new-close-btn" id="compose-new-close" aria-label="Close">${icon.close('16px')}</button>
       </div>
       <div class="compose-new-body-area">
         <div class="compose-field-group" style="position:relative">

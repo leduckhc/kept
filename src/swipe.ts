@@ -2,6 +2,7 @@ import { type Thread } from "./gmail";
 import { type ActionDeps, doArchive } from "./actions";
 import { doSnooze } from "./snooze";
 import { state } from "./state";
+import { icon } from "./icons";
 
 const SWIPE_THRESHOLD = 80;
 
@@ -94,10 +95,10 @@ function ensureSwipeBgs(row: HTMLElement): void {
   if (row.querySelector(".swipe-bg")) return;
   const archive = document.createElement("div");
   archive.className = "swipe-bg swipe-bg-archive";
-  archive.innerHTML = `<span class="swipe-bg-icon">📥</span>`;
+  archive.innerHTML = `<span class="swipe-bg-icon">${icon.archive('28px')}</span>`;
   const snooze = document.createElement("div");
   snooze.className = "swipe-bg swipe-bg-snooze";
-  snooze.innerHTML = `<span class="swipe-bg-icon">⏰</span>`;
+  snooze.innerHTML = `<span class="swipe-bg-icon">${icon.snooze('28px')}</span>`;
   row.prepend(snooze);
   row.prepend(archive);
 }
