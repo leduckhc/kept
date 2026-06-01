@@ -1,0 +1,48 @@
+# e2e/pilot/scenarios/compose-panel.toml
+# Verify the compose panel opens and functions
+
+[[steps]]
+action = "press"
+key = "c"
+
+[[steps]]
+action = "wait"
+selector = ".compose-panel"
+timeout = 2000
+
+[[steps]]
+action = "assert"
+type = "visible"
+selector = ".compose-panel"
+
+[[steps]]
+action = "assert"
+type = "visible"
+selector = ".compose-to"
+
+[[steps]]
+action = "fill"
+ref = ".compose-to"
+value = "test@example.com"
+
+[[steps]]
+action = "fill"
+ref = ".compose-subject"
+value = "E2E Test Subject"
+
+[[steps]]
+action = "assert"
+type = "value"
+selector = ".compose-subject"
+expected = "E2E Test Subject"
+
+# Close the panel
+[[steps]]
+action = "press"
+key = "Escape"
+
+[[steps]]
+action = "wait"
+selector = ".compose-panel"
+state = "hidden"
+timeout = 1000

@@ -1,0 +1,27 @@
+# e2e/pilot/scenarios/inbox-loads.toml
+# Verify the inbox renders with threads after app start
+
+[[steps]]
+action = "wait"
+selector = ".thread-list"
+timeout = 5000
+
+[[steps]]
+action = "snapshot"
+interactive = true
+
+[[steps]]
+action = "assert"
+type = "visible"
+selector = ".sidebar"
+
+[[steps]]
+action = "assert"
+type = "visible"
+selector = ".thread-list"
+
+[[steps]]
+action = "assert"
+type = "count"
+selector = ".thread-item"
+min = 1

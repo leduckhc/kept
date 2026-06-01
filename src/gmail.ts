@@ -1,5 +1,18 @@
 // gmail.ts — Gmail API sync, send, reply, block, snooze
-import { fetch } from '@tauri-apps/plugin-http';
+
+// Tauri HTTP plugin loaded lazily (crashes in browser E2E mode)
+let _fetch: typeof globalThis.fetch | null = null;
+async function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  if (!_fetch) {
+    if ('__TAURI_INTERNALS__' in window) {
+      const mod = await import('@tauri-apps/plugin-http');
+      _fetch = mod.fetch as unknown as typeof globalThis.fetch;
+    } else {
+      _fetch = globalThis.fetch.bind(globalThis);
+    }
+  }
+  return _fetch(input, init);
+}
 import { type Account, ensureFreshToken } from './auth';
 import { getDb } from './db';
 

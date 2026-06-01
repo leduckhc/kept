@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
+import path from "path";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+const isE2E = process.env.VITE_E2E === '1';
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -26,5 +27,10 @@ export default defineConfig(async () => ({
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+    // Serve e2e/ as static assets in E2E browser mode (provides kept.db)
+    ...(isE2E ? { fs: { allow: [path.resolve(__dirname, 'e2e')] } } : {}),
   },
+
+  // In E2E mode, serve the e2e directory so sql.js can fetch kept.db
+  ...(isE2E ? { publicDir: 'e2e' } : {}),
 }));

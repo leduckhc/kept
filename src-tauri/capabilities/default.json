@@ -16,6 +16,7 @@
     "keyring:allow-get-password",
     "keyring:allow-set-password",
     "keyring:allow-delete-password",
+    "pilot:default",
     {
       "identifier": "http:default",
       "allow": [

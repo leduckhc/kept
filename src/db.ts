@@ -1,11 +1,26 @@
-// db.ts — SQLite schema + migrations via @tauri-apps/plugin-sql
-import Database from '@tauri-apps/plugin-sql';
+// db.ts — SQLite schema + migrations via @tauri-apps/plugin-sql (Tauri) or sql.js (browser E2E)
+
+type Database = {
+  select<T>(query: string, bindValues?: unknown[]): Promise<T>;
+  execute(query: string, bindValues?: unknown[]): Promise<{ rowsAffected: number; lastInsertId?: number }>;
+};
 
 let _db: Database | null = null;
 
+async function loadDatabase(): Promise<Database> {
+  const isTauri = '__TAURI_INTERNALS__' in window;
+  if (isTauri) {
+    const { default: TauriDatabase } = await import('@tauri-apps/plugin-sql');
+    return TauriDatabase.load('sqlite:kept.db');
+  } else {
+    const { default: BrowserDatabase } = await import('./db-browser');
+    return BrowserDatabase.load('sqlite:kept.db');
+  }
+}
+
 export async function getDb(): Promise<Database> {
   if (_db) return _db;
-  _db = await Database.load('sqlite:kept.db');
+  _db = await loadDatabase();
   await migrate(_db);
   return _db;
 }

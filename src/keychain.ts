@@ -3,8 +3,9 @@
  * macOS: Keychain Services
  * Windows: Credential Manager
  * Linux: Secret Service (GNOME Keyring / KDE Wallet)
+ *
+ * In browser E2E mode, keychain is unavailable — functions gracefully no-op/return null.
  */
-import { getPassword, setPassword, deletePassword } from 'tauri-plugin-keyring-api';
 
 const SERVICE = 'com.kept.app';
 
@@ -14,11 +15,22 @@ interface StoredTokens {
   tokenExpiry: number;
 }
 
+let _keyring: typeof import('tauri-plugin-keyring-api') | null = null;
+async function getKeyring() {
+  if (!_keyring) {
+    if (!('__TAURI_INTERNALS__' in window)) return null;
+    _keyring = await import('tauri-plugin-keyring-api');
+  }
+  return _keyring;
+}
+
 /**
  * Save tokens to OS keychain, keyed by account email.
  */
 export async function saveTokensToKeychain(email: string, tokens: StoredTokens): Promise<void> {
-  await setPassword(SERVICE, email, JSON.stringify(tokens));
+  const kr = await getKeyring();
+  if (!kr) return;
+  await kr.setPassword(SERVICE, email, JSON.stringify(tokens));
 }
 
 /**
@@ -26,7 +38,9 @@ export async function saveTokensToKeychain(email: string, tokens: StoredTokens):
  */
 export async function getTokensFromKeychain(email: string): Promise<StoredTokens | null> {
   try {
-    const raw = await getPassword(SERVICE, email);
+    const kr = await getKeyring();
+    if (!kr) return null;
+    const raw = await kr.getPassword(SERVICE, email);
     if (!raw) return null;
     return JSON.parse(raw) as StoredTokens;
   } catch {
@@ -39,7 +53,9 @@ export async function getTokensFromKeychain(email: string): Promise<StoredTokens
  */
 export async function deleteTokensFromKeychain(email: string): Promise<void> {
   try {
-    await deletePassword(SERVICE, email);
+    const kr = await getKeyring();
+    if (!kr) return;
+    await kr.deletePassword(SERVICE, email);
   } catch {
     // Key might not exist — that's fine
   }

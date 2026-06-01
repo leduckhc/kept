@@ -1,9 +1,19 @@
 // auth.ts — Google OAuth via tauri-plugin-oauth (localhost server) + tauri-plugin-shell (open browser)
 /// <reference types="vite/client" />
-import { start, cancel } from '@fabianlars/tauri-plugin-oauth';
-import { open } from '@tauri-apps/plugin-shell';
 import { getDb } from './db';
 import { saveTokensToKeychain, getTokensFromKeychain, deleteTokensFromKeychain } from './keychain';
+
+// Tauri plugins loaded lazily — they crash in browser context
+let _oauth: typeof import('@fabianlars/tauri-plugin-oauth') | null = null;
+let _shell: typeof import('@tauri-apps/plugin-shell') | null = null;
+async function getTauriOAuth() {
+  if (!_oauth) _oauth = await import('@fabianlars/tauri-plugin-oauth');
+  return _oauth;
+}
+async function getTauriShell() {
+  if (!_shell) _shell = await import('@tauri-apps/plugin-shell');
+  return _shell;
+}
 
 const GOOGLE_CLIENT_ID = 'REPLACED_CLIENT_ID';
 const GOOGLE_CLIENT_SECRET = 'REPLACED_CLIENT_SECRET';
@@ -136,7 +146,8 @@ export async function startOAuth(): Promise<Account> {
   const state = crypto.randomUUID();
 
   // tauri-plugin-oauth spawns a localhost server on a random port, returns the port
-  const port = await start({
+  const oauth = await getTauriOAuth();
+  const port = await oauth.start({
     response: '<html><body><h2>Login successful — you can close this tab.</h2></body></html>',
   });
 
@@ -154,7 +165,8 @@ export async function startOAuth(): Promise<Account> {
   url.searchParams.set('prompt', 'consent');
 
   // Open system browser
-  await open(url.toString());
+  const shell = await getTauriShell();
+  await shell.open(url.toString());
 
   // Wait for redirect — tauri-plugin-oauth fires a 'oauth://url' event with the full redirect URL
   const code = await waitForCode(state);
@@ -162,7 +174,7 @@ export async function startOAuth(): Promise<Account> {
   try {
     return await exchangeCode(code, verifier, redirectUri);
   } finally {
-    await cancel(port).catch(() => {});
+    await oauth.cancel(port).catch(() => {});
   }
 }
 

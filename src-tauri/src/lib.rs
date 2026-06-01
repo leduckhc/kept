@@ -54,6 +54,11 @@ pub fn run() {
         .manage(UnreadState(Mutex::new(0)))
         .invoke_handler(tauri::generate_handler![update_unread_badge])
         .setup(|app: &mut tauri::App| {
+            // ── tauri-pilot (debug builds only) ─────────────────────
+            #[cfg(debug_assertions)]
+            {
+                app.handle().plugin(tauri_plugin_pilot::init())?;
+            }
             // ── App menu ──────────────────────────────────────────
             let app_submenu = SubmenuBuilder::new(app, "Kept")
                 .item(&PredefinedMenuItem::about(app, Some("About Kept"), None)?)
