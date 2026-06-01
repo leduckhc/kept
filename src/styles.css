@@ -662,6 +662,21 @@ body {
 .email-body-rendered p {
   margin: 0 0 8px;
 }
+/* Force readable text — override inline styles from senders that assume light backgrounds */
+.email-body-rendered *:not(a) {
+  color: var(--text) !important;
+}
+.email-body-rendered a {
+  color: var(--accent, #5B4EDB) !important;
+}
+/* Preserve button text colors where senders set explicit white-on-color */
+.email-body-rendered a[style*="color: #fff"],
+.email-body-rendered a[style*="color:#fff"],
+.email-body-rendered a[style*="color: #ffffff"],
+.email-body-rendered a[style*="color:#ffffff"],
+.email-body-rendered a[style*="color: rgb(255"] {
+  color: #ffffff !important;
+}
 .reader-footer {
   position: sticky;
   bottom: 0;
