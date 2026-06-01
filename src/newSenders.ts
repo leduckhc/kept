@@ -24,6 +24,7 @@ interface NewSenderInfo {
   name: string;
   subject: string;
   thread: Thread;
+  count: number;
 }
 
 /** Get deduplicated list of new senders from current threads */
@@ -35,11 +36,13 @@ export function getNewSenders(): NewSenderInfo[] {
     if (seen.has(lower)) continue;
     seen.add(lower);
     if (isNewSender(t.senderEmail)) {
+      const count = state.threads.filter(th => th.senderEmail.toLowerCase() === lower).length;
       result.push({
         email: t.senderEmail,
         name: t.senderName || t.senderEmail.split('@')[0],
         subject: t.subject,
         thread: t,
+        count,
       });
     }
   }
@@ -57,15 +60,21 @@ function avatarColor(str: string): string {
 function renderCard(sender: NewSenderInfo): string {
   const initial = (sender.name[0] || '?').toUpperCase();
   const color = avatarColor(sender.email);
+  const countLabel = sender.count > 1 ? `<span class="new-sender-count">+${sender.count - 1}</span>` : '';
   return `
     <div class="new-sender-card" data-email="${esc(sender.email)}">
-      <div class="new-sender-avatar" style="background:${color}">${initial}</div>
-      <div class="new-sender-name" title="${esc(sender.name)}">${esc(sender.name)}</div>
-      <div class="new-sender-email" title="${esc(sender.email)}">${esc(sender.email)}</div>
-      <div class="new-sender-subject" title="${esc(sender.subject)}">${icon.email('14px')} ${esc(sender.subject)}</div>
+      <div class="new-sender-top">
+        <div class="new-sender-avatar" style="background:${color}">${initial}</div>
+        <div class="new-sender-info">
+          <div class="new-sender-name" title="${esc(sender.name)}">${esc(sender.name)}</div>
+          <div class="new-sender-email" title="${esc(sender.email)}">${esc(sender.email)}</div>
+        </div>
+      </div>
+      <div class="new-sender-subject" title="${esc(sender.subject)}">${icon.email('14px')} ${esc(sender.subject)} ${countLabel}</div>
+      <div class="new-sender-divider"></div>
       <div class="new-sender-actions">
-        <button class="new-sender-accept" title="Accept sender">${icon.check('16px')}</button>
-        <button class="new-sender-block" title="Block sender">${icon.close('16px')}</button>
+        <button class="new-sender-accept" title="Accept sender">${icon.thumbUp('14px')} Accept</button>
+        <button class="new-sender-block" title="Block sender">${icon.thumbDown('14px')} Block</button>
       </div>
     </div>`;
 }
