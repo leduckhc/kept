@@ -207,7 +207,7 @@ export async function openThread(
         const loadImgBtn = document.createElement('button');
         loadImgBtn.className = 'btn-load-images';
         loadImgBtn.textContent = '🖼 Load images';
-        loadImgBtn.style.cssText = 'display:none; margin-top:6px; font-size:12px;';
+        loadImgBtn.style.cssText = 'display:none; margin-bottom:8px; font-size:12px;';
         loadImgBtn.addEventListener('click', () => {
           emailBodyDiv.querySelectorAll<HTMLImageElement>('img[data-original-src]').forEach(img => {
             const orig = img.getAttribute('data-original-src')!;
@@ -220,8 +220,8 @@ export async function openThread(
         const blockedImgs = emailBodyDiv.querySelectorAll('img[data-original-src]');
         if (blockedImgs.length > 0) loadImgBtn.style.display = 'inline-block';
 
-        contentWrap.appendChild(emailBodyDiv);
         contentWrap.appendChild(loadImgBtn);
+        contentWrap.appendChild(emailBodyDiv);
       } else {
         const plainText: string = m.body ?? '';
         const lines = plainText.slice(0, 20000).split('\n');
@@ -269,7 +269,7 @@ export async function openThread(
       bodyEl.appendChild(msgContainer);
     });
 
-    bodyEl.scrollTop = bodyEl.scrollHeight;
+    bodyEl.scrollTop = 0;
   } catch (err) {
     console.error('[threadReader] Failed to load messages:', err);
     reader.querySelector('.reader-body')!.innerHTML = `<p style="color:var(--text-muted)">Could not load messages. ${esc(String(err))}</p>`;
