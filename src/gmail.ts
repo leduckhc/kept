@@ -749,14 +749,21 @@ export function groupBySection(threads: Thread[]): Array<{ label: string; thread
   const today = startOf('day', now);
   const yesterday = new Date(today.getTime() - 86_400_000);
   const weekStart = startOf('week', now);
+  const lastWeekStart = new Date(weekStart.getTime() - 7 * 86_400_000);
   const monthStart = startOf('month', now);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
 
   const newSenders: Thread[] = [];
   const todayGroup: Thread[] = [];
   const yesterdayGroup: Thread[] = [];
   const thisWeek: Thread[] = [];
+  const lastWeek: Thread[] = [];
   const thisMonth: Thread[] = [];
-  const older: Thread[] = [];
+  const lastMonth: Thread[] = [];
+  const byYear: Record<number, Thread[]> = {};
 
   // Detect new senders = first time we see this sender (crude: no prior archived threads needed)
   // For now: unread threads from senders with only 1 thread total
@@ -771,18 +778,31 @@ export function groupBySection(threads: Thread[]): Array<{ label: string; thread
     if (d >= today) { todayGroup.push(t); continue; }
     if (d >= yesterday) { yesterdayGroup.push(t); continue; }
     if (d >= weekStart) { thisWeek.push(t); continue; }
+    if (d >= lastWeekStart) { lastWeek.push(t); continue; }
     if (d >= monthStart) { thisMonth.push(t); continue; }
-    older.push(t);
+    if (d >= lastMonthStart) { lastMonth.push(t); continue; }
+    // Group by year
+    const year = d.getFullYear();
+    (byYear[year] ??= []).push(t);
   }
 
-  return [
+  const sections: Array<{ label: string; threads: Thread[] }> = [
     { label: 'New senders', threads: newSenders },
     { label: 'Today', threads: todayGroup },
     { label: 'Yesterday', threads: yesterdayGroup },
     { label: 'This week', threads: thisWeek },
-    { label: 'This month', threads: thisMonth },
-    { label: 'Older', threads: older },
-  ].filter(s => s.threads.length > 0);
+    { label: 'Last week', threads: lastWeek },
+    { label: MONTH_NAMES[now.getMonth()], threads: thisMonth },
+    { label: MONTH_NAMES[(now.getMonth() - 1 + 12) % 12], threads: lastMonth },
+  ];
+
+  // Add year groups sorted descending
+  const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+  for (const y of years) {
+    sections.push({ label: String(y), threads: byYear[y] });
+  }
+
+  return sections.filter(s => s.threads.length > 0);
 }
 
 function startOf(unit: 'day' | 'week' | 'month', d: Date): Date {
