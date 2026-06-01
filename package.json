@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@fabianlars/tauri-plugin-oauth": "^2.0.0",
+    "@iconify/icons-mdi": "^1.2.48",
+    "@iconify/icons-mdi-light": "^1.2.5",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-notification": "^2.3.3",
