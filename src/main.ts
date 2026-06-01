@@ -195,7 +195,7 @@ function showShell() {
         ${VIEWS.map(v => `<button class="tab-btn mobile-tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
-        <button class="btn-icon state.account-picker-btn" id="btn-state.account" title="Switch state.account" style="font-size:13px">${state.account?.email?.split('@')[0] ?? '…'} ▾</button>
+        <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${state.account?.email?.split('@')[0] ?? '…'} ▾</button>
         <button class="btn-icon btn-menu" id="btn-menu" title="More options">⋮</button>
       </div>
       <div class="app-body">
@@ -222,10 +222,10 @@ function showShell() {
         <div class="settings-body">
           <div class="settings-section">
             <div class="settings-section-label">Accounts</div>
-            <div id="settings-state.accounts-list"></div>
-            <button class="settings-add-state.account" id="settings-add-state.account">
-              <span class="settings-add-state.account-icon"></span>
-              + Add state.account
+            <div id="settings-accounts-list"></div>
+            <button class="settings-add-state.account" id="settings-add-account">
+              <span class="settings-add-account-icon"></span>
+              + Add account
             </button>
           </div>
           <div class="settings-divider"></div>
@@ -296,7 +296,7 @@ function showShell() {
   // ⋮ menu
   document.getElementById('btn-menu')!.addEventListener('click', () => showToolbarMenu());
 
-  document.getElementById('btn-state.account')!.addEventListener('click', () => {
+  document.getElementById('btn-account')!.addEventListener('click', () => {
     showAccountMenu();
   });
 
@@ -402,7 +402,7 @@ function openSettings() {
   // Wire sign out (once: true prevents duplicate confirm dialogs on repeated open/close)
   const signoutBtn = document.getElementById('settings-signout') as HTMLButtonElement;
   signoutBtn?.addEventListener('click', async () => {
-    if (!confirm('Sign out of all state.accounts? This will delete all local data.')) return;
+    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
     signoutBtn.disabled = true;
     signoutBtn.textContent = 'Signing out…';
     try {
@@ -450,7 +450,7 @@ function openSettings() {
   }
 
   // Wire add state.account (once: true prevents duplicate OAuth launches on repeated open/close)
-  document.getElementById('settings-add-state.account')!.addEventListener('click', async () => {
+  document.getElementById('settings-add-account')!.addEventListener('click', async () => {
     try {
       const newAcct = await startOAuth();
       const existing = state.accounts.find(a => a.id === newAcct.id);
@@ -485,7 +485,7 @@ function closeSettings() {
 }
 
 function renderSettingsAccounts() {
-  const list = document.getElementById('settings-state.accounts-list');
+  const list = document.getElementById('settings-accounts-list');
   if (!list) return;
   const avatarColors = ['#7c6fa8', '#5b8dd9', '#7cb9a8', '#d97c5b', '#c47cad'];
   list.innerHTML = state.accounts.map((a, i) => {
@@ -493,25 +493,25 @@ function renderSettingsAccounts() {
     const color = avatarColors[i % avatarColors.length];
     const isOnly = state.accounts.length === 1;
     return `
-      <div class="settings-state.account-row" data-id="${esc(a.id)}">
+      <div class="settings-account-row" data-id="${esc(a.id)}">
         <div class="settings-avatar" style="background:${color}">${initial}</div>
-        <div class="settings-state.account-info">
-          <div class="settings-state.account-name">${esc(a.email.split('@')[0])}</div>
-          <div class="settings-state.account-email">${esc(a.email)}</div>
+        <div class="settings-account-info">
+          <div class="settings-account-name">${esc(a.email.split('@')[0])}</div>
+          <div class="settings-account-email">${esc(a.email)}</div>
         </div>
-        <button class="settings-state.account-remove" data-id="${esc(a.id)}" title="Remove state.account"
+        <button class="settings-account-remove" data-id="${esc(a.id)}" title="Remove account"
           ${isOnly ? 'disabled' : ''} aria-label="Remove ${esc(a.email)}">×</button>
       </div>`;
   }).join('');
 
   // Wire remove buttons
-  list.querySelectorAll<HTMLButtonElement>('.settings-state.account-remove').forEach(btn => {
+  list.querySelectorAll<HTMLButtonElement>('.settings-account-remove').forEach(btn => {
     if (btn.disabled) return;
     btn.addEventListener('click', async () => {
       const removeId = btn.dataset.id!;
       const target = state.accounts.find(a => a.id === removeId);
       if (!target) return;
-      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this state.account.`)) return;
+      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
       try {
         await removeAccount(target);
         state.accounts = state.accounts.filter(a => a.id !== removeId);
@@ -534,7 +534,7 @@ function renderSettingsAccounts() {
           renderSettingsAccounts();
         }
       } catch (err) {
-        console.error('Remove state.account error:', err);
+        console.error('Remove account error:', err);
         setStatus('Failed to remove state.account');
       }
     });
@@ -744,49 +744,49 @@ function showToolbarMenu() {
 // ── Account menu ──────────────────────────────────────────
 function showAccountMenu() {
   // Remove any existing menu
-  document.getElementById('state.account-menu-overlay')?.remove();
+  document.getElementById('account-menu-overlay')?.remove();
 
   const overlay = document.createElement('div');
-  overlay.id = 'state.account-menu-overlay';
+  overlay.id = 'account-menu-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:200;';
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const menu = document.createElement('div');
-  menu.className = 'state.account-menu';
+  menu.className = 'account-menu';
   menu.innerHTML = `
-    <div class="state.account-menu-header">Accounts</div>
+    <div class="account-menu-header">Accounts</div>
     ${state.accounts.length > 1 ? `
-      <button class="state.account-menu-item${state.unifiedMode ? ' active' : ''}" id="btn-all-state.accounts">
-        <span class="state.account-email">All Accounts</span>
-        ${state.unifiedMode ? '<span class="state.account-active-badge">active</span>' : ''}
+      <button class="account-menu-item${state.unifiedMode ? ' active' : ''}" id="btn-all-accounts">
+        <span class="account-email">All Accounts</span>
+        ${state.unifiedMode ? '<span class="account-active-badge">active</span>' : ''}
       </button>` : ''}
     ${state.accounts.map((a, i) => `
-      <button class="state.account-menu-item${!state.unifiedMode && a.id === state.account?.id ? ' active' : ''}" data-id="${a.id}">
-        <span class="state.account-badge-dot" style="background:${ACCOUNT_BADGE_COLORS[i % ACCOUNT_BADGE_COLORS.length]}"></span>
-        <span class="state.account-email">${esc(a.email)}</span>
-        ${!state.unifiedMode && a.id === state.account?.id ? '<span class="state.account-active-badge">active</span>' : ''}
-        <button class="state.account-remove-btn" data-remove-id="${a.id}" title="Remove state.account">×</button>
+      <button class="account-menu-item${!state.unifiedMode && a.id === state.account?.id ? ' active' : ''}" data-id="${a.id}">
+        <span class="account-badge-dot" style="background:${ACCOUNT_BADGE_COLORS[i % ACCOUNT_BADGE_COLORS.length]}"></span>
+        <span class="account-email">${esc(a.email)}</span>
+        ${!state.unifiedMode && a.id === state.account?.id ? '<span class="account-active-badge">active</span>' : ''}
+        <button class="account-remove-btn" data-remove-id="${a.id}" title="Remove account">×</button>
       </button>`).join('')}
-    <button class="state.account-menu-add" id="btn-add-state.account">+ Add state.account</button>
+    <button class="account-menu-add" id="btn-add-account">+ Add account</button>
     <hr style="border:none;border-top:1px solid var(--border);margin:4px 0"/>
-    <button class="state.account-menu-signout" id="btn-signout-all">Sign out of all state.accounts</button>
+    <button class="account-menu-signout" id="btn-signout-all">Sign out of all accounts</button>
   `;
 
   overlay.appendChild(menu);
   document.body.appendChild(overlay);
 
   // All Accounts unified mode
-  document.getElementById('btn-all-state.accounts')?.addEventListener('click', async () => {
+  document.getElementById('btn-all-accounts')?.addEventListener('click', async () => {
     overlay.remove();
     state.unifiedMode = true;
-    const acctBtn = document.getElementById('btn-state.account');
+    const acctBtn = document.getElementById('btn-account');
     if (acctBtn) acctBtn.textContent = 'All Accounts ▾';
     const statusLeft = document.getElementById('status-left');
     if (statusLeft) statusLeft.textContent = 'All Accounts';
     await refreshAll();
   });
 
-  // Switch state.account
+  // Switch account
   menu.querySelectorAll<HTMLButtonElement>('.account-menu-item').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       if ((e.target as HTMLElement).closest('.account-remove-btn')) return;
@@ -801,27 +801,27 @@ function showAccountMenu() {
       renderInbox();
       const statusLeft = document.getElementById('status-left');
       if (statusLeft) statusLeft.textContent = target.email;
-      const acctBtn = document.getElementById('btn-state.account');
+      const acctBtn = document.getElementById('btn-account');
       if (acctBtn) acctBtn.textContent = `${target.email.split('@')[0]} ▾`;
       overlay.remove();
       syncAndRender();
     });
   });
 
-  // Remove state.account
+  // Remove account
   menu.querySelectorAll<HTMLButtonElement>('.account-remove-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const removeId = btn.dataset.removeId!;
       const target = state.accounts.find(a => a.id === removeId);
       if (!target) return;
-      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this state.account.`)) return;
+      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
       overlay.remove();
       try {
         await removeAccount(target);
         state.accounts = state.accounts.filter(a => a.id !== removeId);
         if (state.account?.id === removeId) {
-          // Switch to another state.account or go to auth
+          // Switch to another account or go to auth
           const next = state.accounts[0] ?? null;
           if (next) {
             setAccount(next);
@@ -837,16 +837,16 @@ function showAccountMenu() {
           }
         }
       } catch (err) {
-        console.error('Remove state.account error:', err);
+        console.error('Remove account error:', err);
         setStatus('Failed to remove state.account');
       }
     });
   });
 
   // Add state.account
-  document.getElementById('btn-add-state.account')!.addEventListener('click', async () => {
+  document.getElementById('btn-add-account')!.addEventListener('click', async () => {
     overlay.remove();
-    const addBtn = document.getElementById('btn-state.account') as HTMLButtonElement | null;
+    const addBtn = document.getElementById('btn-account') as HTMLButtonElement | null;
     if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Connecting…'; }
     try {
       const newAcct = await startOAuth();
@@ -872,7 +872,7 @@ function showAccountMenu() {
 
   // Sign out of all state.accounts
   document.getElementById('btn-signout-all')!.addEventListener('click', async () => {
-    if (!confirm('Sign out of all state.accounts? This will delete all local data.')) return;
+    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
     overlay.remove();
     try {
       for (const a of state.accounts) {
