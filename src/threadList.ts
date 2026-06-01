@@ -75,14 +75,12 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
         ${avatarHtml(t)}
         ${acctBadge}
       </div>
+      <span class="thread-sender">${searchQ ? highlightText(sender, searchQ) : esc(sender)}</span>
       <div class="thread-mid${attachment ? ' has-attachment' : ''}">
-        <div class="thread-top">
-          <span class="thread-sender">${searchQ ? highlightText(sender, searchQ) : esc(sender)}</span>
-          <span class="thread-date">${date}</span>
-        </div>
-        <div class="thread-subject-line">${searchQ ? highlightText(t.subject, searchQ) : esc(t.subject)}${t.messageCount && t.messageCount > 1 ? `<span class="thread-count">${t.messageCount}</span>` : ''}</div>
-        <div class="thread-preview-line">${clockIndicator || esc(t.snippet)}</div>
+        <span class="thread-subject-line">${searchQ ? highlightText(t.subject, searchQ) : esc(t.subject)}${t.messageCount && t.messageCount > 1 ? `<span class="thread-count">${t.messageCount}</span>` : ''}</span>
+        <span class="thread-preview-line">${clockIndicator || esc(t.snippet)}</span>
       </div>
+      <span class="thread-date">${date}</span>
       ${actionsHtml}
     </div>`;
 }
@@ -269,14 +267,13 @@ export async function renderScheduledView() {
     <div class="section-header">Scheduled <span class="section-badge">${scheduled.length}</span></div>
     ${scheduled.map(e => `
       <div class="thread-row" data-sched-id="${esc(e.id)}">
+        <div class="avatar-wrap"><div class="avatar" style="background:#888" data-initial="⏰"></div></div>
+        <span class="thread-sender">${esc(e.to)}</span>
         <div class="thread-mid">
-          <div class="thread-top">
-            <span class="thread-sender">${esc(e.to)}</span>
-            <span class="thread-date">${formatDate(e.scheduledAt)}</span>
-          </div>
-          <div class="thread-subject-line">${esc(e.subject)}</div>
-          <div class="thread-preview-line">${icon.calendar('14px')} Sends ${formatDate(e.scheduledAt)}</div>
+          <span class="thread-subject-line">${esc(e.subject)}</span>
+          <span class="thread-preview-line">${icon.calendar('14px')} Sends ${formatDate(e.scheduledAt)}</span>
         </div>
+        <span class="thread-date">${formatDate(e.scheduledAt)}</span>
         <div class="thread-actions">
           <button class="btn-action danger btn-cancel-sched" title="Cancel scheduled send">${icon.close('16px')}</button>
         </div>

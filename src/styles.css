@@ -372,7 +372,7 @@ body {
 /* ── Thread row ─────────────────────────────────────────── */
 .thread-row {
   display: grid;
-  grid-template-columns: 40px 1fr auto;
+  grid-template-columns: 40px 180px 1fr auto;
   align-items: center;
   gap: 10px;
   height: 36px;
@@ -447,7 +447,7 @@ body {
 /* Avatar wrap — clickable for selection */
 .avatar-wrap { cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; }
 
-/* Middle column — single-line: sender | subject — snippet · · · time */
+/* Middle column — subject + snippet inline */
 .thread-mid {
   min-width: 0;
   display: flex;
@@ -455,10 +455,7 @@ body {
   gap: 0;
   overflow: hidden;
 }
-/* thread-top holds sender + date; collapse to inline participants */
-.thread-top {
-  display: contents;
-}
+/* thread-top no longer needed — sender is its own grid column */
 
 .thread-sender {
   font-size: 13px;
@@ -467,22 +464,18 @@ body {
   text-overflow: ellipsis;
   color: var(--text-muted);
   font-weight: 400;
-  flex-shrink: 0;
-  max-width: 120px;
 }
 .thread-row.unread .thread-sender {
   font-weight: 600;
   color: var(--text);
 }
-.thread-sender.unread { font-weight: 600; }
 
 .thread-date {
   font-size: 11px;
   color: var(--text-disabled);
   white-space: nowrap;
   flex-shrink: 0;
-  margin-left: auto;
-  padding-left: 8px;
+  text-align: right;
 }
 
 .thread-subject-line {
@@ -494,7 +487,6 @@ body {
   color: var(--text-muted);
   flex-shrink: 1;
   min-width: 0;
-  margin-left: 8px;
 }
 .thread-row.unread .thread-subject-line { color: var(--text); font-weight: 400; }
 
@@ -2446,7 +2438,8 @@ body {
 
 /* ── Mobile density ──────────────────────────────────────── */
 @media (max-width: 600px) {
-  .thread-row { min-height: 40px; }
+  .thread-row { min-height: 40px; grid-template-columns: 40px 1fr auto; }
+  .thread-sender { display: none; }
 }
 
 /* ── Mobile layout (<1024px): revert to single-pane ─────── */
