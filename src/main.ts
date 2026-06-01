@@ -82,6 +82,12 @@ function applyFocusFilter(list: Thread[]): { visible: Thread[]; hiddenCount: num
   return { visible, hiddenCount: list.length - visible.length };
 }
 
+function getAccountAvatar(): string {
+  if (!state.account?.email) return '?';
+  const initial = state.account.email.charAt(0).toUpperCase();
+  return `<span class="avatar-circle">${initial}</span>`;
+}
+
 // ── Boot ──────────────────────────────────────────────────
 async function boot() {
   applyTheme(localStorage.getItem('theme') ?? 'light');
@@ -194,11 +200,12 @@ function showShell() {
         ${VIEWS.map(v => `<button class="tab-btn mobile-tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
-        <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${state.account?.email?.split('@')[0] ?? '…'} ▾</button>
       </div>
       <div class="app-body">
         <nav class="sidebar" id="sidebar">
           ${VIEWS.map(v => `<button class="sidebar-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}" title="${v.name}">${v.icon}</button>`).join('')}
+          <div class="sidebar-spacer"></div>
+          <button class="sidebar-btn sidebar-avatar" id="btn-account" title="Switch account">${getAccountAvatar()}</button>
         </nav>
         <div class="inbox" id="inbox"></div>
         <div class="reader-pane" id="reader-pane">
@@ -755,7 +762,7 @@ function showAccountMenu() {
     overlay.remove();
     state.unifiedMode = true;
     const acctBtn = document.getElementById('btn-account');
-    if (acctBtn) acctBtn.textContent = 'All Accounts ▾';
+    if (acctBtn) acctBtn.innerHTML = '<span class="avatar-circle">A</span>';
     const statusLeft = document.getElementById('status-left');
     if (statusLeft) statusLeft.textContent = 'All Accounts';
     await refreshAll();
@@ -777,7 +784,7 @@ function showAccountMenu() {
       const statusLeft = document.getElementById('status-left');
       if (statusLeft) statusLeft.textContent = target.email;
       const acctBtn = document.getElementById('btn-account');
-      if (acctBtn) acctBtn.textContent = `${target.email.split('@')[0]} ▾`;
+      if (acctBtn) acctBtn.innerHTML = `<span class="avatar-circle">${target.email.charAt(0).toUpperCase()}</span>`;
       overlay.remove();
       syncAndRender();
     });
