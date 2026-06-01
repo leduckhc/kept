@@ -277,7 +277,7 @@ export async function openThread(
   try {
     const bodyEl2 = reader.querySelector('.reader-body');
     if (bodyEl2) {
-      const msgs = bodyEl2.querySelectorAll('.msg-body');
+      const msgs = bodyEl2.querySelectorAll('.thread-message-content');
       if (msgs.length > 0) lastPlainText = (msgs[msgs.length - 1] as HTMLElement).innerText?.slice(0, 2000) ?? '';
     }
   } catch { /* non-fatal */ }

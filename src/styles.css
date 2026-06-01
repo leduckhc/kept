@@ -2959,6 +2959,30 @@ body {
   border-radius: 6px 6px 0 0;
   background: var(--surface);
 }
+.compose-toolbar-new .toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.12s, color 0.12s;
+}
+.compose-toolbar-new .toolbar-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.compose-toolbar-new .toolbar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
 .compose-editor-new {
   flex: 1;
   min-height: 100px;

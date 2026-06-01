@@ -8,7 +8,7 @@ import {
   Image, Undo2, Bold, Italic, Underline, Menu, LogOut, VolumeX,
   ArrowUp, Calendar, RefreshCw, Plus, Tag, Reply, Send, SunMoon,
   Keyboard, Paperclip, AlarmClock, MailOpen, Eye, ArrowLeft,
-  ThumbsUp, ThumbsDown, Globe,
+  ThumbsUp, ThumbsDown, Globe, Maximize2,
 } from 'lucide-static';
 
 /**
@@ -78,6 +78,9 @@ export const icon = {
 
   // Domain grouping
   globe:       (s?: string) => sized(Globe, s),
+
+  // Expand/maximize
+  expand:      (s?: string) => sized(Maximize2, s),
 
   // Custom render for any SVG string at a given size
   custom: sized,

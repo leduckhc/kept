@@ -61,7 +61,7 @@ export async function openCompose(opts: ComposeOptions) {
       <span class="compose-panel-title">${modeTitle}</span>
       <div class="compose-panel-actions">
         <button class="btn-icon compose-panel-minimize" id="compose-minimize" title="Minimize">—</button>
-        <button class="btn-icon compose-panel-expand" id="compose-expand" title="Expand">${icon.inbox('14px')}</button>
+        <button class="btn-icon compose-panel-expand" id="compose-expand" title="Expand">${icon.expand('14px')}</button>
         <button class="btn-icon compose-panel-close" id="compose-close" title="Close">${icon.close('14px')}</button>
       </div>
     </div>
@@ -250,6 +250,13 @@ export async function openCompose(opts: ComposeOptions) {
   });
 
   panel.querySelector('#compose-expand')!.addEventListener('click', () => {
+    // Un-minimize first if minimized
+    if (minimized) {
+      minimized = false;
+      bodyWrap.style.display = '';
+      panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = '';
+      panel.classList.remove('compose-panel-minimized');
+    }
     panel.classList.toggle('compose-panel-expanded');
   });
 
