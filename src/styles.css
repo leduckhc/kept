@@ -143,12 +143,12 @@ body {
   border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
-  color: #666;
+  color: var(--text-muted);
   transition: all 0.12s ease;
 }
-.sidebar-btn:hover { color: #ccc; background: rgba(255,255,255,0.08); }
+.sidebar-btn:hover { color: var(--text); background: var(--hover); }
 .sidebar-btn.active {
-  color: #fff;
+  color: var(--accent);
 }
 .sidebar-btn.active::before {
   content: '';
@@ -158,7 +158,7 @@ body {
   transform: translateY(-50%);
   width: 3px;
   height: 20px;
-  background: #4a9eff;
+  background: var(--accent);
   border-radius: 0 2px 2px 0;
 }
 
