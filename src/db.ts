@@ -154,4 +154,20 @@ async function migrate(db: Database): Promise<void> {
       created_at INTEGER DEFAULT (unixepoch())
     )
   `).catch(() => {});
+
+  // Attachment metadata
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      attachment_id TEXT NOT NULL,
+      FOREIGN KEY (thread_id) REFERENCES threads(id)
+    )
+  `).catch(() => {});
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_attachments_thread ON attachments(thread_id)`).catch(() => {});
 }

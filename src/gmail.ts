@@ -573,23 +573,71 @@ interface SendOptions {
   body: string;
   threadId?: string;
   inReplyTo?: string;
+  attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
 }
 
 export async function sendEmail(account: Account, opts: SendOptions): Promise<void> {
   const a = await ensureFreshToken(account);
-  const lines = [
-    `From: ${account.email}`,
-    `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
-    opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
-    'Content-Type: text/plain; charset=UTF-8',
-    '',
-    opts.body,
-  ].filter(Boolean);
-  const raw = btoa(unescape(encodeURIComponent(lines.join('\r\n')))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+  let raw: string;
+
+  if (opts.attachments && opts.attachments.length > 0) {
+    // Multipart MIME with attachments
+    const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const headerLines = [
+      `From: ${account.email}`,
+      `To: ${opts.to}`,
+      `Subject: ${opts.subject}`,
+      opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      '',
+      opts.body,
+    ].filter(Boolean);
+
+    const parts: string[] = [headerLines.join('\r\n')];
+
+    for (const att of opts.attachments) {
+      const b64 = uint8ArrayToBase64(att.data);
+      parts.push([
+        `--${boundary}`,
+        `Content-Type: ${att.mimeType}; name="${att.filename}"`,
+        `Content-Disposition: attachment; filename="${att.filename}"`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        b64,
+      ].join('\r\n'));
+    }
+
+    parts.push(`--${boundary}--`);
+    const mimeMessage = parts.join('\r\n');
+    raw = btoa(unescape(encodeURIComponent(mimeMessage))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  } else {
+    // Simple text email
+    const lines = [
+      `From: ${account.email}`,
+      `To: ${opts.to}`,
+      `Subject: ${opts.subject}`,
+      opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
+      'Content-Type: text/plain; charset=UTF-8',
+      '',
+      opts.body,
+    ].filter(Boolean);
+    raw = btoa(unescape(encodeURIComponent(lines.join('\r\n')))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+
   const payload: Record<string, string> = { raw };
   if (opts.threadId) payload.threadId = opts.threadId;
   await gmailPost(a, '/users/me/messages/send', payload);
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 // ── Fetch full message body ───────────────────────────────
@@ -616,6 +664,14 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
   };
   const msgs = data.messages ?? [];
   const lastMessageId = msgs.length > 0 ? msgs[msgs.length - 1].id : null;
+
+  // Extract and store attachment metadata (idempotent)
+  const allAttachments: AttachmentMeta[] = [];
+  for (const msg of msgs) {
+    allAttachments.push(...extractAttachmentMetas(msg.payload, msg.id, gmailThreadId, a.id));
+  }
+  saveAttachmentMetas(allAttachments).catch(() => {}); // best-effort, don't block render
+
   return {
     messages: msgs.map(msg => {
       const getH = (n: string) => msg.payload.headers.find(h => h.name.toLowerCase() === n)?.value ?? '';
@@ -631,7 +687,8 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
 // Recursive MIME part type (supports arbitrary nesting)
 export interface MimePart {
   mimeType: string;
-  body?: { data?: string };
+  filename?: string;
+  body?: { data?: string; attachmentId?: string; size?: number };
   parts?: MimePart[];
 }
 
@@ -953,3 +1010,101 @@ export async function removeGroupedDomain(accountId: string, domain: string): Pr
     [domain, accountId]
   );
 }
+
+// ── Attachments ──────────────────────────────────────────
+
+export interface AttachmentMeta {
+  id: string;
+  message_id: string;
+  thread_id: string;
+  account_id: string;
+  filename: string;
+  mime_type: string;
+  size: number;
+  attachment_id: string;
+}
+
+/**
+ * Extract attachment metadata from a full MIME tree.
+ */
+function extractAttachmentMetas(
+  payload: MimePart,
+  messageId: string,
+  threadId: string,
+  accountId: string
+): AttachmentMeta[] {
+  const results: AttachmentMeta[] = [];
+  let partIdx = 0;
+
+  function walk(part: MimePart) {
+    if (part.filename && part.body?.attachmentId) {
+      results.push({
+        id: `${messageId}_${partIdx}`,
+        message_id: messageId,
+        thread_id: threadId,
+        account_id: accountId,
+        filename: part.filename,
+        mime_type: part.mimeType ?? 'application/octet-stream',
+        size: part.body.size ?? 0,
+        attachment_id: part.body.attachmentId,
+      });
+      partIdx++;
+    }
+    if (part.parts) part.parts.forEach(walk);
+  }
+  walk(payload);
+  return results;
+}
+
+/**
+ * Load attachment metadata from DB for a thread.
+ */
+export async function loadAttachments(threadId: string): Promise<AttachmentMeta[]> {
+  const db = await getDb();
+  return db.select<AttachmentMeta[]>(
+    'SELECT * FROM attachments WHERE thread_id = ? ORDER BY filename',
+    [threadId]
+  );
+}
+
+/**
+ * Store attachment metadata to DB (idempotent).
+ */
+async function saveAttachmentMetas(metas: AttachmentMeta[]): Promise<void> {
+  if (!metas.length) return;
+  const db = await getDb();
+  for (const a of metas) {
+    await db.execute(
+      `INSERT OR REPLACE INTO attachments (id, message_id, thread_id, account_id, filename, mime_type, size, attachment_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [a.id, a.message_id, a.thread_id, a.account_id, a.filename, a.mime_type, a.size, a.attachment_id]
+    );
+  }
+}
+
+/**
+ * Fetch raw attachment bytes from Gmail API.
+ */
+export async function downloadAttachment(
+  account: Account,
+  messageId: string,
+  attachmentId: string
+): Promise<Uint8Array> {
+  const fresh = await ensureFreshToken(account);
+  const url = `${API}/users/me/messages/${messageId}/attachments/${attachmentId}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${fresh.accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Attachment fetch failed: ${res.status}`);
+  const json = await res.json() as { data: string };
+  return base64UrlToBytes(json.data);
+}
+
+function base64UrlToBytes(b64url: string): Uint8Array {
+  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+

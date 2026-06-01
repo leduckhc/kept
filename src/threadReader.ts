@@ -1,4 +1,4 @@
-import { type Thread, fetchMessageBody, sendEmail, markRead, archiveThread, blockSender } from './gmail';
+import { type Thread, fetchMessageBody, sendEmail, markRead, archiveThread, blockSender, loadAttachments, downloadAttachment, type AttachmentMeta } from './gmail';
 import { getAccountById } from './auth';
 import { state, setAccount } from './state';
 import { sanitizeEmailHtml } from './sanitize';
@@ -66,8 +66,12 @@ export async function openThread(
           <span class="toolbar-sep"></span>
           <button class="toolbar-btn" data-cmd="createLink" title="Insert link">🔗</button>
           <button class="toolbar-btn" data-cmd="removeFormat" title="Clear formatting">⊘</button>
+          <span class="toolbar-sep"></span>
+          <button class="toolbar-btn" id="btn-attach" title="Attach file">📎</button>
+          <input type="file" id="file-input" multiple style="display:none" />
         </div>
         <div id="compose-body" class="compose-editor" contenteditable="true" data-placeholder="Reply…"></div>
+        <div id="compose-attachments" class="compose-attachments"></div>
         <div style="display:flex; gap:8px;">
           <button class="btn-primary" id="btn-send">Send</button>
           <button class="btn-secondary" id="btn-cancel-compose">Cancel</button>
@@ -280,6 +284,9 @@ export async function openThread(
     });
 
     bodyEl.scrollTop = 0;
+
+    // Render attachment chips below messages
+    renderAttachmentChips(bodyEl, t.gmailThreadId);
   } catch (err) {
     console.error('[threadReader] Failed to load messages:', err);
     reader.querySelector('.reader-body')!.innerHTML = `<p style="color:var(--text-muted)">Could not load messages. ${esc(String(err))}</p>`;
@@ -370,9 +377,63 @@ export async function openThread(
     document.getElementById('compose')!.style.display = 'none';
     document.getElementById('btn-reply')!.style.display = '';
   });
+
+  // ── Compose attachments state ──
+  const pendingAttachments: Array<{ filename: string; mimeType: string; data: Uint8Array }> = [];
+  const attachmentsContainer = reader.querySelector<HTMLElement>('#compose-attachments')!;
+  const fileInput = reader.querySelector<HTMLInputElement>('#file-input')!;
+
+  function renderPendingAttachments() {
+    attachmentsContainer.innerHTML = pendingAttachments.map((a, i) => `
+      <div class="compose-attachment-chip">
+        <span class="attachment-icon">${getFileIcon(a.mimeType)}</span>
+        <span class="attachment-name">${esc(a.filename)}</span>
+        <button class="compose-attachment-remove" data-idx="${i}" title="Remove">✕</button>
+      </div>`).join('');
+    attachmentsContainer.querySelectorAll('.compose-attachment-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).dataset.idx!);
+        pendingAttachments.splice(idx, 1);
+        renderPendingAttachments();
+      });
+    });
+  }
+
+  async function addFiles(files: FileList | File[]) {
+    for (const file of Array.from(files)) {
+      const buf = await file.arrayBuffer();
+      pendingAttachments.push({
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        data: new Uint8Array(buf),
+      });
+    }
+    renderPendingAttachments();
+  }
+
+  reader.querySelector('#btn-attach')!.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files?.length) addFiles(fileInput.files);
+    fileInput.value = '';
+  });
+
+  // Drag & drop on compose editor
+  composeEditor.addEventListener('dragover', (e: DragEvent) => {
+    e.preventDefault();
+    composeEditor.classList.add('drag-over');
+  });
+  composeEditor.addEventListener('dragleave', () => {
+    composeEditor.classList.remove('drag-over');
+  });
+  composeEditor.addEventListener('drop', (e: DragEvent) => {
+    e.preventDefault();
+    composeEditor.classList.remove('drag-over');
+    if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
+  });
+
   document.getElementById('btn-send')!.addEventListener('click', async () => {
     const body = composeEditor.innerText.trim();
-    if (!body || !state.account) return;
+    if ((!body && !pendingAttachments.length) || !state.account) return;
     const btn = document.getElementById('btn-send') as HTMLButtonElement;
     btn.disabled = true;
     btn.innerHTML = '<span class="send-spinner"></span> Sending…';
@@ -380,9 +441,10 @@ export async function openThread(
       await sendEmail(state.account, {
         to: t.senderEmail,
         subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
-        body,
+        body: body || '(attached)',
         threadId: t.gmailThreadId,
         inReplyTo: lastMessageId ?? undefined,
+        attachments: pendingAttachments.length > 0 ? pendingAttachments : undefined,
       });
       btn.innerHTML = '✓ Sent';
       btn.classList.add('send-success');
@@ -420,3 +482,140 @@ export async function openThread(
     closeReader();
   });
 }
+
+// ── Attachment chips ─────────────────────────────────────
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileIcon(mimeType: string): string {
+  if (mimeType.startsWith('image/')) return '🖼';
+  if (mimeType.startsWith('video/')) return '🎬';
+  if (mimeType.startsWith('audio/')) return '🎵';
+  if (mimeType.includes('pdf')) return '📄';
+  if (mimeType.includes('zip') || mimeType.includes('compressed')) return '📦';
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
+  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return '📽';
+  if (mimeType.includes('document') || mimeType.includes('word')) return '📝';
+  return '📎';
+}
+
+async function renderAttachmentChips(bodyEl: Element, threadId: string) {
+  const attachments = await loadAttachments(threadId);
+  if (!attachments.length) return;
+
+  const section = document.createElement('div');
+  section.className = 'attachment-section';
+  section.innerHTML = `<div class="attachment-section-title">📎 ${attachments.length} attachment${attachments.length > 1 ? 's' : ''}</div>`;
+
+  const grid = document.createElement('div');
+  grid.className = 'attachment-grid';
+
+  for (const att of attachments) {
+    const chip = document.createElement('button');
+    chip.className = 'attachment-chip';
+    chip.title = `${att.filename} (${formatFileSize(att.size)})`;
+    chip.innerHTML = `
+      <span class="attachment-icon">${getFileIcon(att.mime_type)}</span>
+      <span class="attachment-name">${esc(att.filename.length > 24 ? att.filename.slice(0, 22) + '…' : att.filename)}</span>
+      <span class="attachment-size">${formatFileSize(att.size)}</span>`;
+    chip.addEventListener('click', () => handleAttachmentDownload(att));
+
+    // Inline preview for images
+    if (att.mime_type.startsWith('image/') && att.size < 5 * 1024 * 1024) {
+      chip.classList.add('attachment-chip-image');
+    }
+
+    grid.appendChild(chip);
+  }
+
+  section.appendChild(grid);
+  bodyEl.appendChild(section);
+}
+
+async function handleAttachmentDownload(att: AttachmentMeta) {
+  if (!state.account) return;
+
+  // For images: show inline preview
+  if (att.mime_type.startsWith('image/')) {
+    return handleImagePreview(att);
+  }
+
+  showToast(`Downloading ${att.filename}…`);
+  try {
+    const bytes = await downloadAttachment(state.account, att.message_id, att.attachment_id);
+    triggerBlobDownload(bytes, att.mime_type, att.filename);
+    showToast(`Downloaded ${att.filename}`);
+  } catch (err) {
+    showToast(`Failed to download: ${err}`);
+  }
+}
+
+function triggerBlobDownload(bytes: Uint8Array, mimeType: string, filename: string) {
+  const blob = new Blob([bytes], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function handleImagePreview(att: AttachmentMeta) {
+  if (!state.account) return;
+
+  // Check if lightbox already open
+  const existing = document.querySelector('.attachment-lightbox');
+  if (existing) existing.remove();
+
+  showToast(`Loading ${att.filename}…`);
+  try {
+    const bytes = await downloadAttachment(state.account, att.message_id, att.attachment_id);
+    const blob = new Blob([bytes], { type: att.mime_type });
+    const url = URL.createObjectURL(blob);
+
+    const lightbox = document.createElement('div');
+    lightbox.className = 'attachment-lightbox';
+    lightbox.innerHTML = `
+      <div class="lightbox-backdrop"></div>
+      <div class="lightbox-content">
+        <img src="${url}" alt="${esc(att.filename)}" class="lightbox-image" />
+        <div class="lightbox-footer">
+          <span class="lightbox-filename">${esc(att.filename)}</span>
+          <button class="btn-primary lightbox-download">⬇ Download</button>
+          <button class="btn-secondary lightbox-close">✕ Close</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(lightbox);
+
+    lightbox.querySelector('.lightbox-backdrop')!.addEventListener('click', () => {
+      lightbox.remove();
+      URL.revokeObjectURL(url);
+    });
+    lightbox.querySelector('.lightbox-close')!.addEventListener('click', () => {
+      lightbox.remove();
+      URL.revokeObjectURL(url);
+    });
+    lightbox.querySelector('.lightbox-download')!.addEventListener('click', () => {
+      triggerBlobDownload(bytes, att.mime_type, att.filename);
+    });
+
+    document.addEventListener('keydown', function onEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        lightbox.remove();
+        URL.revokeObjectURL(url);
+        document.removeEventListener('keydown', onEsc);
+      }
+    });
+  } catch (err) {
+    showToast(`Failed to load image: ${err}`);
+  }
+}
+
+
