@@ -227,7 +227,7 @@ function showShell() {
           <div class="settings-section">
             <div class="settings-section-label">Accounts</div>
             <div id="settings-accounts-list"></div>
-            <button class="settings-add-state.account" id="settings-add-account">
+            <button class="settings-add-account" id="settings-add-account">
               <span class="settings-add-account-icon"></span>
               + Add account
             </button>
