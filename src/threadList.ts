@@ -88,6 +88,68 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
     </div>`;
 }
 
+export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]): string {
+  const label = type === 'newsletters' ? 'Newsletters' : 'Updates';
+  const count = threads.length;
+
+  // Group by sender for badges
+  const bySender: Record<string, { name: string; count: number }> = {};
+  for (const t of threads) {
+    const key = t.senderEmail;
+    if (!bySender[key]) {
+      const name = t.senderName || t.senderEmail.split('@')[1] || t.senderEmail;
+      bySender[key] = { name, count: 0 };
+    }
+    bySender[key].count++;
+  }
+  const sortedSenders = Object.entries(bySender).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+
+  const badges = sortedSenders.map(([email, info]) =>
+    `<span class="sender-badge" data-sender-email="${esc(email)}">${esc(info.name)} <span class="sender-count">#${info.count}</span></span>`
+  ).join('');
+
+  return `<div class="category-row" data-category="${type}">
+    <span class="category-label">${label}</span>
+    <span class="category-count">#${count}</span>
+    <div class="category-senders">${badges}</div>
+    <div class="category-actions">
+      <button class="btn-action btn-archive-all" title="Archive all">${icon.archive('16px')}</button>
+      <button class="btn-action btn-trash-all" title="Delete all">${icon.trash('16px')}</button>
+      <button class="btn-action btn-read-all" title="Mark all read">${icon.markRead('16px')}</button>
+    </div>
+  </div>`;
+}
+
+export function senderGroupRow(senderEmail: string, senderName: string, threads: Thread[]): string {
+  const latest = threads[0]; // threads should be sorted by receivedAt desc
+  const hasUnread = threads.some(t => t.isUnread);
+  const dot = `<span class="unread-dot${hasUnread ? ' filled' : ''}"></span>`;
+  const date = formatDate(latest.receivedAt);
+  const displayName = senderName || senderEmail;
+
+  return `<div class="thread-row sender-group-row" data-sender-email="${esc(senderEmail)}">
+    ${dot}
+    <div class="avatar-wrap">${avatarHtml(latest)}</div>
+    <span class="thread-sender">${esc(displayName)} <span class="sender-group-count">#${threads.length}</span></span>
+    <div class="thread-mid">
+      <span class="thread-subject-line">${esc(latest.subject)}</span>
+      <span class="thread-preview-line">${esc(latest.snippet)}</span>
+    </div>
+    <span class="thread-date">${date}</span>
+    <div class="thread-actions">
+      <button class="btn-action btn-archive" title="Archive all">${icon.archive('16px')}</button>
+      <button class="btn-action btn-trash" title="Delete all">${icon.trash('16px')}</button>
+    </div>
+  </div>`;
+}
+
+function filterBackHeader(label: string): string {
+  return `<div class="filter-back-header">
+    <button class="btn-filter-back">${icon.arrowLeft('18px')}</button>
+    <span class="filter-label">${esc(label)}</span>
+  </div>`;
+}
+
 /** Attempt in-place DOM patching for minor changes. Returns true if patched, false to fall back to full rebuild. */
 function patchThreadList(container: HTMLElement, newThreads: Thread[]): boolean {
   const existingRows = new Map<string, HTMLElement>();
@@ -140,6 +202,26 @@ export function renderInbox(deps: ThreadListDeps) {
   const container = document.getElementById('inbox');
   if (!container) return;
 
+  // Filtered view mode (category or sender filter)
+  if (state.categoryFilter || state.senderFilter) {
+    const filterLabel = state.categoryFilter
+      ? (state.categoryFilter === 'newsletters' ? 'Newsletters' : 'Updates')
+      : state.senderFilter!;
+    const filtered = state.threads.filter(t => {
+      if (state.categoryFilter) return t.category === state.categoryFilter;
+      if (state.senderFilter) return t.senderEmail === state.senderFilter;
+      return true;
+    });
+    container.innerHTML = filterBackHeader(filterLabel) + filtered.map(t => threadRow(t, false)).join('');
+    container.querySelector('.btn-filter-back')?.addEventListener('click', () => {
+      state.categoryFilter = null;
+      state.senderFilter = null;
+      deps.renderInbox();
+    });
+    wireThreadRows(container, filtered, false, deps);
+    return;
+  }
+
   // Preserve search bar across re-renders
   const existingBar = document.getElementById('search-bar');
   const searchBarHtml = existingBar ? existingBar.outerHTML : null;
@@ -186,7 +268,7 @@ export function renderInbox(deps: ThreadListDeps) {
     // Flat list — no sections while searching
     html = focusBanner + searchFiltered.map(t => threadRow(t, false)).join('');
   } else {
-    const sections = groupBySection(searchFiltered);
+    const sections = groupBySection(searchFiltered, state.groupedSenders);
 
     // Try incremental DOM patching first (skip if searching or focus banner changed)
     const allThreads = sections.flatMap(s => s.threads);
@@ -206,8 +288,33 @@ export function renderInbox(deps: ThreadListDeps) {
     html = focusBanner + sections.map(s => {
       const unread = s.threads.filter(t => t.isUnread).length;
       const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
+
+      // Category rows (only in Today section)
+      let categoryHtml = '';
+      if (s.categoryThreads) {
+        if (s.categoryThreads.newsletters.length > 0) {
+          categoryHtml += categoryRow('newsletters', s.categoryThreads.newsletters);
+        }
+        if (s.categoryThreads.updates.length > 0) {
+          categoryHtml += categoryRow('updates', s.categoryThreads.updates);
+        }
+      }
+
+      // Sender group rows
+      let senderGroupHtml = '';
+      if (s.senderGroups) {
+        for (const [email, groupThreads] of Object.entries(s.senderGroups)) {
+          if (groupThreads.length > 0) {
+            const name = groupThreads[0].senderName || email;
+            senderGroupHtml += senderGroupRow(email, name, groupThreads);
+          }
+        }
+      }
+
       return `
       <div class="section-header">${s.label}${badge}</div>
+      ${categoryHtml}
+      ${senderGroupHtml}
       ${s.threads.map(t => threadRow(t, false)).join('')}
     `;
     }).join('');
@@ -242,6 +349,7 @@ export function renderInbox(deps: ThreadListDeps) {
     container.innerHTML = html;
   }
   wireThreadRows(container, searchFiltered, false, deps);
+  wireCategoryAndGroupRows(container, deps);
   if (state.bulkMode) deps.updateBulkBar();
   if (state.selectedThreadId) {
     const row = container.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
@@ -253,6 +361,42 @@ export function renderInbox(deps: ThreadListDeps) {
 
   // Render new senders section above thread list
   renderNewSendersSection(container, deps.getActionDeps(), deps.openThread);
+}
+
+function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadListDeps) {
+  // Wire category rows
+  container.querySelectorAll<HTMLElement>('.category-row').forEach(row => {
+    const cat = row.dataset.category;
+    row.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.category-actions')) return;
+      if ((e.target as HTMLElement).closest('.sender-badge')) return;
+      state.categoryFilter = cat ?? null;
+      deps.renderInbox();
+    });
+    // Sender badges inside category rows
+    row.querySelectorAll<HTMLElement>('.sender-badge').forEach(badge => {
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const email = badge.dataset.senderEmail;
+        if (email) {
+          state.senderFilter = email;
+          deps.renderInbox();
+        }
+      });
+    });
+  });
+
+  // Wire sender group rows
+  container.querySelectorAll<HTMLElement>('.sender-group-row').forEach(row => {
+    const email = row.dataset.senderEmail;
+    row.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.thread-actions')) return;
+      if (email) {
+        state.senderFilter = email;
+        deps.renderInbox();
+      }
+    });
+  });
 }
 
 function prependSearchBar(container: HTMLElement, barHtml: string, value: string, _deps: ThreadListDeps) {

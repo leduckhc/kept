@@ -23,6 +23,10 @@ export const state = {
   gPending: false,
   gTimeout: null as ReturnType<typeof setTimeout> | null,
   layoutMode: (localStorage.getItem('kept.layoutMode') || '3-pane') as LayoutMode,
+  // Newsletters & Updates + Group by Sender
+  categoryFilter: null as string | null,
+  senderFilter: null as string | null,
+  groupedSenders: [] as string[],
 };
 
 export function setAccount(a: Account) {

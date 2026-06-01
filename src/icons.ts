@@ -39,6 +39,8 @@ import keyboardIcon from '@iconify/icons-mdi/keyboard';
 import attachIcon from '@iconify/icons-mdi/attachment';
 import snoozeIcon from '@iconify/icons-mdi/alarm-snooze';
 import emailOpenIcon from '@iconify/icons-mdi/email-open';
+import eyeIcon from '@iconify/icons-mdi/eye';
+import arrowLeftIcon from '@iconify/icons-mdi/arrow-left';
 
 interface IconData {
   width?: number;
@@ -115,6 +117,10 @@ export const icon = {
   // Thumb icons
   thumbUp:     (s?: string) => renderSvg(thumbUpData, s),
   thumbDown:   (s?: string) => renderSvg(thumbDownData, s),
+
+  // Mark read / back
+  markRead:    (s?: string) => renderSvg(i(eyeIcon), s),
+  arrowLeft:   (s?: string) => renderSvg(i(arrowLeftIcon), s),
 
   // Custom render for any icon data
   custom: renderSvg,

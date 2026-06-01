@@ -141,4 +141,17 @@ async function migrate(db: Database): Promise<void> {
 
   // KPT-074: per-account email signature
   await db.execute(`ALTER TABLE accounts ADD COLUMN signature TEXT`).catch(() => {});
+
+  // Newsletters & Updates: category column
+  await db.execute(`ALTER TABLE threads ADD COLUMN category TEXT DEFAULT 'personal'`).catch(() => {});
+
+  // Group by sender table
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS grouped_senders (
+      email TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      group_type TEXT NOT NULL DEFAULT 'sender',
+      created_at INTEGER DEFAULT (unixepoch())
+    )
+  `).catch(() => {});
 }

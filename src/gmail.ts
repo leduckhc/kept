@@ -23,6 +23,7 @@ export interface Thread {
   label: string;      // KPT-023: 'INBOX' | 'SENT' | 'DRAFT' | 'STARRED'
   accountId: string;  // KPT-037: which account this thread belongs to
   isMuted: boolean;   // KPT-040: suppressed from inbox permanently
+  category: string;   // 'personal' | 'newsletters' | 'updates'
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -217,6 +218,15 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   const isStarred = last.labelIds.includes('STARRED') ? 1 : 0;
   const newMessageCount = msgs.length;
 
+  // Extract category from Gmail labels
+  const allLabelIds = msgs.flatMap(m => m.labelIds ?? []);
+  let category = 'personal';
+  if (allLabelIds.includes('CATEGORY_PROMOTIONS') || allLabelIds.includes('CATEGORY_FORUMS')) {
+    category = 'newsletters';
+  } else if (allLabelIds.includes('CATEGORY_UPDATES') || allLabelIds.includes('CATEGORY_SOCIAL')) {
+    category = 'updates';
+  }
+
   // Check existing snooze/mute state and message count so we can auto-unsnooze on new messages
   const existing = await db.select<Array<{ snoozed_until: number | null; snooze_label: string | null; message_count: number | null; is_muted: number | null }>>(
     'SELECT snoozed_until, snooze_label, message_count, is_muted FROM threads WHERE id = ?',
@@ -235,8 +245,8 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 
   await db.execute(
     `INSERT INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, label, message_count, snoozed_until, snooze_label, is_muted)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, label, message_count, snoozed_until, snooze_label, is_muted, category)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id    = excluded.account_id,
        subject       = excluded.subject,
@@ -252,8 +262,9 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
        message_count  = excluded.message_count,
        snoozed_until  = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snoozed_until, excluded.snoozed_until) END,
        snooze_label   = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snooze_label, excluded.snooze_label) END,
-       is_muted       = COALESCE(threads.is_muted, excluded.is_muted)`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, label, newMessageCount, snoozedUntil, snoozeLabel, isMuted]
+       is_muted       = COALESCE(threads.is_muted, excluded.is_muted),
+       category       = excluded.category`,
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, label, newMessageCount, snoozedUntil, snoozeLabel, isMuted, category]
   );
 }
 
@@ -421,6 +432,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     label: (r.label as string) ?? 'INBOX',
     accountId: (r.account_id as string) ?? '',
     isMuted: (r.is_muted as number) === 1,
+    category: (r.category as string) ?? 'personal',
   };
 }
 
@@ -751,7 +763,7 @@ function parseFrom(raw: string): { name: string; email: string } {
   return { name: '', email: raw.trim() };
 }
 
-let _cachedSections: Array<{ label: string; threads: Thread[] }> | null = null;
+let _cachedSections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]> }> | null = null;
 let _cachedSectionsKey = '';
 
 export function invalidateSectionCache() {
@@ -759,9 +771,10 @@ export function invalidateSectionCache() {
   _cachedSectionsKey = '';
 }
 
-export function groupBySection(threads: Thread[]): Array<{ label: string; threads: Thread[] }> {
+export function groupBySection(threads: Thread[], groupedSenders?: string[]): Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]> }> {
   // Fast cache key: length + boundary timestamps + boundary unread states
-  const key = `${threads.length}:${threads[0]?.receivedAt}:${threads[threads.length-1]?.receivedAt}:${threads[0]?.isUnread}:${threads[threads.length-1]?.isUnread}:${threads[0]?.isStarred}:${threads[threads.length-1]?.isStarred}`;
+  const gsKey = groupedSenders?.join(',') ?? '';
+  const key = `${threads.length}:${threads[0]?.receivedAt}:${threads[threads.length-1]?.receivedAt}:${threads[0]?.isUnread}:${threads[threads.length-1]?.isUnread}:${threads[0]?.isStarred}:${threads[threads.length-1]?.isStarred}:${gsKey}`;
   if (_cachedSectionsKey === key && _cachedSections) return _cachedSections;
 
   const now = new Date();
@@ -775,6 +788,8 @@ export function groupBySection(threads: Thread[]): Array<{ label: string; thread
   const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
 
+  const groupedSet = new Set(groupedSenders ?? []);
+
   const newSenders: Thread[] = [];
   const todayGroup: Thread[] = [];
   const yesterdayGroup: Thread[] = [];
@@ -784,6 +799,10 @@ export function groupBySection(threads: Thread[]): Array<{ label: string; thread
   const lastMonth: Thread[] = [];
   const byYear: Record<number, Thread[]> = {};
 
+  // Today category threads
+  const todayNewsletters: Thread[] = [];
+  const todayUpdates: Thread[] = [];
+
   // Detect new senders = first time we see this sender (crude: no prior archived threads needed)
   // For now: unread threads from senders with only 1 thread total
   const senderCounts: Record<string, number> = {};
@@ -791,6 +810,15 @@ export function groupBySection(threads: Thread[]): Array<{ label: string; thread
 
   for (const t of threads) {
     const d = new Date(t.receivedAt);
+
+    // Today's newsletters/updates get pulled into special rows
+    if (d >= today && t.category === 'newsletters') {
+      todayNewsletters.push(t); continue;
+    }
+    if (d >= today && t.category === 'updates') {
+      todayUpdates.push(t); continue;
+    }
+
     if (senderCounts[t.senderEmail] === 1 && t.isUnread) {
       newSenders.push(t); continue;
     }
@@ -805,23 +833,46 @@ export function groupBySection(threads: Thread[]): Array<{ label: string; thread
     (byYear[year] ??= []).push(t);
   }
 
-  const sections: Array<{ label: string; threads: Thread[] }> = [
+  // Helper: split threads into grouped senders and remaining
+  function splitGrouped(list: Thread[]): { remaining: Thread[]; groups: Record<string, Thread[]> } {
+    if (groupedSet.size === 0) return { remaining: list, groups: {} };
+    const remaining: Thread[] = [];
+    const groups: Record<string, Thread[]> = {};
+    for (const t of list) {
+      if (groupedSet.has(t.senderEmail)) {
+        (groups[t.senderEmail] ??= []).push(t);
+      } else {
+        remaining.push(t);
+      }
+    }
+    return { remaining, groups };
+  }
+
+  const todaySplit = splitGrouped(todayGroup);
+  const yesterdaySplit = splitGrouped(yesterdayGroup);
+  const thisWeekSplit = splitGrouped(thisWeek);
+  const lastWeekSplit = splitGrouped(lastWeek);
+  const thisMonthSplit = splitGrouped(thisMonth);
+  const lastMonthSplit = splitGrouped(lastMonth);
+
+  const sections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]> }> = [
     { label: 'New senders', threads: newSenders },
-    { label: 'Today', threads: todayGroup },
-    { label: 'Yesterday', threads: yesterdayGroup },
-    { label: 'This week', threads: thisWeek },
-    { label: 'Last week', threads: lastWeek },
-    { label: MONTH_NAMES[now.getMonth()], threads: thisMonth },
-    { label: MONTH_NAMES[(now.getMonth() - 1 + 12) % 12], threads: lastMonth },
+    { label: 'Today', threads: todaySplit.remaining, categoryThreads: { newsletters: todayNewsletters, updates: todayUpdates }, senderGroups: todaySplit.groups },
+    { label: 'Yesterday', threads: yesterdaySplit.remaining, senderGroups: yesterdaySplit.groups },
+    { label: 'This week', threads: thisWeekSplit.remaining, senderGroups: thisWeekSplit.groups },
+    { label: 'Last week', threads: lastWeekSplit.remaining, senderGroups: lastWeekSplit.groups },
+    { label: MONTH_NAMES[now.getMonth()], threads: thisMonthSplit.remaining, senderGroups: thisMonthSplit.groups },
+    { label: MONTH_NAMES[(now.getMonth() - 1 + 12) % 12], threads: lastMonthSplit.remaining, senderGroups: lastMonthSplit.groups },
   ];
 
   // Add year groups sorted descending
   const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
   for (const y of years) {
-    sections.push({ label: String(y), threads: byYear[y] });
+    const split = splitGrouped(byYear[y]);
+    sections.push({ label: String(y), threads: split.remaining, senderGroups: split.groups });
   }
 
-  const result = sections.filter(s => s.threads.length > 0);
+  const result = sections.filter(s => s.threads.length > 0 || (s.categoryThreads && (s.categoryThreads.newsletters.length > 0 || s.categoryThreads.updates.length > 0)) || (s.senderGroups && Object.keys(s.senderGroups).length > 0));
   _cachedSectionsKey = key;
   _cachedSections = result;
   return result;
@@ -841,4 +892,30 @@ function startOf(unit: 'day' | 'week' | 'month', d: Date): Date {
 export async function hasSyncedBefore(accountId: string): Promise<boolean> {
   const historyId = await getSetting(accountId, 'historyId');
   return historyId !== null;
+}
+
+// ── Grouped Senders ───────────────────────────────────────
+export async function getGroupedSenders(accountId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ email: string }>>(
+    'SELECT email FROM grouped_senders WHERE account_id = ?',
+    [accountId]
+  );
+  return rows.map(r => r.email);
+}
+
+export async function addGroupedSender(accountId: string, email: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    'INSERT OR REPLACE INTO grouped_senders (email, account_id) VALUES (?, ?)',
+    [email, accountId]
+  );
+}
+
+export async function removeGroupedSender(accountId: string, email: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    'DELETE FROM grouped_senders WHERE email = ? AND account_id = ?',
+    [email, accountId]
+  );
 }

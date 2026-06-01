@@ -1,8 +1,9 @@
-import { type Thread, unmuteThread } from './gmail';
+import { type Thread, unmuteThread, addGroupedSender, removeGroupedSender } from './gmail';
 import { setStatus } from './helpers';
 import { doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute, type ActionDeps } from './actions';
 import { openSnoozePicker } from './snooze';
 import { icon } from './icons';
+import { state } from './state';
 
 export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElement, isSnoozed: boolean, deps: ActionDeps) {
   document.getElementById('kept-ctx-menu')?.remove();
@@ -38,6 +39,23 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
     }
   }});
   items.push('divider');
+  const isGrouped = state.groupedSenders.includes(t.senderEmail);
+  items.push({ label: `${icon.tag('16px')}  ${isGrouped ? 'Ungroup' : 'Group'} emails from ${t.senderName || t.senderEmail}`, action: () => {
+    menu.remove();
+    const accountId = state.account?.id;
+    if (!accountId) return;
+    if (isGrouped) {
+      removeGroupedSender(accountId, t.senderEmail).then(() => {
+        state.groupedSenders = state.groupedSenders.filter(e => e !== t.senderEmail);
+        deps.renderInbox();
+      }).catch(() => setStatus('Ungroup failed'));
+    } else {
+      addGroupedSender(accountId, t.senderEmail).then(() => {
+        state.groupedSenders = [...state.groupedSenders, t.senderEmail];
+        deps.renderInbox();
+      }).catch(() => setStatus('Group failed'));
+    }
+  }});
   items.push({ label: `${icon.close('16px')}  Block sender`, action: () => { menu.remove(); doBlock(t, row, deps); }, cls: 'ctx-menu-item--danger' });
 
   const actionItems = items.filter((x): x is MenuItem => x !== 'divider');
