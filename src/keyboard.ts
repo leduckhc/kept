@@ -24,6 +24,7 @@ export interface KeyboardDeps {
   doToggleStar: (t: Thread, row: HTMLElement) => Promise<void>;
   doMarkUnread: (t: Thread, row: HTMLElement) => Promise<void>;
   doMute: (t: Thread, row: HTMLElement, deps: ActionDeps) => Promise<void>;
+  syncAndRender: () => void;
 }
 
 export function isInputFocused(): boolean {
@@ -160,6 +161,10 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
     if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       deps.renderCommandPalette();
+    }
+    if (e.key === 'r' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      deps.syncAndRender();
     }
   });
 

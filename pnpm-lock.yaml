@@ -11,6 +11,12 @@ importers:
       '@fabianlars/tauri-plugin-oauth':
         specifier: ^2.0.0
         version: 2.0.0
+      '@iconify/icons-mdi':
+        specifier: ^1.2.48
+        version: 1.2.48
+      '@iconify/icons-mdi-light':
+        specifier: ^1.2.5
+        version: 1.2.5
       '@tauri-apps/api':
         specifier: ^2.11.0
         version: 2.11.0
@@ -215,6 +221,15 @@ packages:
 
   '@fabianlars/tauri-plugin-oauth@2.0.0':
     resolution: {integrity: sha512-I1s08ZXrsFuYfNWusAcpLyiCfr5TCvaBrRuKfTG+XQrcaqnAcwjdWH0U5J9QWuMDLwCUMnVxdobtMJzPR8raxQ==}
+
+  '@iconify/icons-mdi-light@1.2.5':
+    resolution: {integrity: sha512-8v8af/vCChwjhc+grZJnsPecT4Al01ydxnH8EeOSXfKE9CfrL4QSXAg6q+15hRIfciSIcBV1ZaAm9I31Frgo8w==}
+
+  '@iconify/icons-mdi@1.2.48':
+    resolution: {integrity: sha512-1Tiq+iX1d2MzrdDiw45Tc9HuhNgg8H4vvaKNV+kF+jmr/kPG+YyeLMyXUKp4bwv+gheIAgNpZPjuqAPRkmMieA==}
+
+  '@iconify/types@2.0.0':
+    resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
@@ -832,6 +847,16 @@ snapshots:
   '@fabianlars/tauri-plugin-oauth@2.0.0':
     dependencies:
       '@tauri-apps/api': 2.11.0
+
+  '@iconify/icons-mdi-light@1.2.5':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify/icons-mdi@1.2.48':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify/types@2.0.0': {}
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 

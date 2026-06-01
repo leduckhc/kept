@@ -19,6 +19,8 @@ export interface CommandPaletteDeps {
   removeAccount: (a: Account) => Promise<void>;
   clearActiveAccountId: () => void;
   applyTheme: (theme: string) => void;
+  syncAndRender: () => void;
+  openSettings: () => void;
 }
 
 const CMD_RECENT_KEY = 'cmd-palette-recent';
@@ -95,6 +97,8 @@ export function renderCommandPalette(deps: CommandPaletteDeps) {
     { id: 'toggle-layout', label: 'Toggle Layout (2-pane / 3-pane)', icon: icon.email('16px'), group: 'App', action: () => {
       toggleLayoutMode();
     }},
+    { id: 'sync',           label: 'Sync',              shortcut: '⌘R', icon: icon.send('16px'), group: 'App', action: () => deps.syncAndRender() },
+    { id: 'settings',       label: 'Settings',          icon: icon.email('16px'), group: 'App', action: () => deps.openSettings() },
     { id: 'show-shortcuts',label: 'Show Shortcuts',    shortcut: '?', icon: icon.keyboard('16px'), group: 'App', action: () => deps.showCheatSheet() },
     { id: 'sign-out',      label: 'Sign Out',          icon: icon.logout('16px'), group: 'App', action: async () => {
       if (!confirm('Sign out of all accounts? This will delete all local data.')) return;

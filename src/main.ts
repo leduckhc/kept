@@ -23,7 +23,6 @@ import {
   openThreadWithReply as _openThreadWithReply,
 } from './keyboard';
 import {
-  toggleBulkMode as _toggleBulkMode,
   exitBulkMode as _exitBulkMode,
   toggleBulkSelection as _toggleBulkSelection,
   removeBulkBar,
@@ -196,7 +195,6 @@ function showShell() {
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
         <button class="btn-icon account-picker-btn" id="btn-account" title="Switch account" style="font-size:13px">${state.account?.email?.split('@')[0] ?? '…'} ▾</button>
-        <button class="btn-icon btn-menu" id="btn-menu" title="More options">⋮</button>
       </div>
       <div class="app-body">
         <nav class="sidebar" id="sidebar">
@@ -293,9 +291,6 @@ function showShell() {
   // Resizable pane handle
   initResizeHandle();
 
-  // ⋮ menu
-  document.getElementById('btn-menu')!.addEventListener('click', () => showToolbarMenu());
-
   document.getElementById('btn-account')!.addEventListener('click', () => {
     showAccountMenu();
   });
@@ -323,6 +318,10 @@ function showShell() {
   registerKeyboardShortcuts();
 
   initSwipeGestures({ getActionDeps });
+
+  // Expose hooks for native menu events (Tauri)
+  (window as any).__kept_sync = () => syncAndRender();
+  (window as any).__kept_settings = () => openSettings();
 }
 
 // ── Settings panel ─────────────────────────────────────────
@@ -717,30 +716,6 @@ async function syncAndRender() {
   }
 }
 
-// ── Toolbar ⋮ menu ────────────────────────────────────────
-function showToolbarMenu() {
-  document.getElementById('toolbar-menu-overlay')?.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'toolbar-menu-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;';
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-
-  const menu = document.createElement('div');
-  menu.className = 'toolbar-menu';
-  menu.innerHTML = `
-    <button class="toolbar-menu-item" id="tmenu-sync">Sync</button>
-    <button class="toolbar-menu-item" id="tmenu-select">Select mode</button>
-    <button class="toolbar-menu-item" id="tmenu-settings">Settings</button>
-  `;
-  overlay.appendChild(menu);
-  document.body.appendChild(overlay);
-
-  document.getElementById('tmenu-sync')!.addEventListener('click', () => { overlay.remove(); syncAndRender(); });
-  document.getElementById('tmenu-select')!.addEventListener('click', () => { overlay.remove(); toggleBulkMode(); });
-  document.getElementById('tmenu-settings')!.addEventListener('click', () => { overlay.remove(); openSettings(); });
-}
-
 // ── Account menu ──────────────────────────────────────────
 function showAccountMenu() {
   // Remove any existing menu
@@ -913,10 +888,10 @@ function registerKeyboardShortcuts() {
     doMarkUnread,
     doMute,
     openSearchBar: () => showSearchBar({ renderInbox, openThread }),
+    syncAndRender,
   });
 }
 
-function toggleBulkMode() { _toggleBulkMode(renderInbox); }
 function exitBulkMode() { _exitBulkMode(renderInbox); }
 function toggleBulkSelection(id: string) { _toggleBulkSelection(id, updateBulkBar); }
 function updateBulkBar() { _updateBulkBar(getActionDeps, exitBulkMode, openBulkSnoozePicker); }
@@ -965,6 +940,8 @@ function renderCommandPalette() {
     removeAccount,
     clearActiveAccountId,
     applyTheme,
+    syncAndRender,
+    openSettings,
   });
 }
 
