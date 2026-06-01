@@ -11,6 +11,7 @@ export interface KeyboardDeps {
   openSearchBar: () => void;
   openThreadWithReply: (t: Thread) => void;
   openComposeNew: (subject?: string) => void;
+  openComposeForward: (subject: string, quotedText?: string) => void;
   switchView: (view: ViewName) => void;
   toggleFocusMode: () => void;
   toggleBulkSelection: (id: string) => void;
@@ -325,7 +326,13 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
         const selectedThread = state.selectedThreadId ? state.threads.find(x => x.id === state.selectedThreadId) : null;
         const baseSubject = readerSubject || selectedThread?.subject || '';
         const fwdSubject = baseSubject.startsWith('Fwd:') ? baseSubject : baseSubject ? `Fwd: ${baseSubject}` : '';
-        deps.openComposeNew(fwdSubject);
+        // Grab last message text from reader if open
+        let quotedText = '';
+        try {
+          const msgs = document.querySelectorAll('.msg-body');
+          if (msgs.length > 0) quotedText = (msgs[msgs.length - 1] as HTMLElement).innerText?.slice(0, 2000) ?? '';
+        } catch { /* */ }
+        deps.openComposeForward(fwdSubject, quotedText);
         break;
       }
 

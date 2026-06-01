@@ -798,6 +798,7 @@ function registerKeyboardShortcuts() {
     openThread,
     openThreadWithReply,
     openComposeNew,
+    openComposeForward,
     switchView,
     toggleFocusMode,
     toggleBulkSelection,
@@ -841,6 +842,10 @@ function renderStarredView() { return _renderStarredView(getThreadListDeps()); }
 
 function openComposeNew(prefillSubject = '') {
   return getCompose().then(m => m.openComposeNew(prefillSubject, openSnippetPicker, showFollowupPrompt));
+}
+
+function openComposeForward(subject: string, quotedText?: string) {
+  return getCompose().then(m => m.openComposeForward({ subject, quotedText }));
 }
 
 function openThread(t: Thread) {

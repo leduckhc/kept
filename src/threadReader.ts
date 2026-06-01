@@ -5,6 +5,8 @@ import { sanitizeEmailHtml } from './sanitize';
 import { getDb } from './db';
 import { showToast, showUndoToast } from './toasts';
 import { esc, formatDate } from './helpers';
+import { openComposeReply, openComposeForward } from './compose';
+import { icon } from './icons';
 
 function getAvatarColor(name: string): string {
   const colors = ["#5B4EDB","#E84D8A","#FEB300","#00C49A","#2F80ED","#F97316","#8B5CF6","#06B6D4"];
@@ -16,8 +18,8 @@ function getAvatarColor(name: string): string {
 export async function openThread(
   t: Thread,
   renderInbox: () => void,
-  openSnippetPicker: (ta: HTMLElement | null) => void,
-  showFollowupPrompt: (opts: { threadId: string; subject: string; sentTo: string }) => void,
+  _openSnippetPicker?: (ta: HTMLElement | null) => void,
+  _showFollowupPrompt?: (opts: { threadId: string; subject: string; sentTo: string }) => void,
 ) {
   if (!state.account) return;
   if (t.isUnread) {
@@ -28,9 +30,6 @@ export async function openThread(
       document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.add('unread');
     });
   }
-
-  const draftKey = 'draft-' + t.gmailThreadId;
-  const savedDraft = localStorage.getItem(draftKey);
 
   const shell = document.getElementById('app-shell')!;
   const pane = document.getElementById('reader-pane');
@@ -53,30 +52,11 @@ export async function openThread(
         <button class="reply-chip" data-reply="Sounds good">Sounds good</button>
         <button class="reply-chip" data-reply="On it">On it</button>
       </div>
-      <button class="btn-primary" id="btn-reply"${savedDraft ? ' style="display:none"' : ''}>Reply</button>
-      <button class="btn-secondary danger" id="btn-block-reader">Block sender</button>
-      <div class="compose-area" id="compose" style="display:${savedDraft ? 'flex' : 'none'}; flex:1; flex-direction:column; gap:8px;">
-        <div class="compose-toolbar">
-          <button class="toolbar-btn" data-cmd="bold" title="Bold (⌘B)"><b>B</b></button>
-          <button class="toolbar-btn" data-cmd="italic" title="Italic (⌘I)"><i>I</i></button>
-          <button class="toolbar-btn" data-cmd="underline" title="Underline (⌘U)"><u>U</u></button>
-          <span class="toolbar-sep"></span>
-          <button class="toolbar-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
-          <button class="toolbar-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
-          <span class="toolbar-sep"></span>
-          <button class="toolbar-btn" data-cmd="createLink" title="Insert link">🔗</button>
-          <button class="toolbar-btn" data-cmd="removeFormat" title="Clear formatting">⊘</button>
-          <span class="toolbar-sep"></span>
-          <button class="toolbar-btn" id="btn-attach" title="Attach file">📎</button>
-          <input type="file" id="file-input" multiple style="display:none" />
-        </div>
-        <div id="compose-body" class="compose-editor" contenteditable="true" data-placeholder="Reply…"></div>
-        <div id="compose-attachments" class="compose-attachments"></div>
-        <div style="display:flex; gap:8px;">
-          <button class="btn-primary" id="btn-send">Send</button>
-          <button class="btn-secondary" id="btn-cancel-compose">Cancel</button>
-        </div>
+      <div class="reader-footer-actions">
+        <button class="btn-primary" id="btn-reply">${icon.reply('14px')} Reply</button>
+        <button class="btn-secondary" id="btn-forward">${icon.send('14px')} Forward</button>
       </div>
+      <button class="btn-secondary danger" id="btn-block-reader">Block sender</button>
     </div>`;
 
   if (pane) {
@@ -292,41 +272,15 @@ export async function openThread(
     reader.querySelector('.reader-body')!.innerHTML = `<p style="color:var(--text-muted)">Could not load messages. ${esc(String(err))}</p>`;
   }
 
-  const composeEditor = reader.querySelector<HTMLElement>('#compose-body')!;
-
-  // Restore saved draft
-  if (savedDraft) {
-    composeEditor.innerText = savedDraft;
-  } else {
-    // Auto-append signature if account has one
-    const sig = state.account?.signature;
-    if (sig) {
-      composeEditor.innerHTML = `<br><div class="signature-block" contenteditable="true" style="color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px;margin-top:8px;font-size:13px;white-space:pre-wrap;">-- \n${sig.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+  // ── Reply / Forward buttons open floating compose ──
+  let lastPlainText = '';
+  try {
+    const bodyEl2 = reader.querySelector('.reader-body');
+    if (bodyEl2) {
+      const msgs = bodyEl2.querySelectorAll('.msg-body');
+      if (msgs.length > 0) lastPlainText = (msgs[msgs.length - 1] as HTMLElement).innerText?.slice(0, 2000) ?? '';
     }
-  }
-
-  composeEditor.addEventListener('input', () => {
-    localStorage.setItem(draftKey, composeEditor.innerText);
-  });
-  composeEditor.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === '/' && composeEditor.innerText.trim() === '') {
-      e.preventDefault();
-      openSnippetPicker(composeEditor);
-    }
-  });
-
-  reader.querySelectorAll<HTMLElement>('.toolbar-btn').forEach(btn => {
-    btn.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const cmd = btn.dataset.cmd!;
-      if (cmd === 'createLink') {
-        const url = prompt('Enter URL:');
-        if (url) document.execCommand('createLink', false, url);
-      } else {
-        document.execCommand(cmd, false);
-      }
-    });
-  });
+  } catch { /* non-fatal */ }
 
   reader.querySelectorAll<HTMLButtonElement>('.reply-chip').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -366,100 +320,20 @@ export async function openThread(
   });
 
   document.getElementById('btn-reply')!.addEventListener('click', () => {
-    const compose = document.getElementById('compose')!;
-    compose.style.display = 'flex';
-    document.getElementById('btn-reply')!.style.display = 'none';
-    composeEditor.focus();
-  });
-  document.getElementById('btn-cancel-compose')!.addEventListener('click', () => {
-    localStorage.removeItem(draftKey);
-    composeEditor.innerHTML = '';
-    document.getElementById('compose')!.style.display = 'none';
-    document.getElementById('btn-reply')!.style.display = '';
-  });
-
-  // ── Compose attachments state ──
-  const pendingAttachments: Array<{ filename: string; mimeType: string; data: Uint8Array }> = [];
-  const attachmentsContainer = reader.querySelector<HTMLElement>('#compose-attachments')!;
-  const fileInput = reader.querySelector<HTMLInputElement>('#file-input')!;
-
-  function renderPendingAttachments() {
-    attachmentsContainer.innerHTML = pendingAttachments.map((a, i) => `
-      <div class="compose-attachment-chip">
-        <span class="attachment-icon">${getFileIcon(a.mimeType)}</span>
-        <span class="attachment-name">${esc(a.filename)}</span>
-        <button class="compose-attachment-remove" data-idx="${i}" title="Remove">✕</button>
-      </div>`).join('');
-    attachmentsContainer.querySelectorAll('.compose-attachment-remove').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt((btn as HTMLElement).dataset.idx!);
-        pendingAttachments.splice(idx, 1);
-        renderPendingAttachments();
-      });
+    openComposeReply({
+      to: t.senderEmail,
+      subject: t.subject,
+      threadId: t.gmailThreadId,
+      inReplyTo: lastMessageId ?? undefined,
+      quotedText: lastPlainText,
     });
-  }
-
-  async function addFiles(files: FileList | File[]) {
-    for (const file of Array.from(files)) {
-      const buf = await file.arrayBuffer();
-      pendingAttachments.push({
-        filename: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        data: new Uint8Array(buf),
-      });
-    }
-    renderPendingAttachments();
-  }
-
-  reader.querySelector('#btn-attach')!.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files?.length) addFiles(fileInput.files);
-    fileInput.value = '';
   });
 
-  // Drag & drop on compose editor
-  composeEditor.addEventListener('dragover', (e: DragEvent) => {
-    e.preventDefault();
-    composeEditor.classList.add('drag-over');
-  });
-  composeEditor.addEventListener('dragleave', () => {
-    composeEditor.classList.remove('drag-over');
-  });
-  composeEditor.addEventListener('drop', (e: DragEvent) => {
-    e.preventDefault();
-    composeEditor.classList.remove('drag-over');
-    if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
-  });
-
-  document.getElementById('btn-send')!.addEventListener('click', async () => {
-    const body = composeEditor.innerText.trim();
-    if ((!body && !pendingAttachments.length) || !state.account) return;
-    const btn = document.getElementById('btn-send') as HTMLButtonElement;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="send-spinner"></span> Sending…';
-    try {
-      await sendEmail(state.account, {
-        to: t.senderEmail,
-        subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
-        body: body || '(attached)',
-        threadId: t.gmailThreadId,
-        inReplyTo: lastMessageId ?? undefined,
-        attachments: pendingAttachments.length > 0 ? pendingAttachments : undefined,
-      });
-      btn.innerHTML = '✓ Sent';
-      btn.classList.add('send-success');
-      setTimeout(() => {
-        localStorage.removeItem(draftKey);
-        closeReader();
-        showFollowupPrompt({ threadId: t.id, subject: t.subject, sentTo: t.senderEmail });
-      }, 1000);
-    } catch (e) {
-      btn.innerHTML = 'Send';
-      btn.disabled = false;
-      btn.classList.add('send-error');
-      setTimeout(() => btn.classList.remove('send-error'), 2000);
-      showToast(`Failed to send: ${e instanceof Error ? e.message : String(e)}`, 4000);
-    }
+  document.getElementById('btn-forward')!.addEventListener('click', () => {
+    openComposeForward({
+      subject: t.subject,
+      quotedText: lastPlainText,
+    });
   });
 
   document.getElementById('btn-archive-reader')!.addEventListener('click', async () => {
