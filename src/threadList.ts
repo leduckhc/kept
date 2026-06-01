@@ -9,6 +9,7 @@ import { getActiveReminderThreadIds } from './followupReminders';
 import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
 import { icon } from './icons';
+import { Newspaper, Megaphone } from 'lucide-static';
 import { renderNewSendersSection } from './newSenders';
 
 const MAX_INITIAL_RENDER = 100;
@@ -91,8 +92,9 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
 export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]): string {
   const label = type === 'newsletters' ? 'Newsletters' : 'Updates';
   const categoryIcon = type === 'newsletters'
-    ? `<div class="avatar category-avatar" style="background:#7c3aed" data-initial="📰"></div>`
-    : `<div class="avatar category-avatar" style="background:#0891b2" data-initial="🔔"></div>`;
+    ? `<div class="avatar category-avatar" style="background:#7c3aed">${icon.custom(Newspaper, '20px')}</div>`
+    : `<div class="avatar category-avatar" style="background:#0891b2">${icon.custom(Megaphone, '20px')}</div>`;
+  const hasUnread = threads.some(t => t.isUnread);
 
   // Group by sender for badges
   const bySender: Record<string, { name: string; email: string; count: number }> = {};
@@ -115,7 +117,7 @@ export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]):
     return `<span class="sender-badge" data-sender-email="${esc(email)}">${miniAvatar}${esc(info.name)} <span class="sender-count">#${info.count}</span></span>`;
   }).join('');
 
-  return `<div class="thread-row category-row" data-category="${type}">
+  return `<div class="thread-row category-row${hasUnread ? ' unread' : ''}" data-category="${type}">
     <div class="avatar-wrap">${categoryIcon}</div>
     <span class="thread-sender">${label}</span>
     <div class="thread-mid">
@@ -136,7 +138,7 @@ export function senderGroupRow(senderEmail: string, senderName: string, threads:
   const date = formatDate(latest.receivedAt);
   const displayName = senderName || senderEmail;
 
-  return `<div class="thread-row sender-group-row" data-sender-email="${esc(senderEmail)}">
+  return `<div class="thread-row sender-group-row${hasUnread ? ' unread' : ''}" data-sender-email="${esc(senderEmail)}">
     ${dot}
     <div class="avatar-wrap">${avatarHtml(latest)}</div>
     <span class="thread-sender">${esc(displayName)} <span class="sender-group-count">#${threads.length}</span></span>
