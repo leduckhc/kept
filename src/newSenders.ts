@@ -199,5 +199,11 @@ function openFullscreen(senders: NewSenderInfo[], actionDeps: ActionDeps, inboxC
     dismissOverlay();
   });
 
-  wireCards(overlay, currentSenders, actionDeps, inboxContainer, openThread);
+  // Wrap openThread to dismiss overlay before opening email
+  const wrappedOpenThread = openThread ? (t: Thread) => {
+    dismissOverlay();
+    openThread(t);
+  } : undefined;
+
+  wireCards(overlay, currentSenders, actionDeps, inboxContainer, wrappedOpenThread);
 }
