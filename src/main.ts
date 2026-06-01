@@ -8,7 +8,6 @@ import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminde
 import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
 import { applyTheme, applyLayoutMode, toggleLayoutMode, setStatus, esc } from './helpers';
 import { type ViewName, state, setAccount } from './state';
-import { ACCOUNT_BADGE_COLORS } from './avatar';
 import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { initSwipeGestures } from './swipe';
 import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute } from './actions';
@@ -299,7 +298,7 @@ function showShell() {
   initResizeHandle();
 
   document.getElementById('btn-account')!.addEventListener('click', () => {
-    showAccountMenu();
+    openSettings();
   });
 
   const searchEl = document.getElementById('search') as HTMLInputElement;
@@ -723,153 +722,7 @@ async function syncAndRender() {
   }
 }
 
-// ── Account menu ──────────────────────────────────────────
-function showAccountMenu() {
-  // Remove any existing menu
-  document.getElementById('account-menu-overlay')?.remove();
 
-  const overlay = document.createElement('div');
-  overlay.id = 'account-menu-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;';
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-
-  const menu = document.createElement('div');
-  menu.className = 'account-menu';
-  menu.innerHTML = `
-    <div class="account-menu-header">Accounts</div>
-    ${state.accounts.length > 1 ? `
-      <button class="account-menu-item${state.unifiedMode ? ' active' : ''}" id="btn-all-accounts">
-        <span class="account-email">All Accounts</span>
-        ${state.unifiedMode ? '<span class="account-active-badge">active</span>' : ''}
-      </button>` : ''}
-    ${state.accounts.map((a, i) => `
-      <button class="account-menu-item${!state.unifiedMode && a.id === state.account?.id ? ' active' : ''}" data-id="${a.id}">
-        <span class="account-badge-dot" style="background:${ACCOUNT_BADGE_COLORS[i % ACCOUNT_BADGE_COLORS.length]}"></span>
-        <span class="account-email">${esc(a.email)}</span>
-        ${!state.unifiedMode && a.id === state.account?.id ? '<span class="account-active-badge">active</span>' : ''}
-        <button class="account-remove-btn" data-remove-id="${a.id}" title="Remove account">×</button>
-      </button>`).join('')}
-    <button class="account-menu-add" id="btn-add-account">+ Add account</button>
-    <hr style="border:none;border-top:1px solid var(--border);margin:4px 0"/>
-    <button class="account-menu-signout" id="btn-signout-all">Sign out of all accounts</button>
-  `;
-
-  overlay.appendChild(menu);
-  document.body.appendChild(overlay);
-
-  // All Accounts unified mode
-  document.getElementById('btn-all-accounts')?.addEventListener('click', async () => {
-    overlay.remove();
-    state.unifiedMode = true;
-    const acctBtn = document.getElementById('btn-account');
-    if (acctBtn) acctBtn.innerHTML = '<span class="avatar-circle">A</span>';
-    const statusLeft = document.getElementById('status-left');
-    if (statusLeft) statusLeft.textContent = 'All Accounts';
-    await refreshAll();
-  });
-
-  // Switch account
-  menu.querySelectorAll<HTMLButtonElement>('.account-menu-item').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      if ((e.target as HTMLElement).closest('.account-remove-btn')) return;
-      const id = btn.dataset.id!;
-      if (!id) return; // "All Accounts" button has no data-id
-      const target = state.accounts.find(a => a.id === id);
-      if (!target) { overlay.remove(); return; }
-      if (!state.unifiedMode && target.id === state.account?.id) { overlay.remove(); return; }
-      state.unifiedMode = false;
-      setAccount(target);
-      state.threads = await loadThreads(target.id);
-      renderInbox();
-      const statusLeft = document.getElementById('status-left');
-      if (statusLeft) statusLeft.textContent = target.email;
-      const acctBtn = document.getElementById('btn-account');
-      if (acctBtn) acctBtn.innerHTML = `<span class="avatar-circle">${target.email.charAt(0).toUpperCase()}</span>`;
-      overlay.remove();
-      syncAndRender();
-    });
-  });
-
-  // Remove account
-  menu.querySelectorAll<HTMLButtonElement>('.account-remove-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const removeId = btn.dataset.removeId!;
-      const target = state.accounts.find(a => a.id === removeId);
-      if (!target) return;
-      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
-      overlay.remove();
-      try {
-        await removeAccount(target);
-        state.accounts = state.accounts.filter(a => a.id !== removeId);
-        if (state.account?.id === removeId) {
-          // Switch to another account or go to auth
-          const next = state.accounts[0] ?? null;
-          if (next) {
-            setAccount(next);
-            state.threads = await loadThreads(next.id);
-            showShell();
-            await refreshAll();
-          } else {
-            clearActiveAccountId();
-            state.account = null;
-            state.threads = [];
-            state.syncing = false;
-            showAuth();
-          }
-        }
-      } catch (err) {
-        console.error('Remove account error:', err);
-        setStatus('Failed to remove state.account');
-      }
-    });
-  });
-
-  // Add state.account
-  document.getElementById('btn-add-account')!.addEventListener('click', async () => {
-    overlay.remove();
-    const addBtn = document.getElementById('btn-account') as HTMLButtonElement | null;
-    if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Connecting…'; }
-    try {
-      const newAcct = await startOAuth();
-      // Check if already in list (duplicate email → update token, already done by saveAccount)
-      const existing = state.accounts.find(a => a.id === newAcct.id);
-      if (existing) {
-        // Update token in-list
-        const idx = state.accounts.indexOf(existing);
-        state.accounts[idx] = newAcct;
-        setStatus(`${newAcct.email} token refreshed`);
-      } else {
-        state.accounts.push(newAcct);
-        setStatus(`${newAcct.email} added`);
-      }
-    } catch (e) {
-      console.error('Add state.account error:', e);
-      setStatus(`Add state.account failed: ${e}`);
-    } finally {
-      if (addBtn) { addBtn.disabled = false; addBtn.textContent = `${state.account?.email?.split('@')[0] ?? '…'} ▾`; }
-      setTimeout(() => setStatus(''), 5000);
-    }
-  });
-
-  // Sign out of all state.accounts
-  document.getElementById('btn-signout-all')!.addEventListener('click', async () => {
-    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
-    overlay.remove();
-    try {
-      for (const a of state.accounts) {
-        await removeAccount(a).catch(e => console.error('Remove error:', e));
-      }
-    } finally {
-      clearActiveAccountId();
-      state.account = null;
-      state.accounts = [];
-      state.threads = [];
-      state.syncing = false;
-      showAuth();
-    }
-  });
-}
 
 function openThreadWithReply(t: Thread) {
   _openThreadWithReply(t, openThread);

@@ -9,6 +9,7 @@ import { getActiveReminderThreadIds } from './followupReminders';
 import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
 import { icon } from './icons';
+import { renderNewSendersSection } from './newSenders';
 
 export function renderEmptyState(emptyIcon: string, title: string, subtitle: string): string {
   return `<div class="empty-state">
@@ -155,6 +156,9 @@ export function renderInbox(deps: ThreadListDeps) {
   }
 
   if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
+
+  // Render new senders section above thread list
+  renderNewSendersSection(container, deps.getActionDeps());
 }
 
 function prependSearchBar(container: HTMLElement, barHtml: string, value: string, _deps: ThreadListDeps) {
