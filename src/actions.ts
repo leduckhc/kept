@@ -107,10 +107,10 @@ export async function doTrash(t: Thread, row: HTMLElement, deps: ActionDeps) {
   }
 }
 
-export async function doBlock(t: Thread, _row: HTMLElement, deps: ActionDeps) {
+export async function doBlock(t: Thread, _row: HTMLElement, deps: ActionDeps): Promise<boolean> {
   const acct = accountFor(t);
-  if (!acct) return;
-  if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return;
+  if (!acct) return false;
+  if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return false;
   await blockSender(acct, t);
   const fresh = await getAccountById(acct.id);
   if (fresh && !state.unifiedMode) setAccount(fresh);
@@ -120,6 +120,7 @@ export async function doBlock(t: Thread, _row: HTMLElement, deps: ActionDeps) {
     state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
     deps.renderInbox();
   });
+  return true;
 }
 
 export async function doUnsnooze(t: Thread, row: HTMLElement, deps: ActionDeps) {

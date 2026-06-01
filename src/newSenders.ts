@@ -113,13 +113,15 @@ function wireCards(root: HTMLElement, senders: NewSenderInfo[], actionDeps: Acti
       updateCount(inboxContainer);
     });
 
-    card.querySelector('.new-sender-block')!.addEventListener('click', (e) => {
+    card.querySelector('.new-sender-block')!.addEventListener('click', async (e) => {
       e.stopPropagation();
       // Create a dummy row element for doBlock
       const dummyRow = document.createElement('div');
-      doBlock(sender.thread, dummyRow, actionDeps);
-      card.remove();
-      updateCount(inboxContainer);
+      const blocked = await doBlock(sender.thread, dummyRow, actionDeps);
+      if (blocked) {
+        card.remove();
+        updateCount(inboxContainer);
+      }
     });
   });
 }
