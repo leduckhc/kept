@@ -2367,10 +2367,6 @@ body {
 .btn-google:active { transform: scale(0.97); }
 
 /* ── New Senders Section ─────────────────────────────────── */
-.new-senders-section {
-  padding: 12px 16px 8px;
-  border-bottom: 1px solid var(--border);
-}
 
 .new-senders-header {
   display: flex;
@@ -2408,8 +2404,46 @@ body {
   gap: 10px;
   padding-bottom: 4px;
   scrollbar-width: none;
+  position: relative;
 }
 .new-senders-row::-webkit-scrollbar { display: none; }
+
+.new-senders-section {
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.new-senders-section::before,
+.new-senders-section::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.new-senders-section::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg), transparent);
+}
+
+.new-senders-section::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg), transparent);
+}
+
+.new-senders-section.fade-left::before {
+  opacity: 1;
+}
+
+.new-senders-section.fade-right::after {
+  opacity: 1;
+}
 
 .new-sender-card {
   flex: 0 0 325px;

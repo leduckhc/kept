@@ -108,6 +108,16 @@ export function renderNewSendersSection(container: HTMLElement, actionDeps: Acti
   container.prepend(section);
   wireCards(section, senders, actionDeps, container, openThread);
 
+  // Wire edge fade shadows based on scroll position
+  const row = section.querySelector<HTMLElement>('.new-senders-row')!;
+  const updateFades = () => {
+    section.classList.toggle('fade-left', row.scrollLeft > 10);
+    section.classList.toggle('fade-right', row.scrollLeft < row.scrollWidth - row.clientWidth - 10);
+  };
+  row.addEventListener('scroll', updateFades, { passive: true });
+  // Initial check (deferred so layout is computed)
+  requestAnimationFrame(updateFades);
+
   // Wire expand button
   section.querySelector('.new-senders-expand')!.addEventListener('click', () => {
     openFullscreen(senders, actionDeps, container, openThread);
