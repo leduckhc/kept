@@ -57,6 +57,11 @@ async function refreshKnownSenders() {
   if (!state.accounts.length) return;
   const allEmails = await Promise.all(state.accounts.map(a => loadRepliedToSenders(a.id).catch(() => [] as string[])));
   state.knownSenders = new Set(allEmails.flat().map(e => e.toLowerCase()));
+  // Merge in accepted senders from localStorage
+  const accepted: string[] = JSON.parse(localStorage.getItem('kept-accepted-senders') || '[]');
+  for (const email of accepted) {
+    state.knownSenders.add(email.toLowerCase());
+  }
 }
 
 function toggleFocusMode() {

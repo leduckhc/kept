@@ -109,6 +109,13 @@ function wireCards(root: HTMLElement, senders: NewSenderInfo[], actionDeps: Acti
     card.querySelector('.new-sender-accept')!.addEventListener('click', (e) => {
       e.stopPropagation();
       state.knownSenders.add(email.toLowerCase());
+      // Persist to localStorage
+      const key = 'kept-accepted-senders';
+      const stored: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!stored.includes(email.toLowerCase())) {
+        stored.push(email.toLowerCase());
+        localStorage.setItem(key, JSON.stringify(stored));
+      }
       card.remove();
       updateCount(inboxContainer);
     });
