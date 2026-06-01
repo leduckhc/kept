@@ -642,10 +642,10 @@ body {
   border-collapse: collapse;
   max-width: 100%;
 }
+/* Do NOT add borders to email table cells — HTML emails use tables for layout, not data */
 .email-body-rendered td,
 .email-body-rendered th {
-  padding: 4px 8px;
-  border: 1px solid var(--border, #2a2a2a);
+  border: none;
 }
 .email-body-rendered pre {
   background: var(--surface, #141414);
@@ -663,11 +663,27 @@ body {
   margin: 0 0 8px;
 }
 /* Force readable text — override inline styles from senders that assume light backgrounds */
-.email-body-rendered *:not(a) {
+/* Also force backgrounds to transparent so white sections don't clash with dark theme */
+.email-body-rendered *:not(a):not(img) {
   color: var(--text) !important;
+  background-color: transparent !important;
+  background: transparent !important;
 }
 .email-body-rendered a {
   color: var(--accent, #5B4EDB) !important;
+  background-color: transparent !important;
+}
+/* Preserve CTA button backgrounds (explicit colored bg, not white) */
+.email-body-rendered a[style*="background:"],
+.email-body-rendered a[style*="background-color:"],
+.email-body-rendered td[bgcolor]:not([bgcolor="#FFFFFF"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]) a {
+  background: revert !important;
+  background-color: revert !important;
+  color: #ffffff !important;
+}
+.email-body-rendered td[bgcolor]:not([bgcolor="#FFFFFF"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]) {
+  background-color: revert !important;
+  background: revert !important;
 }
 /* Preserve button text colors where senders set explicit white-on-color */
 .email-body-rendered a[style*="color: #fff"],
