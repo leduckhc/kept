@@ -364,6 +364,7 @@ function openSettings() {
   renderSettingsAccounts();
 
   // Sync dark mode toggle state
+  const currentTheme = localStorage.getItem('theme') ?? 'light';
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const toggle = document.getElementById('settings-darkmode-toggle') as HTMLButtonElement;
   const sub = document.getElementById('settings-darkmode-sub');
@@ -371,7 +372,8 @@ function openSettings() {
     toggle.setAttribute('aria-checked', String(isDark));
     toggle.classList.toggle('on', isDark);
   }
-  if (sub) sub.textContent = isDark ? 'Currently using dark theme' : 'Switch to dark theme';
+  const themeLabel = currentTheme === 'system' ? 'Following system preference' : isDark ? 'Currently using dark theme' : 'Switch to dark theme';
+  if (sub) sub.textContent = themeLabel;
 
   // Sync smart notifications toggle state
   const smartNotifToggle = document.getElementById('settings-smartnotif-toggle') as HTMLButtonElement;
@@ -399,13 +401,15 @@ function openSettings() {
 
   // Wire dark mode toggle (once: true prevents listener accumulation on repeated open/close)
   toggle?.addEventListener('click', () => {
-    const nowDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const next = nowDark ? 'light' : 'dark';
+    const cur = localStorage.getItem('theme') ?? 'light';
+    const next = cur === 'light' ? 'dark' : cur === 'dark' ? 'system' : 'light';
     applyTheme(next);
-    toggle.setAttribute('aria-checked', String(!nowDark));
-    toggle.classList.toggle('on', !nowDark);
+    const nowDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    toggle.setAttribute('aria-checked', String(nowDark));
+    toggle.classList.toggle('on', nowDark);
     const subEl = document.getElementById('settings-darkmode-sub');
-    if (subEl) subEl.textContent = !nowDark ? 'Currently using dark theme' : 'Switch to dark theme';
+    const label = next === 'system' ? 'Following system preference' : nowDark ? 'Currently using dark theme' : 'Switch to dark theme';
+    if (subEl) subEl.textContent = label;
   }, { once: true });
 
   // Sync layout toggle state

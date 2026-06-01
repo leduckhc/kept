@@ -90,9 +90,10 @@ export function renderCommandPalette(deps: CommandPaletteDeps) {
     { id: 'go-sent',       label: 'Go to Sent',        icon: icon.send('16px'), group: 'Navigate', action: () => deps.switchView('Sent') },
     { id: 'go-drafts',     label: 'Go to Drafts',      icon: icon.pencil('16px'), group: 'Navigate', action: () => deps.switchView('Drafts') },
     { id: 'go-starred',    label: 'Go to Starred',     icon: icon.star('16px'), group: 'Navigate', action: () => deps.switchView('Starred') },
-        { id: 'toggle-theme',  label: 'Toggle Dark Mode',  icon: icon.theme('16px'), group: 'App', action: () => {
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      deps.applyTheme(isDark ? 'light' : 'dark');
+        { id: 'toggle-theme',  label: 'Toggle Theme (Light / Dark / System)',  icon: icon.theme('16px'), group: 'App', action: () => {
+      const current = localStorage.getItem('theme') ?? 'light';
+      const next = current === 'light' ? 'dark' : current === 'dark' ? 'system' : 'light';
+      deps.applyTheme(next);
     }},
     { id: 'toggle-layout', label: 'Toggle Layout (2-pane / 3-pane)', icon: icon.email('16px'), group: 'App', action: () => {
       toggleLayoutMode();

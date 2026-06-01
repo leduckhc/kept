@@ -616,10 +616,12 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   line-height: 1.6;
-  color: var(--text);
+  color: #1a1a1a;
+  background: #ffffff;
   word-break: break-word;
   overflow-wrap: break-word;
   padding: 16px;
+  border-radius: 8px;
 }
 .email-body-rendered a {
   color: var(--accent, #5B4EDB);
@@ -663,45 +665,22 @@ body {
 .email-body-rendered p {
   margin: 0 0 8px;
 }
-/* Force readable text — override inline styles from senders that assume light backgrounds */
-/* Dark mode: force light text + transparent bg so content is visible against #0a0a0a */
-/* Light mode: let emails render naturally (most are designed for white backgrounds) */
-[data-theme="dark"] .email-body-rendered *:not(a):not(img) {
-  color: var(--text) !important;
-  background-color: transparent !important;
-  background: transparent !important;
+/* ── Email dark mode (CSS filter approach — same as Gmail/Apple Mail/Outlook) ── */
+/* Inverts colors + rotates hue to preserve color relationships. Images/media
+   are re-inverted so they display correctly. Pure CSS = instantaneous switch. */
+[data-theme="dark"] .email-body-rendered {
+  filter: invert(1) hue-rotate(180deg);
+  -webkit-filter: invert(1) hue-rotate(180deg);
 }
-[data-theme="dark"] .email-body-rendered a {
-  color: var(--accent, #4a9eff) !important;
-  background-color: transparent !important;
+/* Re-invert media so images/videos look normal */
+[data-theme="dark"] .email-body-rendered img,
+[data-theme="dark"] .email-body-rendered video,
+[data-theme="dark"] .email-body-rendered picture,
+[data-theme="dark"] .email-body-rendered [style*="background-image"] {
+  filter: invert(1) hue-rotate(180deg);
+  -webkit-filter: invert(1) hue-rotate(180deg);
 }
-/* Light mode: minimal override — just cap max contrast and ensure readability */
-:root .email-body-rendered *:not(a):not(img) {
-  /* Let email inline styles show naturally on white background */
-}
-:root .email-body-rendered a {
-  color: var(--accent, #2563eb);
-}
-/* Preserve CTA button backgrounds (explicit colored bg, not white) */
-[data-theme="dark"] .email-body-rendered a[style*="background:"],
-[data-theme="dark"] .email-body-rendered a[style*="background-color:"],
-[data-theme="dark"] .email-body-rendered td[bgcolor]:not([bgcolor="#FFFFFF"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]) a {
-  background: revert !important;
-  background-color: revert !important;
-  color: #ffffff !important;
-}
-[data-theme="dark"] .email-body-rendered td[bgcolor]:not([bgcolor="#FFFFFF"]):not([bgcolor="#ffffff"]):not([bgcolor="white"]) {
-  background-color: revert !important;
-  background: revert !important;
-}
-/* Preserve button text colors where senders set explicit white-on-color */
-[data-theme="dark"] .email-body-rendered a[style*="color: #fff"],
-[data-theme="dark"] .email-body-rendered a[style*="color:#fff"],
-[data-theme="dark"] .email-body-rendered a[style*="color: #ffffff"],
-[data-theme="dark"] .email-body-rendered a[style*="color:#ffffff"],
-[data-theme="dark"] .email-body-rendered a[style*="color: rgb(255"] {
-  color: #ffffff !important;
-}
+/* Light mode: emails render naturally (designed for white backgrounds) */
 .reader-footer {
   position: sticky;
   bottom: 0;

@@ -1,9 +1,21 @@
 import { state, type LayoutMode } from './state';
 
 export function applyTheme(theme: string) {
-  document.documentElement.setAttribute('data-theme', theme);
-  document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
-  localStorage.setItem('theme', theme);
+  const resolved = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
+  document.documentElement.setAttribute('data-theme', resolved);
+  document.documentElement.style.colorScheme = resolved === 'dark' ? 'dark' : 'light';
+  localStorage.setItem('theme', theme); // store user choice (may be 'system')
+}
+
+// Listen for OS preference changes when user chose 'system'
+if (typeof window !== 'undefined') {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (localStorage.getItem('theme') === 'system') {
+      applyTheme('system');
+    }
+  });
 }
 
 export function applyLayoutMode(mode: LayoutMode) {
