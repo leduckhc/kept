@@ -239,9 +239,12 @@ function showShell() {
     <div id="app-shell" class="${state.layoutMode === '2-pane' ? 'layout-2pane' : ''}">
       <div class="toolbar">
         <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">☰</button>
-        <div class="toolbar-search-wrap">
-          <span class="toolbar-search-icon">${icon.search('14px')}</span>
-          <input class="search-input" id="search" placeholder="Search…" type="search" />
+        <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
+          <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]">${icon.search('16px')}</button>
+          <div class="search-pill">
+            <span class="toolbar-search-icon">${icon.search('14px')}</span>
+            <input class="search-input" id="search" placeholder="Search…" type="search" />
+          </div>
         </div>
         <div class="toolbar-actions">
           <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
@@ -359,6 +362,23 @@ function showShell() {
   });
 
   const searchEl = document.getElementById('search') as HTMLInputElement;
+  const searchWrap = document.getElementById('toolbar-search-wrap')!;
+  const searchToggle = document.getElementById('btn-search-toggle')!;
+
+  function expandSearch() {
+    searchWrap.classList.remove('collapsed');
+    searchWrap.classList.add('expanded');
+    setTimeout(() => searchEl.focus(), 50);
+  }
+  function collapseSearch() {
+    if (searchEl.value) return; // don't collapse if there's a query
+    searchWrap.classList.remove('expanded');
+    searchWrap.classList.add('collapsed');
+    searchEl.blur();
+  }
+
+  searchToggle.addEventListener('click', expandSearch);
+
   searchEl.addEventListener('input', () => {
     state.searchQuery = searchEl.value;
     if (searchDebounce !== null) clearTimeout(searchDebounce);
@@ -368,11 +388,29 @@ function showShell() {
       renderInbox();
     }, 200);
   });
-  searchEl.addEventListener('focus', () => searchEl.classList.add('expanded'));
-  searchEl.addEventListener('blur', () => { if (!searchEl.value) searchEl.classList.remove('expanded'); });
+  searchEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      searchEl.value = '';
+      state.searchQuery = '';
+      collapseSearch();
+      if (state.account) loadThreads(state.account.id).then(t => { state.threads = t; renderInbox(); });
+    }
+  });
+  // Collapse on click outside
+  document.addEventListener('click', (e) => {
+    if (searchWrap.classList.contains('expanded') && !searchWrap.contains(e.target as Node)) {
+      collapseSearch();
+    }
+  });
 
   // Keyboard shortcuts (skip when focus is in an input/textarea)
   function handleKey(e: KeyboardEvent) {
+    // Cmd/Ctrl+F: expand search bar (prevent browser find)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+      e.preventDefault();
+      expandSearch();
+      return;
+    }
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
     if (e.key === 'c' && !e.metaKey && !e.ctrlKey) openComposeNew();
