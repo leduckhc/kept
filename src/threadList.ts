@@ -4,13 +4,12 @@ import { state } from './state';
 import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze, accountFor } from './actions';
 import { openSnoozePicker } from './snooze';
 import { showContextMenu } from './contextMenu';
-import { avatarHtml, ACCOUNT_BADGE_COLORS } from './avatar';
+import { avatarHtml, stackedAvatarsHtml, ACCOUNT_BADGE_COLORS } from './avatar';
 import { getActiveReminderThreadIds } from './followupReminders';
 import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
 import { icon } from './icons';
 import { showUndoToast } from './toasts';
-import { Newspaper, Megaphone } from 'lucide-static';
 import { renderNewSendersSection } from './newSenders';
 
 const MAX_INITIAL_RENDER = 100;
@@ -92,10 +91,10 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
 
 export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]): string {
   const label = type === 'newsletters' ? 'Newsletters' : 'Updates';
-  const categoryIcon = type === 'newsletters'
-    ? `<div class="avatar category-avatar" style="background:#7c3aed">${icon.custom(Newspaper, '20px')}</div>`
-    : `<div class="avatar category-avatar" style="background:#0891b2">${icon.custom(Megaphone, '20px')}</div>`;
   const hasUnread = threads.some(t => t.isUnread);
+
+  // Stacked overlapping avatars from top senders
+  const avatarStack = stackedAvatarsHtml(threads, 3);
 
   // Group by sender for badges
   const bySender: Record<string, { name: string; email: string; count: number }> = {};
@@ -119,7 +118,7 @@ export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]):
   }).join('');
 
   return `<div class="thread-row category-row${hasUnread ? ' unread' : ''}" data-category="${type}">
-    <div class="avatar-wrap">${categoryIcon}</div>
+    <div class="avatar-wrap">${avatarStack}</div>
     <span class="thread-sender">${label}</span>
     <div class="thread-mid">
       <div class="category-senders">${badges}</div>
@@ -166,7 +165,7 @@ export function domainGroupRow(domain: string, threads: Thread[]): string {
 
   return `<div class="thread-row domain-group-row${hasUnread ? ' unread' : ''}" data-domain="${esc(domain)}">
     ${dot}
-    <div class="avatar-wrap"><div class="domain-avatar">${icon.globe('16px')}</div></div>
+    <div class="avatar-wrap">${stackedAvatarsHtml(threads, 3)}</div>
     <span class="thread-sender">${esc(domain)} <span class="sender-group-count">${countLabel}</span></span>
     <div class="thread-mid">
       <span class="thread-subject-line">${esc(latest.subject)}</span>

@@ -62,6 +62,34 @@ export function avatarHtml(t: Thread): string {
   return `<div class="avatar" style="background:${color}" data-initial="${initial}">${faviconImg}${gravatarImg}</div>`;
 }
 
+/** Stacked overlapping avatars for group rows (up to K senders). */
+export function stackedAvatarsHtml(threads: Thread[], maxCount = 3): string {
+  // Dedupe by senderEmail, keep order of first appearance
+  const seen = new Set<string>();
+  const unique: Thread[] = [];
+  for (const t of threads) {
+    if (!seen.has(t.senderEmail)) {
+      seen.add(t.senderEmail);
+      unique.push(t);
+      if (unique.length >= maxCount) break;
+    }
+  }
+  const avatars = unique.map((t, i) => {
+    const label = t.senderName || t.senderEmail;
+    const initial = label[0].toUpperCase();
+    const color = AVATAR_COLORS[hashStr(t.senderEmail) % AVATAR_COLORS.length];
+    const domain = t.senderEmail.split('@')[1] ?? '';
+    const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+    const gravatar = t.senderEmail ? gravatarUrl(t.senderEmail) : '';
+    const faviconImg = faviconUrl ? `<img class="avatar-favicon" src="${faviconUrl}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+    const gravatarImg = gravatar ? `<img class="avatar-gravatar" src="${gravatar}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+    const offset = i * 12; // px overlap shift
+    return `<div class="avatar stacked-avatar" style="background:${color};left:${offset}px;z-index:${maxCount - i}" data-initial="${initial}">${faviconImg}${gravatarImg}</div>`;
+  });
+  const totalWidth = 32 + (unique.length - 1) * 12;
+  return `<div class="stacked-avatars" style="width:${totalWidth}px">${avatars.join('')}</div>`;
+}
+
 export function avatarColor(s: string): string {
   const colors = ['#7c6fd4','#4a90d9','#e67e22','#27ae60','#c0392b','#8e44ad','#16a085','#d35400'];
   let h = 0;

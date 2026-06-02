@@ -427,6 +427,22 @@ body {
 /* Avatar wrap — clickable for selection */
 .avatar-wrap { cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; }
 
+/* Stacked overlapping avatars for group rows */
+.stacked-avatars {
+  position: relative;
+  height: 32px;
+  display: flex;
+  align-items: center;
+}
+.stacked-avatar {
+  position: absolute;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--bg-primary, #1a1a2e);
+  box-sizing: border-box;
+}
+
 /* Middle column — subject + snippet inline */
 .thread-mid {
   min-width: 0;
