@@ -298,7 +298,7 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
   let activeLabel: string;
   let activeSearch: string | undefined;
 
-  const KNOWN_LABELS = ['INBOX', 'SENT', 'DRAFT', 'STARRED', 'TRASH'];
+  const KNOWN_LABELS = ['INBOX', 'SENT', 'DRAFT', 'STARRED', 'TRASH', 'ARCHIVE'];
   if (labelOrSearch && KNOWN_LABELS.includes(labelOrSearch)) {
     activeLabel = labelOrSearch;
     activeSearch = search;
@@ -380,6 +380,8 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
     params.push(nowMs);
   } else if (activeLabel === 'TRASH') {
     sql = `SELECT * FROM threads WHERE account_id = ? AND label = 'TRASH' ORDER BY received_at DESC LIMIT 500`;
+  } else if (activeLabel === 'ARCHIVE') {
+    sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 1 AND label != 'TRASH' ORDER BY received_at DESC LIMIT 500`;
   } else {
     sql = `SELECT * FROM threads WHERE account_id = ? AND label = ? AND is_archived = 0 AND is_blocked = 0
            AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
