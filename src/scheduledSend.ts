@@ -8,6 +8,7 @@ export interface ScheduledEmail {
   to: string;
   subject: string;
   body: string;
+  htmlBody?: string;
   scheduledAt: number; // unix ms
   threadId?: string;
   inReplyTo?: string;
@@ -72,6 +73,7 @@ type SendFn = (account: Account, opts: {
   cc?: string;
   subject: string;
   body: string;
+  htmlBody?: string;
   threadId?: string;
   inReplyTo?: string;
   attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
@@ -102,6 +104,7 @@ async function dispatchDue(getAccount: () => Account | null, sendFn: SendFn) {
         cc: item.cc,
         subject: item.subject,
         body: item.body,
+        htmlBody: item.htmlBody,
         threadId: item.threadId,
         inReplyTo: item.inReplyTo,
         attachments,

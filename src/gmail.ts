@@ -476,6 +476,38 @@ export async function markUnread(account: Account, thread: Thread): Promise<void
   await db.execute('UPDATE threads SET is_unread = 1 WHERE id = ?', [thread.id]);
 }
 
+// Mark thread as unread by threadId (no Thread object needed)
+export async function markThreadUnread(account: Account, threadId: string): Promise<void> {
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${threadId}/modify`, { addLabelIds: ['UNREAD'] });
+}
+
+// Report spam (add SPAM, remove INBOX)
+export async function reportSpam(account: Account, threadId: string): Promise<void> {
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${threadId}/modify`, { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] });
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_archived = 1 WHERE gmail_thread_id = ?', [threadId]);
+}
+
+// Move to label (add target label, optionally remove INBOX)
+export async function moveToLabel(account: Account, threadId: string, labelId: string, removeFromInbox = true): Promise<void> {
+  const a = await ensureFreshToken(account);
+  const removeLabelIds = removeFromInbox ? ['INBOX'] : [];
+  await gmailPost(a, `/users/me/threads/${threadId}/modify`, { addLabelIds: [labelId], removeLabelIds });
+  if (removeFromInbox) {
+    const db = await getDb();
+    await db.execute('UPDATE threads SET is_archived = 1 WHERE gmail_thread_id = ?', [threadId]);
+  }
+}
+
+// Fetch user's labels for the move-to picker
+export async function fetchLabels(account: Account): Promise<Array<{id: string, name: string}>> {
+  const a = await ensureFreshToken(account);
+  const data = await gmailGet(a, '/users/me/labels') as { labels?: Array<{ id: string; name: string; type: string }> };
+  return (data.labels || []).filter((l) => l.type === 'user').map((l) => ({ id: l.id, name: l.name }));
+}
+
 export async function toggleStar(account: Account, thread: Thread): Promise<boolean> {
   const a = await ensureFreshToken(account);
   const newStarred = !thread.isStarred;
@@ -645,6 +677,7 @@ interface SendOptions {
   cc?: string;
   subject: string;
   body: string;
+  htmlBody?: string;
   threadId?: string;
   inReplyTo?: string;
   attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
@@ -739,9 +772,29 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
 
   let raw: string;
 
+  // Helper to build multipart/alternative body (text + html)
+  function buildAlternativePart(altBoundary: string): string {
+    const altLines = [
+      `--${altBoundary}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      '',
+      opts.body,
+      `--${altBoundary}`,
+      'Content-Type: text/html; charset=UTF-8',
+      '',
+      opts.htmlBody!,
+      `--${altBoundary}--`,
+    ];
+    return altLines.join('\r\n');
+  }
+
+  const hasHtml = !!opts.htmlBody;
+
   if (opts.attachments && opts.attachments.length > 0) {
-    // Multipart MIME with attachments
-    const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    // Multipart/mixed with nested multipart/alternative for text+html
+    const mixBoundary = `----=_Mix_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const altBoundary = `----=_Alt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
     const headerLines = [
       `From: ${account.email}`,
       `To: ${opts.to}`,
@@ -749,20 +802,32 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
       `Subject: ${opts.subject}`,
       opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
       `MIME-Version: 1.0`,
-      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      `Content-Type: multipart/mixed; boundary="${mixBoundary}"`,
       '',
-      `--${boundary}`,
-      'Content-Type: text/plain; charset=UTF-8',
-      '',
-      opts.body,
     ].filter(Boolean);
 
     const parts: string[] = [headerLines.join('\r\n')];
 
+    if (hasHtml) {
+      parts.push([
+        `--${mixBoundary}`,
+        `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+        '',
+        buildAlternativePart(altBoundary),
+      ].join('\r\n'));
+    } else {
+      parts.push([
+        `--${mixBoundary}`,
+        'Content-Type: text/plain; charset=UTF-8',
+        '',
+        opts.body,
+      ].join('\r\n'));
+    }
+
     for (const att of opts.attachments) {
       const b64 = uint8ArrayToBase64(att.data);
       parts.push([
-        `--${boundary}`,
+        `--${mixBoundary}`,
         `Content-Type: ${att.mimeType}; name="${att.filename}"`,
         `Content-Disposition: attachment; filename="${att.filename}"`,
         'Content-Transfer-Encoding: base64',
@@ -771,9 +836,24 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
       ].join('\r\n'));
     }
 
-    parts.push(`--${boundary}--`);
+    parts.push(`--${mixBoundary}--`);
     const mimeMessage = parts.join('\r\n');
     raw = btoa(unescape(encodeURIComponent(mimeMessage))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  } else if (hasHtml) {
+    // Multipart/alternative (text + html, no attachments)
+    const altBoundary = `----=_Alt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const lines = [
+      `From: ${account.email}`,
+      `To: ${opts.to}`,
+      opts.cc ? `Cc: ${opts.cc}` : '',
+      `Subject: ${opts.subject}`,
+      opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      '',
+      buildAlternativePart(altBoundary),
+    ].filter(Boolean);
+    raw = btoa(unescape(encodeURIComponent(lines.join('\r\n')))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   } else {
     // Simple text email
     const lines = [

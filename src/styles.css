@@ -3163,4 +3163,45 @@ body {
   position: relative;
 }
 
+/* ── Label picker dropdown (Move to) ── */
+.reader-actions-header {
+  position: relative;
+}
+.label-picker-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  min-width: 180px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  padding: 4px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  margin-top: 4px;
+}
+.label-picker-loading,
+.label-picker-empty {
+  padding: 12px 16px;
+  color: var(--text-muted, #888);
+  font-size: 13px;
+}
+.label-picker-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text-primary, #eee);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 0;
+}
+.label-picker-item:hover {
+  background: var(--bg-hover, #2a2a3e);
+}
+
 

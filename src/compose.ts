@@ -409,6 +409,7 @@ export async function openCompose(opts: ComposeOptions) {
       cc: cc || undefined,
       subject: subject || '(no subject)',
       body: body || '(attached)',
+      htmlBody: editorEl.innerHTML.trim() || undefined,
       threadId: opts.threadId,
       inReplyTo: opts.inReplyTo,
       attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,

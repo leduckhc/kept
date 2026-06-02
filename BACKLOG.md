@@ -10,7 +10,6 @@
 - [ ] **AI thread summaries + smart reply chips** — Local Ollama integration. Deferred until app is daily-driver stable.
 - [ ] **Rich text send** — Send `text/html` alternative part (~30min scope).
 - [ ] **Thread actions** — Mark unread, spam, move-to-label.
-- [ ] **Drafts open in Compose** — Clicking a draft in the Drafts view should open it in the floating compose panel (prefilled), not the thread reader.
 - [ ] **Background send daemon** — OS-level sidecar (launchd/systemd/Task Scheduler) to dispatch scheduled sends when app is closed. Ship alongside code-signing/installer work.
 - [ ] **E2E test suite** — Infrastructure ready; actual test files not written.
 

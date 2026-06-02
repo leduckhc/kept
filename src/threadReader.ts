@@ -1,4 +1,4 @@
-import { type Thread, fetchMessageBody, sendEmail, markRead, archiveThread, blockSender, loadAttachments, downloadAttachment, type AttachmentMeta } from './gmail';
+import { type Thread, fetchMessageBody, sendEmail, markRead, archiveThread, blockSender, loadAttachments, downloadAttachment, type AttachmentMeta, markThreadUnread, reportSpam, moveToLabel, fetchLabels } from './gmail';
 import { getAccountById } from './auth';
 import { state, setAccount } from './state';
 import { sanitizeEmailHtml } from './sanitize';
@@ -41,6 +41,9 @@ export async function openThread(
       <button class="btn-icon reader-back" id="reader-back" title="Back to inbox [Escape]">←</button>
       <div class="reader-subject">${esc(t.subject)}</div>
       <div class="reader-actions-header">
+        <button class="btn-icon" id="btn-mark-unread-reader" title="Mark unread">${icon.emailOpen('16px')}</button>
+        <button class="btn-icon" id="btn-spam-reader" title="Report spam">${icon.spam('16px')}</button>
+        <button class="btn-icon" id="btn-move-reader" title="Move to label">${icon.folderMove('16px')}</button>
         <button class="btn-icon" id="btn-archive-reader" title="Archive">🗑</button>
       </div>
     </div>
@@ -384,6 +387,94 @@ export async function openThread(
     state.threads = state.threads.filter(x => x.senderEmail !== t.senderEmail);
     renderInbox();
     closeReader();
+  });
+
+  // ── Thread actions: Mark unread, Spam, Move to label ──
+  document.getElementById('btn-mark-unread-reader')!.addEventListener('click', async () => {
+    if (!state.account) return;
+    try {
+      await markThreadUnread(state.account, t.gmailThreadId);
+      t.isUnread = true;
+      const db = await getDb();
+      await db.execute('UPDATE threads SET is_unread = 1 WHERE id = ?', [t.id]);
+      showToast('Marked as unread');
+      closeReader();
+      renderInbox();
+    } catch (e) {
+      showToast(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  });
+
+  document.getElementById('btn-spam-reader')!.addEventListener('click', async () => {
+    if (!state.account) return;
+    if (!confirm('Report this thread as spam?')) return;
+    try {
+      await reportSpam(state.account, t.gmailThreadId);
+      state.threads = state.threads.filter(x => x.id !== t.id);
+      showToast('Reported as spam');
+      closeReader();
+      renderInbox();
+    } catch (e) {
+      showToast(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  });
+
+  document.getElementById('btn-move-reader')!.addEventListener('click', async () => {
+    if (!state.account) return;
+    // Show label picker dropdown
+    const btn = document.getElementById('btn-move-reader')!;
+    const existing = document.querySelector('.label-picker-dropdown');
+    if (existing) { existing.remove(); return; }
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'label-picker-dropdown';
+    dropdown.innerHTML = '<div class="label-picker-loading">Loading labels…</div>';
+    btn.parentElement!.appendChild(dropdown);
+
+    try {
+      // Cache labels in state
+      if (!(state as unknown as Record<string, unknown>)._cachedLabels) {
+        (state as unknown as Record<string, unknown>)._cachedLabels = await fetchLabels(state.account);
+      }
+      const labels: Array<{id: string, name: string}> = (state as unknown as Record<string, unknown>)._cachedLabels as Array<{id: string, name: string}>;
+
+      if (labels.length === 0) {
+        dropdown.innerHTML = '<div class="label-picker-empty">No user labels found</div>';
+        return;
+      }
+
+      dropdown.innerHTML = '';
+      for (const label of labels) {
+        const item = document.createElement('button');
+        item.className = 'label-picker-item';
+        item.textContent = label.name;
+        item.addEventListener('click', async () => {
+          if (!state.account) return;
+          try {
+            await moveToLabel(state.account, t.gmailThreadId, label.id);
+            state.threads = state.threads.filter(x => x.id !== t.id);
+            showToast(`Moved to ${label.name}`);
+            dropdown.remove();
+            closeReader();
+            renderInbox();
+          } catch (e) {
+            showToast(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        });
+        dropdown.appendChild(item);
+      }
+    } catch {
+      dropdown.innerHTML = `<div class="label-picker-empty">Failed to load labels</div>`;
+    }
+
+    // Close dropdown on outside click
+    const closeDropdown = (ev: MouseEvent) => {
+      if (!dropdown.contains(ev.target as Node) && ev.target !== btn) {
+        dropdown.remove();
+        document.removeEventListener('click', closeDropdown);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeDropdown), 0);
   });
 }
 
