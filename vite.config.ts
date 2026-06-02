@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
+import wasm from "vite-plugin-wasm";
 
 const host = process.env.TAURI_DEV_HOST;
 const isE2E = process.env.VITE_E2E === '1';
 
 // https://vite.dev/config/
 export default defineConfig({
+  plugins: [wasm()],
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
