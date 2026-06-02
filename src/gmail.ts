@@ -955,49 +955,77 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[], gro
     (byYear[year] ??= []).push(t);
   }
 
-  // Helper: split threads into grouped senders, grouped domains, and remaining
-  function splitGrouped(list: Thread[]): { remaining: Thread[]; groups: Record<string, Thread[]>; domainGroups: Record<string, Thread[]> } {
-    if (groupedSet.size === 0 && domainSet.size === 0) return { remaining: list, groups: {}, domainGroups: {} };
-    const remaining: Thread[] = [];
-    const groups: Record<string, Thread[]> = {};
-    const dGroups: Record<string, Thread[]> = {};
-    for (const t of list) {
+  // Helper: remove grouped threads from a list, returning only non-grouped threads
+  function removeGrouped(list: Thread[]): Thread[] {
+    if (groupedSet.size === 0 && domainSet.size === 0) return list;
+    return list.filter(t => {
+      if (groupedSet.has(t.senderEmail)) return false;
+      const domain = t.senderEmail.split('@')[1] ?? '';
+      if (domain && domainSet.has(domain)) return false;
+      return true;
+    });
+  }
+
+  // Collect ALL grouped threads across all time buckets, keyed by sender/domain
+  const allSenderGroups: Record<string, Thread[]> = {};
+  const allDomainGroups: Record<string, Thread[]> = {};
+  const allTimeBuckets = [todayGroup, yesterdayGroup, thisWeek, lastWeek, thisMonth, lastMonth, ...Object.values(byYear)];
+  for (const bucket of allTimeBuckets) {
+    for (const t of bucket) {
       if (groupedSet.has(t.senderEmail)) {
-        (groups[t.senderEmail] ??= []).push(t);
+        (allSenderGroups[t.senderEmail] ??= []).push(t);
       } else {
         const domain = t.senderEmail.split('@')[1] ?? '';
         if (domain && domainSet.has(domain)) {
-          (dGroups[domain] ??= []).push(t);
-        } else {
-          remaining.push(t);
+          (allDomainGroups[domain] ??= []).push(t);
         }
       }
     }
-    return { remaining, groups, domainGroups: dGroups };
   }
 
-  const todaySplit = splitGrouped(todayGroup);
-  const yesterdaySplit = splitGrouped(yesterdayGroup);
-  const thisWeekSplit = splitGrouped(thisWeek);
-  const lastWeekSplit = splitGrouped(lastWeek);
-  const thisMonthSplit = splitGrouped(thisMonth);
-  const lastMonthSplit = splitGrouped(lastMonth);
+  // Determine which section each group belongs to (based on latest thread)
+  type SectionLabel = string;
+  const sectionOrder = ['Today', 'Yesterday', 'This week', 'Last week', MONTH_NAMES[now.getMonth()], MONTH_NAMES[(now.getMonth() - 1 + 12) % 12]];
+  const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+  for (const y of years) sectionOrder.push(String(y));
+
+  function getSectionForDate(d: Date): SectionLabel {
+    if (d >= today) return 'Today';
+    if (d >= yesterday) return 'Yesterday';
+    if (d >= weekStart) return 'This week';
+    if (d >= lastWeekStart) return 'Last week';
+    if (d >= monthStart) return MONTH_NAMES[now.getMonth()];
+    if (d >= lastMonthStart) return MONTH_NAMES[(now.getMonth() - 1 + 12) % 12];
+    return String(d.getFullYear());
+  }
+
+  // Place each group in the section of its latest (first) thread
+  const sectionSenderGroups: Record<SectionLabel, Record<string, Thread[]>> = {};
+  const sectionDomainGroups: Record<SectionLabel, Record<string, Thread[]>> = {};
+  for (const [email, groupThreads] of Object.entries(allSenderGroups)) {
+    const latest = groupThreads[0]; // threads were sorted desc before bucketing
+    const section = getSectionForDate(new Date(latest.receivedAt));
+    (sectionSenderGroups[section] ??= {})[email] = groupThreads;
+  }
+  for (const [domain, groupThreads] of Object.entries(allDomainGroups)) {
+    const latest = groupThreads[0];
+    const section = getSectionForDate(new Date(latest.receivedAt));
+    (sectionDomainGroups[section] ??= {})[domain] = groupThreads;
+  }
 
   const sections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> = [
     { label: 'New senders', threads: newSenders },
-    { label: 'Today', threads: todaySplit.remaining, categoryThreads: { newsletters: todayNewsletters, updates: todayUpdates }, senderGroups: todaySplit.groups, domainGroups: todaySplit.domainGroups },
-    { label: 'Yesterday', threads: yesterdaySplit.remaining, senderGroups: yesterdaySplit.groups, domainGroups: yesterdaySplit.domainGroups },
-    { label: 'This week', threads: thisWeekSplit.remaining, senderGroups: thisWeekSplit.groups, domainGroups: thisWeekSplit.domainGroups },
-    { label: 'Last week', threads: lastWeekSplit.remaining, senderGroups: lastWeekSplit.groups, domainGroups: lastWeekSplit.domainGroups },
-    { label: MONTH_NAMES[now.getMonth()], threads: thisMonthSplit.remaining, senderGroups: thisMonthSplit.groups, domainGroups: thisMonthSplit.domainGroups },
-    { label: MONTH_NAMES[(now.getMonth() - 1 + 12) % 12], threads: lastMonthSplit.remaining, senderGroups: lastMonthSplit.groups, domainGroups: lastMonthSplit.domainGroups },
+    { label: 'Today', threads: removeGrouped(todayGroup), categoryThreads: { newsletters: todayNewsletters, updates: todayUpdates }, senderGroups: sectionSenderGroups['Today'], domainGroups: sectionDomainGroups['Today'] },
+    { label: 'Yesterday', threads: removeGrouped(yesterdayGroup), senderGroups: sectionSenderGroups['Yesterday'], domainGroups: sectionDomainGroups['Yesterday'] },
+    { label: 'This week', threads: removeGrouped(thisWeek), senderGroups: sectionSenderGroups['This week'], domainGroups: sectionDomainGroups['This week'] },
+    { label: 'Last week', threads: removeGrouped(lastWeek), senderGroups: sectionSenderGroups['Last week'], domainGroups: sectionDomainGroups['Last week'] },
+    { label: MONTH_NAMES[now.getMonth()], threads: removeGrouped(thisMonth), senderGroups: sectionSenderGroups[MONTH_NAMES[now.getMonth()]], domainGroups: sectionDomainGroups[MONTH_NAMES[now.getMonth()]] },
+    { label: MONTH_NAMES[(now.getMonth() - 1 + 12) % 12], threads: removeGrouped(lastMonth), senderGroups: sectionSenderGroups[MONTH_NAMES[(now.getMonth() - 1 + 12) % 12]], domainGroups: sectionDomainGroups[MONTH_NAMES[(now.getMonth() - 1 + 12) % 12]] },
   ];
 
   // Add year groups sorted descending
-  const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
   for (const y of years) {
-    const split = splitGrouped(byYear[y]);
-    sections.push({ label: String(y), threads: split.remaining, senderGroups: split.groups, domainGroups: split.domainGroups });
+    sections.push({ label: String(y), threads: removeGrouped(byYear[y]), senderGroups: sectionSenderGroups[String(y)], domainGroups: sectionDomainGroups[String(y)] });
   }
 
   const result = sections.filter(s => s.threads.length > 0 || (s.categoryThreads && (s.categoryThreads.newsletters.length > 0 || s.categoryThreads.updates.length > 0)) || (s.senderGroups && Object.keys(s.senderGroups).length > 0) || (s.domainGroups && Object.keys(s.domainGroups).length > 0));
