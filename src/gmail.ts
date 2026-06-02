@@ -921,9 +921,9 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[], gro
   const lastMonth: Thread[] = [];
   const byYear: Record<number, Thread[]> = {};
 
-  // Today category threads
-  const todayNewsletters: Thread[] = [];
-  const todayUpdates: Thread[] = [];
+  // Category threads collected globally (not just today)
+  const allNewsletters: Thread[] = [];
+  const allUpdates: Thread[] = [];
 
   // Detect new senders = first time we see this sender (crude: no prior archived threads needed)
   // For now: unread threads from senders with only 1 thread total
@@ -933,12 +933,12 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[], gro
   for (const t of threads) {
     const d = new Date(t.receivedAt);
 
-    // Today's newsletters/updates get pulled into special rows
-    if (d >= today && t.category === 'newsletters') {
-      todayNewsletters.push(t); continue;
+    // Newsletters/updates go into category rows — never into regular time buckets
+    if (t.category === 'newsletters') {
+      allNewsletters.push(t); continue;
     }
-    if (d >= today && t.category === 'updates') {
-      todayUpdates.push(t); continue;
+    if (t.category === 'updates') {
+      allUpdates.push(t); continue;
     }
 
     if (senderCounts[t.senderEmail] === 1 && t.isUnread) {
@@ -1015,7 +1015,7 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[], gro
 
   const sections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> = [
     { label: 'New senders', threads: newSenders },
-    { label: 'Today', threads: removeGrouped(todayGroup), categoryThreads: { newsletters: todayNewsletters, updates: todayUpdates }, senderGroups: sectionSenderGroups['Today'], domainGroups: sectionDomainGroups['Today'] },
+    { label: 'Today', threads: removeGrouped(todayGroup), categoryThreads: { newsletters: allNewsletters, updates: allUpdates }, senderGroups: sectionSenderGroups['Today'], domainGroups: sectionDomainGroups['Today'] },
     { label: 'Yesterday', threads: removeGrouped(yesterdayGroup), senderGroups: sectionSenderGroups['Yesterday'], domainGroups: sectionDomainGroups['Yesterday'] },
     { label: 'This week', threads: removeGrouped(thisWeek), senderGroups: sectionSenderGroups['This week'], domainGroups: sectionDomainGroups['This week'] },
     { label: 'Last week', threads: removeGrouped(lastWeek), senderGroups: sectionSenderGroups['Last week'], domainGroups: sectionDomainGroups['Last week'] },
