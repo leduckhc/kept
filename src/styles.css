@@ -139,7 +139,7 @@ body {
   justify-content: center;
   background: none;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
   font-size: 16px;
   color: var(--text-muted);
@@ -378,7 +378,7 @@ body {
   cursor: pointer;
   color: var(--text-muted);
   padding: 6px;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 16px;
   line-height: 1;
   min-width: 32px;
@@ -394,7 +394,7 @@ body {
 .toolbar-actions .btn-compose {
   background: var(--accent);
   color: #fff;
-  border-radius: 10px;
+  border-radius: 20px;
 }
 .toolbar-actions .btn-compose:hover {
   background: #6b5ec4;
@@ -450,7 +450,7 @@ body {
   overflow: hidden;
   isolation: isolate;
   touch-action: pan-y;
-  border-radius: 8px;
+  border-radius: 10px;
   margin: 0 4px;
 }
 .thread-row:hover { background: var(--surface-hover); }
