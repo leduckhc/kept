@@ -2174,8 +2174,9 @@ body {
 
 /* ── Mobile layout (<1024px): revert to single-pane ─────── */
 @media (max-width: 1023px) and (min-width: 601px) {
-  /* Show mobile tab buttons, hide sidebar (tablets only; phones use drawer) */
+  /* Show mobile tab buttons AND hamburger, hide sidebar (tablets) */
   .mobile-tab-btn { display: inline-block !important; }
+  .btn-hamburger { display: flex !important; }
 }
 @media (max-width: 1023px) {
   .sidebar { display: none; }
