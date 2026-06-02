@@ -11,6 +11,8 @@ export interface ScheduledEmail {
   scheduledAt: number; // unix ms
   threadId?: string;
   inReplyTo?: string;
+  cc?: string;
+  attachments?: Array<{ filename: string; mimeType: string; data: string }>; // base64
   createdAt: number;
 }
 
@@ -56,4 +58,79 @@ export function getDueEmails(): ScheduledEmail[] {
 
 export function getScheduledCount(): number {
   return loadScheduled().length;
+}
+
+// ── Dispatch timer ──────────────────────────────────────────
+
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { showToast } from './toasts';
+import type { Account } from './auth';
+import { sendingIds } from './threadList';
+
+type SendFn = (account: Account, opts: {
+  to: string;
+  cc?: string;
+  subject: string;
+  body: string;
+  threadId?: string;
+  inReplyTo?: string;
+  attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
+}) => Promise<void>;
+
+const failedIds = new Set<string>();
+
+async function dispatchDue(getAccount: () => Account | null, sendFn: SendFn) {
+  const due = getDueEmails();
+  if (due.length === 0) return;
+
+  const account = getAccount();
+  if (!account) return;
+
+  for (const item of due) {
+    if (sendingIds.has(item.id)) continue;
+    sendingIds.add(item.id);
+
+    try {
+      const attachments = item.attachments?.map(a => ({
+        filename: a.filename,
+        mimeType: a.mimeType,
+        data: Uint8Array.from(atob(a.data), c => c.charCodeAt(0)),
+      }));
+
+      await sendFn(account, {
+        to: item.to,
+        cc: item.cc,
+        subject: item.subject,
+        body: item.body,
+        threadId: item.threadId,
+        inReplyTo: item.inReplyTo,
+        attachments,
+      });
+
+      removeScheduled(item.id);
+      sendingIds.delete(item.id);
+      failedIds.delete(item.id);
+      showToast(`Scheduled email to ${item.to} sent`);
+    } catch (err) {
+      sendingIds.delete(item.id);
+      if (!failedIds.has(item.id)) {
+        failedIds.add(item.id);
+        showToast(`Scheduled send failed: ${err instanceof Error ? err.message : String(err)}`, 4000);
+      }
+    }
+  }
+}
+
+export function startScheduledSendDispatch(getAccount: () => Account | null, sendFn: SendFn) {
+  // Run immediately then every 30s
+  dispatchDue(getAccount, sendFn);
+  setInterval(() => dispatchDue(getAccount, sendFn), 30_000);
+
+  // Also fire on window focus (Tauri only)
+  const isTauri = '__TAURI_INTERNALS__' in window;
+  if (isTauri) {
+    getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) dispatchDue(getAccount, sendFn);
+    });
+  }
 }

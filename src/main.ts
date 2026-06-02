@@ -10,6 +10,8 @@ import { syncAndRender, refreshAll, loadUnifiedThreads, initSync } from './sync'
 import { applyTheme, applyLayoutMode, esc } from './helpers';
 import { type ViewName, state, setAccount } from './state';
 import { openSnoozePicker, setupSnoozeResurface } from './snooze';
+import { startScheduledSendDispatch } from './scheduledSend';
+import { sendEmail } from './gmail';
 import { initSwipeGestures } from './swipe';
 import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute } from './actions';
 import { openInlineReply } from './inlineReply';
@@ -150,6 +152,7 @@ async function boot() {
       refreshKnownSenders().catch(() => {});
       await refreshAll();
       setupSnoozeResurface(renderInbox);
+      startScheduledSendDispatch(() => state.account, sendEmail);
 
       // Background auto-sync every 60s
       setInterval(() => { syncAndRender().catch(() => {}); }, 60_000);

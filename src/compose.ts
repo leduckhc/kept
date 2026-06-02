@@ -2,6 +2,7 @@
 // Modes: new, reply, replyAll, forward. Supports multiple simultaneous panels.
 
 import { loadSenderEmails, sendEmail, createDraft, updateDraft, deleteDraft } from './gmail';
+import { scheduleEmail } from './scheduledSend';
 import { state } from './state';
 import { showToast, showUndoToast } from './toasts';
 import { avatarColor } from './avatar';
@@ -147,6 +148,7 @@ export async function openCompose(opts: ComposeOptions) {
     </div>
     <div class="compose-panel-footer">
       <button class="compose-send-btn-new">${icon.send('14px')} Send</button>
+      <button class="compose-schedule-btn">${icon.calendar('14px')} ▾</button>
       <button class="compose-discard-btn-new">Discard</button>
     </div>`;
 
@@ -450,6 +452,9 @@ export async function openCompose(opts: ComposeOptions) {
   function onKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       if (acList.style.display !== 'none') { closeAc(); return; }
+      // Close schedule picker if open
+      const picker = panel.querySelector('.schedule-send-popover');
+      if (picker) { picker.remove(); return; }
       const hasContent = editorEl.innerText.trim().length > 0 || pendingAttachments.length > 0;
       if (!hasContent) closeCompose(panel);
     }
@@ -460,6 +465,95 @@ export async function openCompose(opts: ComposeOptions) {
     }
   }
   panel.addEventListener('keydown', onKeyDown);
+
+  // ── Schedule Send ──
+  const scheduleBtn = panel.querySelector<HTMLButtonElement>('.compose-schedule-btn')!;
+  scheduleBtn.addEventListener('click', () => {
+    // Remove existing popover if open
+    const existing = panel.querySelector('.schedule-send-popover');
+    if (existing) { existing.remove(); return; }
+
+    const popover = document.createElement('div');
+    popover.className = 'schedule-send-popover';
+
+    // Compute preset dates
+    const now = new Date();
+    const tomorrow9am = new Date(now);
+    tomorrow9am.setDate(tomorrow9am.getDate() + 1);
+    tomorrow9am.setHours(9, 0, 0, 0);
+
+    const tomorrow2pm = new Date(now);
+    tomorrow2pm.setDate(tomorrow2pm.getDate() + 1);
+    tomorrow2pm.setHours(14, 0, 0, 0);
+
+    const daysUntilMonday = ((8 - now.getDay()) % 7) || 7;
+    const monday9am = new Date(now);
+    monday9am.setDate(monday9am.getDate() + daysUntilMonday);
+    monday9am.setHours(9, 0, 0, 0);
+
+    popover.innerHTML = `
+      <div class="schedule-send-title">Schedule Send</div>
+      <button class="schedule-preset" data-time="${tomorrow9am.getTime()}">Tomorrow morning (9am)</button>
+      <button class="schedule-preset" data-time="${tomorrow2pm.getTime()}">Tomorrow afternoon (2pm)</button>
+      <button class="schedule-preset" data-time="${monday9am.getTime()}">Monday morning (9am)</button>
+      <div class="schedule-custom">
+        <input type="datetime-local" class="schedule-datetime-input" />
+        <button class="schedule-custom-confirm">Schedule</button>
+      </div>
+    `;
+
+    panel.querySelector('.compose-panel-footer')!.appendChild(popover);
+
+    function doSchedule(scheduledAt: number) {
+      const to = toEl.value.trim();
+      const cc = ccEl?.value.trim() ?? '';
+      const subject = subjectEl.value.trim();
+      const body = editorEl.innerText.trim();
+      if (!to || (!body && !pendingAttachments.length) || !state.account) {
+        showToast('Please fill in recipient and message');
+        return;
+      }
+
+      // Convert Uint8Array attachments to base64 for localStorage
+      const attachments = pendingAttachments.length > 0
+        ? pendingAttachments.map(a => ({
+            filename: a.filename,
+            mimeType: a.mimeType,
+            data: btoa(String.fromCharCode(...a.data)),
+          }))
+        : undefined;
+
+      scheduleEmail({
+        accountId: state.account!.id,
+        to,
+        cc: cc || undefined,
+        subject: subject || '(no subject)',
+        body: body || '(attached)',
+        scheduledAt,
+        threadId: opts.threadId,
+        inReplyTo: opts.inReplyTo,
+        attachments,
+      });
+
+      popover.remove();
+      closeCompose(panel);
+      const d = new Date(scheduledAt);
+      showToast(`Scheduled for ${d.toLocaleString()}`);
+    }
+
+    popover.querySelectorAll<HTMLButtonElement>('.schedule-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        doSchedule(parseInt(btn.dataset.time!));
+      });
+    });
+
+    const customConfirm = popover.querySelector<HTMLButtonElement>('.schedule-custom-confirm')!;
+    const customInput = popover.querySelector<HTMLInputElement>('.schedule-datetime-input')!;
+    customConfirm.addEventListener('click', () => {
+      if (!customInput.value) { showToast('Pick a date/time'); return; }
+      doSchedule(new Date(customInput.value).getTime());
+    });
+  });
 
   // Focus first empty field
   if (!opts.to) toEl.focus();

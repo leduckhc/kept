@@ -13,6 +13,9 @@ import { showUndoToast } from './toasts';
 import { Newspaper, Megaphone } from 'lucide-static';
 import { renderNewSendersSection } from './newSenders';
 
+// IDs currently being dispatched — used by scheduledSend dispatch and scheduled view
+export const sendingIds = new Set<string>();
+
 const MAX_INITIAL_RENDER = 100;
 const LAZY_CHUNK_SIZE = 50;
 
@@ -631,13 +634,13 @@ export async function renderScheduledView() {
   container.innerHTML = `
     <div class="section-header">Scheduled <span class="section-badge">${scheduled.length}</span></div>
     ${scheduled.map(e => `
-      <div class="thread-row" data-sched-id="${esc(e.id)}">
+      <div class="thread-row${sendingIds.has(e.id) ? ' sched-sending' : ''}" data-sched-id="${esc(e.id)}">
         <span class="unread-dot"></span>
         <div class="avatar-wrap"><div class="avatar" style="background:#888" data-initial="⏰"></div></div>
         <span class="thread-sender">${esc(e.to)}</span>
         <div class="thread-mid">
           <span class="thread-subject-line">${esc(e.subject)}</span>
-          <span class="thread-preview-line">${icon.calendar('14px')} Sends ${formatDate(e.scheduledAt)}</span>
+          <span class="thread-preview-line">${sendingIds.has(e.id) ? '<span class="sched-sending-label">Sending…</span>' : `${icon.calendar('14px')} Sends ${formatDate(e.scheduledAt)}`}</span>
         </div>
         <span class="thread-date">${formatDate(e.scheduledAt)}</span>
         <div class="thread-actions">
