@@ -146,12 +146,13 @@ body {
   transition: all 0.12s ease;
 }
 .sidebar-btn:hover { color: var(--text); background: var(--hover); }
-/* Sidebar tooltips appear to the right */
-.sidebar-btn:hover::after {
+/* Sidebar tooltips appear to the right of the icon strip */
+.sidebar-btn[title]:hover::after {
   bottom: auto;
   left: calc(100% + 8px);
   top: 50%;
   transform: translateY(-50%);
+  animation: tooltip-in-right 0.12s ease-out;
 }
 .sidebar-btn.active {
   color: var(--accent);
@@ -332,6 +333,10 @@ body {
 @keyframes tooltip-in {
   from { opacity: 0; transform: translateX(-50%) translateY(2px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes tooltip-in-right {
+  from { opacity: 0; transform: translateY(-50%) translateX(2px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
 .btn-pill {
