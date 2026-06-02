@@ -15,8 +15,8 @@ async function getTauriShell() {
   return _shell;
 }
 
-const GOOGLE_CLIENT_ID = 'REPLACED_CLIENT_ID';
-const GOOGLE_CLIENT_SECRET = 'REPLACED_CLIENT_SECRET';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 const SCOPES = [
   'openid',
   'email',
