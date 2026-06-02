@@ -96,7 +96,7 @@ export async function openThread(
   let lastCc = '';
 
   try {
-    if (import.meta.env.DEV) console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account.id);
+    if (import.meta.env.DEV) console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account.id); // eslint-disable-line no-console
     const result = await fetchMessageBody(state.account, t.gmailThreadId);
     lastMessageId = result.lastMessageId;
     // Capture last message's To/Cc for Reply All

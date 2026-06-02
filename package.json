@@ -14,7 +14,8 @@
     "verify": "tsc --noEmit && eslint src/ && vitest run",
     "lint": "eslint src/",
     "e2e:pilot": "bash e2e/pilot/run.sh",
-    "dev:pilot": "cargo tauri dev"
+    "dev:pilot": "cargo tauri dev",
+    "check": "tsc --noEmit && eslint src/ --max-warnings 0 && vitest run && node node_modules/vite/bin/vite.js build"
   },
   "dependencies": {
     "@fabianlars/tauri-plugin-oauth": "^2.0.0",
@@ -39,11 +40,15 @@
     "better-sqlite3": "^12.10.0",
     "eslint": "^10.4.1",
     "happy-dom": "^20.9.0",
+    "simple-git-hooks": "^2.13.1",
     "sql.js": "^1.14.1",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.14",
     "vite-plugin-wasm": "^3.6.0",
     "vitest": "^4.1.7"
+  },
+  "simple-git-hooks": {
+    "pre-push": "npm run check"
   }
 }

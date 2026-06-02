@@ -118,7 +118,7 @@ async function syncFull(account: Account, accountId: string, label: string = 'IN
     pageToken = data.nextPageToken;
     page++;
     if (page >= MAX_SYNC_PAGES) {
-      if (import.meta.env.DEV) console.log(`syncFull(${label}): hit MAX_SYNC_PAGES, stopping`);
+      if (import.meta.env.DEV) console.log(`syncFull(${label}): hit MAX_SYNC_PAGES, stopping`); // eslint-disable-line no-console
       break;
     }
   } while (pageToken);
