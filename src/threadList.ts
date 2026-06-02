@@ -1,7 +1,7 @@
-import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection } from './gmail';
+import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection, archiveThread, unarchiveThread, loadThreads } from './gmail';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 import { state } from './state';
-import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze } from './actions';
+import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze, accountFor } from './actions';
 import { openSnoozePicker } from './snooze';
 import { showContextMenu } from './contextMenu';
 import { avatarHtml, ACCOUNT_BADGE_COLORS } from './avatar';
@@ -9,6 +9,7 @@ import { getActiveReminderThreadIds } from './followupReminders';
 import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
 import { icon } from './icons';
+import { showUndoToast } from './toasts';
 import { Newspaper, Megaphone } from 'lucide-static';
 import { renderNewSendersSection } from './newSenders';
 
@@ -433,6 +434,35 @@ function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadListDeps) 
           state.senderFilter = email;
           deps.renderInbox();
         }
+      });
+    });
+    // Archive all threads in this category
+    row.querySelector('.btn-archive-all')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const categoryThreads = state.threads.filter(t => t.category === cat);
+      if (categoryThreads.length === 0) return;
+      // Remove from UI immediately
+      state.threads = state.threads.filter(t => t.category !== cat);
+      deps.renderInbox();
+      // Archive in background
+      const archived: Thread[] = [];
+      for (const t of categoryThreads) {
+        const acct = accountFor(t);
+        if (!acct) continue;
+        try {
+          await archiveThread(acct, t);
+          archived.push(t);
+        } catch (err) {
+          console.error('Archive failed for', t.id, err);
+        }
+      }
+      showUndoToast(`Archived ${archived.length} ${cat}`, async () => {
+        for (const t of archived) {
+          const acct = accountFor(t);
+          if (acct) await unarchiveThread(acct, t).catch(() => {});
+        }
+        state.threads = state.account ? await loadThreads(state.account.id) : [];
+        deps.renderInbox();
       });
     });
   });
