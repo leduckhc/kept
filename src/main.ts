@@ -1,12 +1,13 @@
 // main.ts — Kept inbox UI
-import { getAllAccounts, removeAccount, saveAccount, startOAuth, migrateTokensToKeychain } from './auth';
+import { getAllAccounts, startOAuth, migrateTokensToKeychain, removeAccount } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
-import { type Thread, syncInbox, loadThreads, loadRepliedToSenders, loadAllSenderEmails, hasSyncedBefore, groupBySection, invalidateSectionCache, getGroupedSenders, getGroupedDomains } from './gmail';
+import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection } from './gmail';
 
-import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
 import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
-import { applyTheme, applyLayoutMode, toggleLayoutMode, setStatus, esc } from './helpers';
+import { openSettings, initSettings } from './settings';
+import { syncAndRender, refreshAll, loadUnifiedThreads, initSync } from './sync';
+import { applyTheme, applyLayoutMode, esc } from './helpers';
 import { type ViewName, state, setAccount } from './state';
 import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { initSwipeGestures } from './swipe';
@@ -136,6 +137,10 @@ function getAccountAvatar(): string {
 async function boot() {
   applyTheme(localStorage.getItem('theme') ?? 'light');
   applyLayoutMode(state.layoutMode);
+
+  // Initialize extracted modules
+  initSettings({ renderInbox, refreshAll, showAuth, loadUnifiedThreads });
+  initSync({ renderInbox, loadUnifiedThreads, refreshKnownSenders });
 
   // Show auth screen immediately — don't block on DB
   showAuth();
@@ -401,226 +406,6 @@ function showShell() {
   (window as unknown as Record<string, unknown>).__kept_settings = () => openSettings();
 }
 
-// ── Settings panel ─────────────────────────────────────────
-function openSettings() {
-  const shell = document.getElementById('app-shell');
-  const panel = document.getElementById('settings-panel');
-  if (!shell || !panel) return;
-
-  // Render state.accounts list
-  renderSettingsAccounts();
-
-  // Sync dark mode toggle state
-  const currentTheme = localStorage.getItem('theme') ?? 'light';
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const toggle = document.getElementById('settings-darkmode-toggle') as HTMLButtonElement;
-  const sub = document.getElementById('settings-darkmode-sub');
-  if (toggle) {
-    toggle.setAttribute('aria-checked', String(isDark));
-    toggle.classList.toggle('on', isDark);
-  }
-  const themeLabel = currentTheme === 'system' ? 'Following system preference' : isDark ? 'Currently using dark theme' : 'Switch to dark theme';
-  if (sub) sub.textContent = themeLabel;
-
-  // Sync smart notifications toggle state
-  const smartNotifToggle = document.getElementById('settings-smartnotif-toggle') as HTMLButtonElement;
-  const smartNotifSub = document.getElementById('settings-smartnotif-sub');
-  const smartOn = localStorage.getItem('smartNotifications') !== 'false';
-  if (smartNotifToggle) {
-    smartNotifToggle.setAttribute('aria-checked', String(smartOn));
-    smartNotifToggle.classList.toggle('on', smartOn);
-  }
-  if (smartNotifSub) smartNotifSub.textContent = smartOn ? 'Only notify for known senders' : 'Notify for all new threads';
-
-  // Wire back button
-  document.getElementById('settings-back')!.addEventListener('click', closeSettings, { once: true });
-
-  // Wire smart notifications toggle
-  smartNotifToggle?.addEventListener('click', () => {
-    const nowOn = localStorage.getItem('smartNotifications') !== 'false';
-    const next = !nowOn;
-    localStorage.setItem('smartNotifications', String(next));
-    smartNotifToggle.setAttribute('aria-checked', String(next));
-    smartNotifToggle.classList.toggle('on', next);
-    const subEl = document.getElementById('settings-smartnotif-sub');
-    if (subEl) subEl.textContent = next ? 'Only notify for known senders' : 'Notify for all new threads';
-  }, { once: true });
-
-  // Wire dark mode toggle (once: true prevents listener accumulation on repeated open/close)
-  toggle?.addEventListener('click', () => {
-    const cur = localStorage.getItem('theme') ?? 'light';
-    const next = cur === 'light' ? 'dark' : cur === 'dark' ? 'system' : 'light';
-    applyTheme(next);
-    const nowDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    toggle.setAttribute('aria-checked', String(nowDark));
-    toggle.classList.toggle('on', nowDark);
-    const subEl = document.getElementById('settings-darkmode-sub');
-    const label = next === 'system' ? 'Following system preference' : nowDark ? 'Currently using dark theme' : 'Switch to dark theme';
-    if (subEl) subEl.textContent = label;
-  }, { once: true });
-
-  // Sync layout toggle state
-  const layoutToggle = document.getElementById('settings-layout-toggle') as HTMLButtonElement;
-  const layoutSub = document.getElementById('settings-layout-sub');
-  const is2Pane = state.layoutMode === '2-pane';
-  if (layoutToggle) {
-    layoutToggle.setAttribute('aria-checked', String(is2Pane));
-    layoutToggle.classList.toggle('on', is2Pane);
-  }
-  if (layoutSub) layoutSub.textContent = is2Pane ? 'Showing list only, click to read' : 'Hide email preview pane';
-
-  // Wire layout toggle
-  layoutToggle?.addEventListener('click', () => {
-    toggleLayoutMode();
-    const nowIs2 = state.layoutMode === '2-pane';
-    layoutToggle.setAttribute('aria-checked', String(nowIs2));
-    layoutToggle.classList.toggle('on', nowIs2);
-    const subEl = document.getElementById('settings-layout-sub');
-    if (subEl) subEl.textContent = nowIs2 ? 'Showing list only, click to read' : 'Hide email preview pane';
-  }, { once: true });
-
-  // Wire sign out (once: true prevents duplicate confirm dialogs on repeated open/close)
-  const signoutBtn = document.getElementById('settings-signout') as HTMLButtonElement;
-  signoutBtn?.addEventListener('click', async () => {
-    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
-    signoutBtn.disabled = true;
-    signoutBtn.textContent = 'Signing out…';
-    try {
-      for (const a of state.accounts) {
-        await removeAccount(a).catch(e => console.error('Remove error:', e));
-      }
-    } finally {
-      clearActiveAccountId();
-      state.account = null;
-      state.accounts = [];
-      state.threads = [];
-      state.syncing = false;
-      showAuth();
-    }
-  }, { once: true });
-
-  // Load and wire signature editor
-  const sigTa = document.getElementById('settings-signature-ta') as HTMLTextAreaElement;
-  const sigPreview = document.getElementById('settings-signature-preview') as HTMLElement;
-  const sigSaveBtn = document.getElementById('settings-signature-save') as HTMLButtonElement;
-  if (sigTa && state.account) {
-    sigTa.value = state.account.signature ?? '';
-    if (sigTa.value) {
-      sigPreview.textContent = sigTa.value;
-      sigPreview.style.display = 'block';
-    }
-    sigTa.addEventListener('input', () => {
-      if (sigTa.value.trim()) {
-        sigPreview.textContent = sigTa.value;
-        sigPreview.style.display = 'block';
-      } else {
-        sigPreview.style.display = 'none';
-      }
-    });
-    sigSaveBtn.addEventListener('click', async () => {
-      if (!state.account) return;
-      const updated = { ...state.account, signature: sigTa.value };
-      await saveAccount(updated);
-      state.account = updated;
-      const idx = state.accounts.findIndex(a => a.id === updated.id);
-      if (idx >= 0) state.accounts[idx] = updated;
-      sigSaveBtn.textContent = 'Saved';
-      setTimeout(() => { sigSaveBtn.textContent = 'Save'; }, 1500);
-    });
-  }
-
-  // Wire add state.account (once: true prevents duplicate OAuth launches on repeated open/close)
-  document.getElementById('settings-add-account')!.addEventListener('click', async () => {
-    try {
-      const newAcct = await startOAuth();
-      const existing = state.accounts.find(a => a.id === newAcct.id);
-      if (existing) {
-        const idx = state.accounts.indexOf(existing);
-        state.accounts[idx] = newAcct;
-        setStatus(`${newAcct.email} token refreshed`);
-      } else {
-        state.accounts.push(newAcct);
-        setStatus(`${newAcct.email} added`);
-      }
-      renderSettingsAccounts();
-    } catch (e) {
-      setStatus(`Add account failed: ${e}`);
-    }
-    setTimeout(() => setStatus(''), 5000);
-  });
-
-  // Animate in
-  panel.classList.add('open');
-  panel.setAttribute('aria-hidden', 'false');
-  shell.classList.add('settings-open');
-}
-
-function closeSettings() {
-  const shell = document.getElementById('app-shell');
-  const panel = document.getElementById('settings-panel');
-  if (!shell || !panel) return;
-  panel.classList.remove('open');
-  panel.setAttribute('aria-hidden', 'true');
-  shell.classList.remove('settings-open');
-}
-
-function renderSettingsAccounts() {
-  const list = document.getElementById('settings-accounts-list');
-  if (!list) return;
-  const avatarColors = ['#7c6fa8', '#5b8dd9', '#7cb9a8', '#d97c5b', '#c47cad'];
-  list.innerHTML = state.accounts.map((a, i) => {
-    const initial = (a.email[0] ?? '?').toUpperCase();
-    const color = avatarColors[i % avatarColors.length];
-    const isOnly = state.accounts.length === 1;
-    return `
-      <div class="settings-account-row" data-id="${esc(a.id)}">
-        <div class="settings-avatar" style="background:${color}">${initial}</div>
-        <div class="settings-account-info">
-          <div class="settings-account-name">${esc(a.email.split('@')[0])}</div>
-          <div class="settings-account-email">${esc(a.email)}</div>
-        </div>
-        <button class="settings-account-remove" data-id="${esc(a.id)}" title="Remove account"
-          ${isOnly ? 'disabled' : ''} aria-label="Remove ${esc(a.email)}">×</button>
-      </div>`;
-  }).join('');
-
-  // Wire remove buttons
-  list.querySelectorAll<HTMLButtonElement>('.settings-account-remove').forEach(btn => {
-    if (btn.disabled) return;
-    btn.addEventListener('click', async () => {
-      const removeId = btn.dataset.id!;
-      const target = state.accounts.find(a => a.id === removeId);
-      if (!target) return;
-      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
-      try {
-        await removeAccount(target);
-        state.accounts = state.accounts.filter(a => a.id !== removeId);
-        if (state.account?.id === removeId) {
-          const next = state.accounts[0] ?? null;
-          if (next) {
-            setAccount(next);
-            state.threads = await loadThreads(next.id);
-            closeSettings();
-            renderInbox();
-            await refreshAll();
-          } else {
-            clearActiveAccountId();
-            state.account = null;
-            state.threads = [];
-            state.syncing = false;
-            showAuth();
-          }
-        } else {
-          renderSettingsAccounts();
-        }
-      } catch (err) {
-        console.error('Remove account error:', err);
-        setStatus('Failed to remove account');
-      }
-    });
-  });
-}
-
 // ── View switching ────────────────────────────────────────
 function switchView(view: ViewName) {
   state.currentView = view;
@@ -677,149 +462,12 @@ function renderLabelView(view: ViewName) {
   });
 }
 
-// ── Sync ──────────────────────────────────────────────────
-/** On boot: load active state.account state.threads, then kick off parallel sync for all state.accounts. */
-async function refreshAll() {
-  if (!state.account) return;
-
-  // Reload grouped senders & domains for current account
-  state.groupedSenders = await getGroupedSenders(state.account.id);
-  state.groupedDomains = await getGroupedDomains(state.account.id);
-
-  if (state.unifiedMode) {
-    state.threads = await loadUnifiedThreads();
-  } else {
-    state.threads = await loadThreads(state.account.id);
-  }
-  renderInbox();
-
-  // Request notification permission early (non-blocking)
-  ensureNotificationPermission().catch(() => {});
-
-  // E2E mode: skip network sync entirely, DB is pre-seeded
-  if (import.meta.env.VITE_E2E === '1') {
-    setStatus(`E2E mode — ${state.threads.length} threads loaded`);
-    return;
-  }
-
-  // Parallel sync — one per state.account, errors are non-fatal per state.account
-  const allAccts = await getAllAccounts();
-  const syncPromises = allAccts.map(acct =>
-    syncInbox(acct, acct.id === state.account!.id ? n => setStatus(`Syncing… ${n} state.threads`) : undefined)
-      .catch(err => console.error(`Sync error for ${acct.email}:`, err))
-  );
-  const btn = document.getElementById('btn-sync');
-  if (btn) btn.style.opacity = '0.4';
-  setStatus('Syncing…');
-  await Promise.all(syncPromises);
-  if (btn) btn.style.opacity = '';
-  invalidateSectionCache();
-  if (state.unifiedMode) {
-    state.threads = await loadUnifiedThreads();
-  } else {
-    state.threads = await loadThreads(state.account.id);
-  }
-  renderInbox();
-  setStatus(`Synced — ${state.threads.length} state.threads`);
-  setTimeout(() => setStatus(''), 5000);
-}
-
-/** KPT-037: Load and merge inbox state.threads from all state.accounts, sorted by receivedAt desc. */
-async function loadUnifiedThreads(): Promise<Thread[]> {
-  const allAccts = await getAllAccounts();
-  const perAccount = await Promise.all(allAccts.map(a => loadThreads(a.id).catch(() => [] as Thread[])));
-  const merged = perAccount.flat();
-  merged.sort((a, b) => b.receivedAt - a.receivedAt);
-  return merged;
-}
+// ── Sync is in sync.ts — refreshAll, syncAndRender, loadUnifiedThreads imported at top
 
 function getActionDeps(): ActionDeps {
   return { renderInbox, loadUnifiedThreads };
 }
 
-async function syncAndRender() {
-  if (state.syncing || !state.account) return;
-
-  // E2E mode: just reload from DB, no network
-  if (import.meta.env.VITE_E2E === '1') {
-    if (state.unifiedMode) {
-      state.threads = await loadUnifiedThreads();
-    } else {
-      state.threads = await loadThreads(state.account.id);
-    }
-    renderInbox();
-    setStatus(`E2E mode — ${state.threads.length} threads`);
-    return;
-  }
-
-  state.syncing = true;
-  setStatus('Syncing…');
-  const btn = document.getElementById('btn-sync');
-  if (btn) btn.style.opacity = '0.4';
-  try {
-    if (state.unifiedMode) {
-      // Sync all state.accounts in parallel
-      const allAccts = await getAllAccounts();
-      await Promise.all(allAccts.map(a =>
-        syncInbox(a, a.id === state.account!.id ? n => setStatus(`Syncing… ${n} state.threads`) : undefined)
-          .catch(err => console.error(`Sync error for ${a.email}:`, err))
-      ));
-      state.threads = await loadUnifiedThreads();
-      renderInbox();
-      setStatus(`Synced — ${state.threads.length} threads`);
-    } else {
-      // Capture thread IDs known before sync to detect new arrivals
-      const preSync = await loadThreads(state.account.id);
-      const knownIds = new Set(preSync.map(t => t.id));
-      // Gate: only send notifications on second+ sync (historyId already set)
-      const isSubsequentSync = await hasSyncedBefore(state.account.id);
-
-      await syncInbox(state.account, n => setStatus(`Syncing… ${n} threads`));
-      state.threads = await loadThreads(state.account.id);
-      renderInbox();
-      setStatus(`Synced — ${state.threads.length} threads`);
-
-      // Refresh known-senders after sync (SENT folder may have grown)
-      refreshKnownSenders().catch(() => {});
-
-      // Fire notifications for newly-arrived state.threads (not first sync)
-      if (isSubsequentSync) {
-        const newThreads = state.threads.filter(t => !knownIds.has(t.id));
-        if (newThreads.length > 0) {
-          const smartNotifs = localStorage.getItem('smartNotifications') !== 'false';
-          const toNotify = smartNotifs
-            ? newThreads.filter(t => state.knownSenders.has(t.senderEmail.toLowerCase()))
-            : newThreads;
-          if (toNotify.length > 0) {
-            notifyNewThreads(toNotify.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
-          }
-        }
-      }
-    }
-
-    // Update tray badge / dock badge with total unread count
-    const unreadCount = state.threads.filter(t => t.isUnread).length;
-    updateBadge(unreadCount).catch(() => {});
-  } catch (e) {
-    console.error('Sync error:', e);
-    const msg = e instanceof Error ? e.message : String(e);
-    setStatus(`Sync error: ${msg}`);
-    // Show error in inbox if it's empty so user sees it
-    if (state.threads.length === 0) {
-      const container = document.getElementById('inbox');
-      if (container) container.innerHTML = `
-        <div class="empty-state" style="color:var(--text-muted)">
-          <div style="font-size:24px">⚠</div>
-          <div>Sync failed</div>
-          <div style="font-size:12px; margin-top:4px; max-width:320px; word-break:break-all">${esc(msg)}</div>
-        </div>`;
-    }
-  } finally {
-    state.syncing = false;
-    if (btn) btn.style.opacity = '';
-    setTimeout(() => setStatus(''), 5000);
-  }
-}
 
 
 
