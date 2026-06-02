@@ -76,7 +76,7 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
       }
     }});
   }
-  items.push({ label: `${icon.close('16px')}  Block sender`, action: () => { menu.remove(); doBlock(t, row, deps); }, cls: 'ctx-menu-item--danger' });
+  items.push({ label: `${icon.shieldBan('16px')}  Block sender`, action: () => { menu.remove(); doBlock(t, row, deps); }, cls: 'ctx-menu-item--danger' });
 
   const actionItems = items.filter((x): x is MenuItem => x !== 'divider');
   menu.innerHTML = items.map((item) =>
