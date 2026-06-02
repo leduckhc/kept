@@ -358,11 +358,13 @@ body {
   height: 36px;
   padding: 0 12px;
   cursor: pointer;
-  transition: background 0.1s ease, transform 0.15s ease;
+  transition: background 0.1s ease, transform 0.15s ease, border-radius 0.1s ease;
   position: relative;
   overflow: hidden;
   isolation: isolate;
   touch-action: pan-y;
+  border-radius: 8px;
+  margin: 0 4px;
 }
 .thread-row:hover { background: var(--surface-hover); }
 .thread-row.selected {
