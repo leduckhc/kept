@@ -590,12 +590,6 @@ body {
 .thread-row.is-starred .unread-dot { border-color: #f59e0b; }
 
 /* ── Thread reader ──────────────────────────────────────── */
-.reader-overlay {
-  display: none;
-}
-.reader-panel {
-  display: none;
-}
 
 /* ── Full-page reader ─────────────────────────────────────── */
 /* Reader is inline in .reader-pane — no overlay, no modal */
@@ -871,12 +865,6 @@ body {
 }
 
 /* ── Reply composer ─────────────────────────────────────── */
-.compose-area {
-  flex-direction: column;
-  gap: 8px;
-}
-.compose-area.open { display: flex; }
-
 .btn-primary {
   padding: 6px 16px;
   background: var(--accent);
@@ -1107,269 +1095,6 @@ body {
 
 .account-badge { display:inline-flex; width:18px; height:18px; border-radius:50%; font-size:10px; font-weight:700; align-items:center; justify-content:center; color:#fff; margin-right:4px; }
 
-/* ── Compose new email — Stark Mono (Variant A) ─────────── */
-.compose-new-overlay {
-  /* inherits .reader-overlay: position:fixed; inset:0; z-index:100; background:rgba(0,0,0,0.4) */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.compose-new-panel {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
-  width: 560px;
-  max-width: 95vw;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-.compose-new-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.compose-new-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-}
-.compose-new-close-btn {
-  color: var(--text-muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.compose-new-close-btn:hover {
-  color: var(--text);
-  background: var(--surface);
-}
-.compose-new-body-area {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  flex: 1;
-  overflow-y: auto;
-}
-.compose-field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.compose-field-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
-}
-.compose-field-input {
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 13px;
-  font-family: var(--font);
-  width: 100%;
-  box-sizing: border-box;
-  transition: border-color 0.1s, background 0.1s;
-}
-.compose-field-input:focus {
-  outline: none;
-  border-color: var(--text-muted);
-  background: var(--bg);
-}
-.compose-field-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-/* Custom autocomplete list */
-.compose-ac-list {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-  z-index: 200;
-}
-.compose-ac-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--text);
-}
-.compose-ac-item:hover,
-.compose-ac-item--active {
-  background: var(--surface);
-}
-.compose-ac-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  flex-shrink: 0;
-}
-.compose-ac-email {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Error banner */
-.compose-new-error-banner {
-  background: var(--danger-bg);
-  border: 1px solid rgba(192,57,43,0.15);
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: var(--danger);
-}
-.compose-new-footer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.compose-send-btn {
-  background: var(--accent);
-  color: var(--bg);
-  font-weight: 600;
-  font-size: 13px;
-  padding: 6px 18px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  opacity: 0.35;
-  transition: opacity 0.1s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.compose-send-btn:not(:disabled) {
-  opacity: 1;
-  cursor: pointer;
-}
-.compose-send-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-.compose-discard-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 4px 6px;
-}
-.compose-discard-btn:hover { color: var(--text); }
-/* Spinner */
-@keyframes compose-spin { to { transform: rotate(360deg); } }
-.compose-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: compose-spin 0.6s linear infinite;
-  vertical-align: middle;
-}
-/* Send button states */
-.send-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid transparent;
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-  vertical-align: middle;
-}
-.send-success {
-  background: #00C49A !important;
-  color: white !important;
-  transition: background 0.15s ease !important;
-}
-.send-error {
-  background: var(--danger, #dc2626) !important;
-  color: white !important;
-  transition: background 0.15s ease !important;
-}
-/* Discard confirm overlay */
-.compose-discard-confirm {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.35);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-.compose-discard-box {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px 24px;
-  text-align: center;
-  width: 260px;
-}
-.compose-discard-msg {
-  font-size: 14px;
-  color: var(--text);
-  margin: 0 0 16px;
-}
-.compose-discard-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-.compose-discard-yes {
-  background: var(--danger);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.compose-discard-yes:hover { opacity: 0.88; }
-.compose-discard-no {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 6px 14px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.compose-discard-no:hover { background: var(--surface); }
 /* Toast */
 .kept-toast {
   position: fixed;
@@ -2263,45 +1988,7 @@ body {
 
 /* ── Thread list animations ──────────────────────────────── */
 /* Staggered slide-in for thread rows on load */
-.thread-row.animate-in {
-  animation: threadSlideIn 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
 
-/* Archive / delete slide-out */
-.thread-row.removing {
-  transform: translateX(-100%);
-  opacity: 0;
-  transition: transform 200ms ease-out, opacity 200ms ease-out;
-  pointer-events: none;
-  overflow: hidden;
-}
-.thread-row.removing-collapse {
-  max-height: 0 !important;
-  transition: max-height 150ms ease-out;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-/* ── Overlay / modal animations ──────────────────────────── */
-/* Backdrop fade */
-.reader-overlay,
-.compose-new-overlay {
-  animation: fadeIn 150ms ease both;
-}
-.reader-overlay.closing,
-.compose-new-overlay.closing {
-  animation: fadeOut 120ms ease forwards;
-}
-
-/* Panel scale-in */
-.reader-panel,
-.compose-new-panel {
-  animation: scaleIn 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-.reader-panel.closing,
-.compose-new-panel.closing {
-  animation: slideDown 120ms ease forwards;
-}
 
 /* Command palette */
 #cmd-palette-backdrop {
@@ -2340,41 +2027,6 @@ body {
 }
 
 /* ── View transition (inbox/starred/snoozed) ─────────────── */
-.inbox.view-out {
-  animation: fadeOut 100ms ease forwards;
-}
-.inbox.view-in {
-  animation: fadeIn 100ms ease both;
-}
-
-/* ── Toast animations ────────────────────────────────────── */
-.toast {
-  animation: slideUp 200ms ease-out;
-}
-.kept-toast {
-  /* override the inline transform-based show/hide with animation classes */
-}
-.kept-toast.toast-enter {
-  animation: toastSlideUp 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-.kept-toast.toast-exit {
-  animation: fadeOut 150ms ease forwards;
-}
-
-/* Undo toast entrance */
-.undo-toast {
-  animation: toastSlideUp 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-.undo-toast.removing {
-  animation: fadeOut 150ms ease forwards;
-  pointer-events: none;
-}
-
-/* Follow-up prompt */
-.followup-prompt.removing {
-  animation: fadeOut 150ms ease forwards;
-  pointer-events: none;
-}
 
 /* ── Button active states ────────────────────────────────── */
 .btn-icon {
@@ -2725,16 +2377,6 @@ body {
   margin-left: 4px;
   vertical-align: middle;
 }
-.domain-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent);
-  color: #fff;
-}
 
 /* ── Filter back header ─────────────────────────────────── */
 .filter-back-header {
@@ -2874,29 +2516,6 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-.compose-attachment-chip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  font-size: 12px;
-  color: var(--text);
-}
-.compose-attachment-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 0 2px;
-  line-height: 1;
-}
-.compose-attachment-remove:hover {
-  color: var(--danger, #e84d4d);
 }
 .compose-editor.drag-over {
   border-color: var(--accent) !important;
@@ -3116,9 +2735,6 @@ body {
   opacity: 0.5;
   cursor: default;
 }
-.compose-send-btn-new.send-success {
-  background: #10b981;
-}
 .compose-discard-btn-new {
   padding: 8px 12px;
   border-radius: 6px;
@@ -3180,15 +2796,6 @@ body {
   padding-left: 8px;
   color: var(--text-muted);
   font-size: 13px;
-}
-.compose-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
 }
 
 /* Mobile: full width */
