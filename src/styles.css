@@ -2180,6 +2180,7 @@ body {
 }
 @media (max-width: 1023px) {
   .sidebar { display: none; }
+  .resize-handle { display: none; }
 
   /* app-body stacks — inbox fills width */
   .app-body {
@@ -2188,6 +2189,7 @@ body {
   }
   .inbox {
     width: 100%;
+    max-width: 100%;
     border-right: none;
     background: var(--bg);
     flex: 1;
