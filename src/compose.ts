@@ -3,7 +3,7 @@
 
 import { loadSenderEmails, sendEmail } from './gmail';
 import { state } from './state';
-import { showToast } from './toasts';
+import { showToast, showUndoToast } from './toasts';
 import { avatarColor } from './avatar';
 import { esc } from './helpers';
 import { icon } from './icons';
@@ -19,6 +19,9 @@ export interface ComposeOptions {
   threadId?: string;
   inReplyTo?: string;
   attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
+  prefillTo?: string;
+  prefillSubject?: string;
+  prefillBody?: string;
 }
 
 let activePanel: HTMLElement | null = null;
@@ -130,6 +133,11 @@ export async function openCompose(opts: ComposeOptions) {
 
   // ── Autocomplete ──
   let acIndex = -1;
+
+  // ── Prefill from undo-send restore ──
+  if (opts.prefillTo) toEl.value = opts.prefillTo;
+  if (opts.prefillSubject) subjectEl.value = opts.prefillSubject;
+  if (opts.prefillBody) editorEl.innerText = opts.prefillBody;
 
   function closeAc() {
     acList.style.display = 'none';
@@ -288,27 +296,40 @@ export async function openCompose(opts: ComposeOptions) {
       return;
     }
 
-    sendBtn.disabled = true;
-    sendBtn.innerHTML = '<span class="compose-spinner"></span> Sending…';
+    // Close panel immediately — send after 5s delay (undo-able)
+    const account = state.account;
+    const payload = {
+      to,
+      subject: subject || '(no subject)',
+      body: body || '(attached)',
+      threadId: opts.threadId,
+      inReplyTo: opts.inReplyTo,
+      attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
+    };
+    closeCompose();
 
-    try {
-      await sendEmail(state.account, {
-        to,
-        subject: subject || '(no subject)',
-        body: body || '(attached)',
-        threadId: opts.threadId,
-        inReplyTo: opts.inReplyTo,
-        attachments: pendingAttachments.length > 0 ? pendingAttachments : undefined,
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        await sendEmail(account, payload);
+        showToast('Message sent');
+      } catch (err) {
+        showToast(`Send failed: ${err instanceof Error ? err.message : String(err)}`, 4000);
+      }
+    }, 5000);
+
+    showUndoToast('Sending…', async () => {
+      cancelled = true;
+      clearTimeout(timer);
+      // Re-open compose with the same content
+      openCompose({
+        ...opts,
+        prefillTo: to,
+        prefillSubject: subject,
+        prefillBody: body,
       });
-      sendBtn.innerHTML = '✓ Sent';
-      sendBtn.classList.add('send-success');
-      showToast('Message sent');
-      setTimeout(() => closeCompose(), 1000);
-    } catch (err) {
-      sendBtn.innerHTML = `${icon.send('14px')} Send`;
-      sendBtn.disabled = false;
-      showToast(`Failed: ${err instanceof Error ? err.message : String(err)}`, 4000);
-    }
+    });
   });
 
   // ── Keyboard ──

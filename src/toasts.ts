@@ -36,7 +36,7 @@ export function showUndoToast(msg: string, undoFn: () => Promise<void> | void) {
 
   pushUndo(msg, undoFn);
 
-  const DURATION = 7000;
+  const DURATION = 5000;
 
   function dismiss() {
     if (_undoToastTimer !== null) { clearTimeout(_undoToastTimer); _undoToastTimer = null; }

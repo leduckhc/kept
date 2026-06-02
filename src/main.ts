@@ -159,6 +159,9 @@ async function boot() {
       refreshKnownSenders().catch(() => {});
       await refreshAll();
       setupSnoozeResurface(renderInbox);
+
+      // Background auto-sync every 60s
+      setInterval(() => { syncAndRender().catch(() => {}); }, 60_000);
     }
   } catch (e) {
     console.error('Boot error:', e);
