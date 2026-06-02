@@ -2145,6 +2145,25 @@ body {
 @media (max-width: 600px) {
   .thread-row { min-height: 40px; grid-template-columns: 40px 1fr auto; }
   .thread-sender { display: none; }
+
+  /* Toolbar: allow tabs to scroll horizontally */
+  .toolbar {
+    gap: 4px;
+    padding: 0 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* hide scrollbar */
+  }
+  .toolbar::-webkit-scrollbar { display: none; }
+
+  /* Shrink tab font on tiny screens */
+  .tab-btn { font-size: 12px; padding: 0 2px; }
+
+  /* Search input: shrink min-width */
+  .search-input { min-width: 80px; }
+
+  /* Date: cap width so subject gets more room */
+  .thread-date { max-width: 48px; overflow: hidden; text-overflow: ellipsis; font-size: 10px; }
 }
 
 /* ── Mobile layout (<1024px): revert to single-pane ─────── */
