@@ -115,6 +115,7 @@ export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]):
   }).join('');
 
   return `<div class="thread-row category-row${hasUnread ? ' unread' : ''}" data-category="${type}">
+    <span class="unread-dot"></span>
     <div class="avatar-wrap">${categoryIcon}</div>
     <span class="thread-sender">${label}</span>
     <div class="thread-mid">
@@ -631,6 +632,7 @@ export async function renderScheduledView() {
     <div class="section-header">Scheduled <span class="section-badge">${scheduled.length}</span></div>
     ${scheduled.map(e => `
       <div class="thread-row" data-sched-id="${esc(e.id)}">
+        <span class="unread-dot"></span>
         <div class="avatar-wrap"><div class="avatar" style="background:#888" data-initial="⏰"></div></div>
         <span class="thread-sender">${esc(e.to)}</span>
         <div class="thread-mid">
