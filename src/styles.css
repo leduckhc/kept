@@ -443,7 +443,7 @@ body {
   align-items: center;
   gap: 10px;
   height: 36px;
-  padding: 0 12px;
+  padding: 0 clamp(12px, 3vw, 36px);
   cursor: pointer;
   transition: background 0.1s ease, transform 0.15s ease, border-radius 0.1s ease;
   position: relative;

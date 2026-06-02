@@ -311,7 +311,6 @@ export function renderInbox(deps: ThreadListDeps) {
         if (row) row.classList.add('is-selected');
       }
       if (state.bulkMode) deps.updateBulkBar();
-      if (searchBarHtml) prependSearchBar(container, searchBarHtml, searchValue, deps);
       renderNewSendersSection(container, deps.getActionDeps(), deps.openThread);
       return;
     }
