@@ -1,18 +1,19 @@
 // compose.ts — Unified Gmail-style floating compose panel
-// Modes: new, reply, forward. Supports rich text, attachments, autocomplete.
+// Modes: new, reply, replyAll, forward. Supports multiple simultaneous panels.
 
-import { loadSenderEmails, sendEmail } from './gmail';
+import { loadSenderEmails, sendEmail, createDraft, updateDraft, deleteDraft } from './gmail';
 import { state } from './state';
 import { showToast, showUndoToast } from './toasts';
 import { avatarColor } from './avatar';
 import { esc } from './helpers';
 import { icon } from './icons';
 
-export type ComposeMode = 'new' | 'reply' | 'forward';
+export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward';
 
 export interface ComposeOptions {
   mode: ComposeMode;
   to?: string;
+  cc?: string;
   subject?: string;
   quotedHtml?: string;
   quotedText?: string;
@@ -20,28 +21,62 @@ export interface ComposeOptions {
   inReplyTo?: string;
   attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
   prefillTo?: string;
+  prefillCc?: string;
   prefillSubject?: string;
   prefillBody?: string;
+  draftId?: string; // existing Gmail draft ID (for updates)
 }
 
-let activePanel: HTMLElement | null = null;
-let minimized = false;
+// ── Multi-panel state ──
+interface ComposeInstance {
+  panel: HTMLElement;
+  minimized: boolean;
+  draftId: string | null;
+  draftTimer: ReturnType<typeof setTimeout> | null;
+}
+
+const activePanels: ComposeInstance[] = [];
+const MAX_PANELS = 3;
 
 export function isComposeOpen(): boolean {
-  return !!activePanel;
+  return activePanels.length > 0;
 }
 
-export function closeCompose() {
-  if (activePanel) {
-    activePanel.remove();
-    activePanel = null;
-    minimized = false;
+export function closeCompose(panel?: HTMLElement) {
+  if (panel) {
+    const idx = activePanels.findIndex(p => p.panel === panel);
+    if (idx >= 0) {
+      const inst = activePanels[idx];
+      if (inst.draftTimer) clearTimeout(inst.draftTimer);
+      inst.panel.remove();
+      activePanels.splice(idx, 1);
+      repositionPanels();
+    }
+  } else {
+    // Close all (legacy compat)
+    for (const inst of activePanels) {
+      if (inst.draftTimer) clearTimeout(inst.draftTimer);
+      inst.panel.remove();
+    }
+    activePanels.length = 0;
   }
 }
 
+function repositionPanels() {
+  // Stack panels from right, each offset 300px to the left
+  activePanels.forEach((inst, i) => {
+    if (!inst.panel.classList.contains('compose-panel-expanded')) {
+      inst.panel.style.right = `${24 + i * 300}px`;
+    }
+  });
+}
+
 export async function openCompose(opts: ComposeOptions) {
-  // Close existing panel if open
-  if (activePanel) closeCompose();
+  // Limit concurrent panels
+  if (activePanels.length >= MAX_PANELS) {
+    showToast('Close a compose window first (max 3)');
+    return;
+  }
 
   if (!state.account) return;
 
@@ -54,32 +89,43 @@ export async function openCompose(opts: ComposeOptions) {
     ...(opts.attachments ?? []),
   ];
 
-  const modeTitle = opts.mode === 'reply' ? 'Reply' : opts.mode === 'forward' ? 'Forward' : 'New Message';
+  const modeTitle = opts.mode === 'reply' ? 'Reply'
+    : opts.mode === 'replyAll' ? 'Reply All'
+    : opts.mode === 'forward' ? 'Forward'
+    : 'New Message';
+
+  const showCc = opts.mode === 'replyAll' || !!opts.cc;
 
   const panel = document.createElement('div');
   panel.className = 'compose-panel';
-  panel.id = 'compose-panel';
   panel.innerHTML = `
-    <div class="compose-panel-header" id="compose-panel-header">
+    <div class="compose-panel-header">
       <span class="compose-panel-title">${modeTitle}</span>
       <div class="compose-panel-actions">
-        <button class="btn-icon compose-panel-minimize" id="compose-minimize" title="Minimize">—</button>
-        <button class="btn-icon compose-panel-expand" id="compose-expand" title="Expand">${icon.expand('14px')}</button>
-        <button class="btn-icon compose-panel-close" id="compose-close" title="Close">${icon.close('14px')}</button>
+        <button class="btn-icon compose-panel-minimize" title="Minimize">—</button>
+        <button class="btn-icon compose-panel-expand" title="Expand">${icon.expand('14px')}</button>
+        <button class="btn-icon compose-panel-close" title="Close">${icon.close('14px')}</button>
       </div>
     </div>
-    <div class="compose-panel-body" id="compose-panel-body">
+    <div class="compose-panel-body">
       <div class="compose-field">
         <label class="compose-label">To</label>
-        <input class="compose-input" id="compose-to" type="text"
+        <input class="compose-input compose-to" type="text"
           value="${esc(opts.to ?? '')}"
           placeholder="name@example.com"
           autocomplete="off" aria-autocomplete="list" />
-        <ul class="compose-ac" id="compose-ac" style="display:none"></ul>
+        <ul class="compose-ac" style="display:none"></ul>
       </div>
+      <div class="compose-field compose-cc-field" style="display:${showCc ? '' : 'none'}">
+        <label class="compose-label">Cc</label>
+        <input class="compose-input compose-cc" type="text"
+          value="${esc(opts.cc ?? '')}"
+          placeholder="cc@example.com" />
+      </div>
+      ${!showCc ? '<button class="compose-show-cc-btn">Cc</button>' : ''}
       <div class="compose-field">
         <label class="compose-label">Subject</label>
-        <input class="compose-input" id="compose-subject" type="text"
+        <input class="compose-input compose-subject" type="text"
           value="${esc(opts.subject ?? '')}"
           placeholder="Subject" />
       </div>
@@ -92,29 +138,48 @@ export async function openCompose(opts: ComposeOptions) {
           <button class="toolbar-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
           <button class="toolbar-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
           <span class="toolbar-sep"></span>
-          <button class="toolbar-btn" id="compose-attach-btn" title="Attach file">${icon.attach('14px')}</button>
-          <input type="file" id="compose-file-input" multiple style="display:none" />
+          <button class="toolbar-btn compose-attach-btn" title="Attach file">${icon.attach('14px')}</button>
+          <input type="file" class="compose-file-input" multiple style="display:none" />
         </div>
-        <div class="compose-editor-new" id="compose-editor" contenteditable="true" data-placeholder="Write your message…"></div>
+        <div class="compose-editor-new" contenteditable="true" data-placeholder="Write your message…"></div>
       </div>
-      <div class="compose-attachments-new" id="compose-attachments"></div>
+      <div class="compose-attachments-new"></div>
     </div>
     <div class="compose-panel-footer">
-      <button class="compose-send-btn-new" id="compose-send-btn">${icon.send('14px')} Send</button>
-      <button class="compose-discard-btn-new" id="compose-discard-btn">Discard</button>
+      <button class="compose-send-btn-new">${icon.send('14px')} Send</button>
+      <button class="compose-discard-btn-new">Discard</button>
     </div>`;
 
   document.body.appendChild(panel);
-  activePanel = panel;
 
-  const toEl = panel.querySelector<HTMLInputElement>('#compose-to')!;
-  const subjectEl = panel.querySelector<HTMLInputElement>('#compose-subject')!;
-  const editorEl = panel.querySelector<HTMLElement>('#compose-editor')!;
-  const sendBtn = panel.querySelector<HTMLButtonElement>('#compose-send-btn')!;
-  const attachmentsEl = panel.querySelector<HTMLElement>('#compose-attachments')!;
-  const acList = panel.querySelector<HTMLUListElement>('#compose-ac')!;
-  const fileInput = panel.querySelector<HTMLInputElement>('#compose-file-input')!;
-  const bodyWrap = panel.querySelector<HTMLElement>('#compose-panel-body')!;
+  const instance: ComposeInstance = {
+    panel,
+    minimized: false,
+    draftId: opts.draftId ?? null,
+    draftTimer: null,
+  };
+  activePanels.push(instance);
+  repositionPanels();
+
+  const toEl = panel.querySelector<HTMLInputElement>('.compose-to')!;
+  const ccEl = panel.querySelector<HTMLInputElement>('.compose-cc');
+  const subjectEl = panel.querySelector<HTMLInputElement>('.compose-subject')!;
+  const editorEl = panel.querySelector<HTMLElement>('.compose-editor-new')!;
+  const sendBtn = panel.querySelector<HTMLButtonElement>('.compose-send-btn-new')!;
+  const attachmentsEl = panel.querySelector<HTMLElement>('.compose-attachments-new')!;
+  const acList = panel.querySelector<HTMLUListElement>('.compose-ac')!;
+  const fileInput = panel.querySelector<HTMLInputElement>('.compose-file-input')!;
+  const bodyWrap = panel.querySelector<HTMLElement>('.compose-panel-body')!;
+
+  // ── Show Cc field button ──
+  const showCcBtn = panel.querySelector<HTMLButtonElement>('.compose-show-cc-btn');
+  if (showCcBtn) {
+    showCcBtn.addEventListener('click', () => {
+      const ccField = panel.querySelector<HTMLElement>('.compose-cc-field');
+      if (ccField) ccField.style.display = '';
+      showCcBtn.remove();
+    });
+  }
 
   // ── Quoted content for reply/forward ──
   if (opts.quotedHtml) {
@@ -126,7 +191,6 @@ export async function openCompose(opts: ComposeOptions) {
   // Auto-append signature
   const sig = state.account?.signature;
   if (sig && !opts.quotedHtml && !opts.quotedText) {
-    // Replace literal \n sequences with real newlines (DB may store escaped form)
     const sigText = sig.replace(/\\n/g, '\n');
     editorEl.innerHTML = `<br><div class="compose-signature" style="color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px;margin-top:8px;font-size:13px;white-space:pre-wrap">-- \n${esc(sigText)}</div>`;
   }
@@ -136,6 +200,7 @@ export async function openCompose(opts: ComposeOptions) {
 
   // ── Prefill from undo-send restore ──
   if (opts.prefillTo) toEl.value = opts.prefillTo;
+  if (opts.prefillCc && ccEl) ccEl.value = opts.prefillCc;
   if (opts.prefillSubject) subjectEl.value = opts.prefillSubject;
   if (opts.prefillBody) editorEl.innerText = opts.prefillBody;
 
@@ -185,9 +250,8 @@ export async function openCompose(opts: ComposeOptions) {
     }
   });
   toEl.addEventListener('blur', (e: FocusEvent) => {
-    // Only close autocomplete if focus moved outside the autocomplete list
     const related = e.relatedTarget as HTMLElement | null;
-    if (!related || !related.closest('.ac-list')) closeAc();
+    if (!related || !related.closest('.compose-ac')) closeAc();
   });
 
   // ── Rich text toolbar ──
@@ -237,7 +301,7 @@ export async function openCompose(opts: ComposeOptions) {
     renderAttachments();
   }
 
-  panel.querySelector('#compose-attach-btn')!.addEventListener('click', () => fileInput.click());
+  panel.querySelector('.compose-attach-btn')!.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => { if (fileInput.files?.length) addFiles(fileInput.files); fileInput.value = ''; });
 
   // Drag & drop
@@ -248,51 +312,87 @@ export async function openCompose(opts: ComposeOptions) {
   // Render pre-loaded attachments (forward mode)
   if (pendingAttachments.length) renderAttachments();
 
+  // ── Draft auto-save (every 3s after content change) ──
+  function scheduleDraftSave() {
+    if (instance.draftTimer) clearTimeout(instance.draftTimer);
+    instance.draftTimer = setTimeout(async () => {
+      if (!state.account) return;
+      const to = toEl.value.trim();
+      const cc = ccEl?.value.trim() ?? '';
+      const subject = subjectEl.value.trim();
+      const body = editorEl.innerText.trim();
+      // Only save if there's meaningful content
+      if (!to && !subject && !body) return;
+      try {
+        if (instance.draftId) {
+          await updateDraft(state.account, instance.draftId, { to, cc, subject, body, threadId: opts.threadId });
+        } else {
+          const id = await createDraft(state.account, { to, cc, subject, body, threadId: opts.threadId });
+          instance.draftId = id;
+        }
+      } catch { /* non-fatal — draft save failure shouldn't block compose */ }
+    }, 3000);
+  }
+
+  toEl.addEventListener('input', scheduleDraftSave);
+  subjectEl.addEventListener('input', scheduleDraftSave);
+  editorEl.addEventListener('input', scheduleDraftSave);
+  if (ccEl) ccEl.addEventListener('input', scheduleDraftSave);
+
   // ── Minimize / Expand / Close ──
-  panel.querySelector('#compose-minimize')!.addEventListener('click', () => {
-    minimized = !minimized;
-    bodyWrap.style.display = minimized ? 'none' : '';
-    panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = minimized ? 'none' : '';
-    panel.classList.toggle('compose-panel-minimized', minimized);
+  panel.querySelector('.compose-panel-minimize')!.addEventListener('click', () => {
+    instance.minimized = !instance.minimized;
+    bodyWrap.style.display = instance.minimized ? 'none' : '';
+    panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = instance.minimized ? 'none' : '';
+    panel.classList.toggle('compose-panel-minimized', instance.minimized);
   });
 
-  panel.querySelector('#compose-panel-header')!.addEventListener('dblclick', () => {
-    minimized = !minimized;
-    bodyWrap.style.display = minimized ? 'none' : '';
-    panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = minimized ? 'none' : '';
-    panel.classList.toggle('compose-panel-minimized', minimized);
+  panel.querySelector('.compose-panel-header')!.addEventListener('dblclick', () => {
+    instance.minimized = !instance.minimized;
+    bodyWrap.style.display = instance.minimized ? 'none' : '';
+    panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = instance.minimized ? 'none' : '';
+    panel.classList.toggle('compose-panel-minimized', instance.minimized);
   });
 
-  panel.querySelector('#compose-expand')!.addEventListener('click', () => {
-    // Un-minimize first if minimized
-    if (minimized) {
-      minimized = false;
+  panel.querySelector('.compose-panel-expand')!.addEventListener('click', () => {
+    if (instance.minimized) {
+      instance.minimized = false;
       bodyWrap.style.display = '';
       panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = '';
       panel.classList.remove('compose-panel-minimized');
     }
     panel.classList.toggle('compose-panel-expanded');
+    repositionPanels();
   });
 
-  panel.querySelector('#compose-close')!.addEventListener('click', () => {
+  async function discardAndClose() {
+    // Delete draft from Gmail if one was saved
+    if (instance.draftId && state.account) {
+      try { await deleteDraft(state.account, instance.draftId); } catch { /* non-fatal */ }
+    }
+    closeCompose(panel);
+  }
+
+  panel.querySelector('.compose-panel-close')!.addEventListener('click', () => {
     const hasContent = editorEl.innerText.trim().length > 0 || pendingAttachments.length > 0;
     if (hasContent) {
       if (!confirm('Discard this draft?')) return;
     }
-    closeCompose();
+    discardAndClose();
   });
 
-  panel.querySelector('#compose-discard-btn')!.addEventListener('click', () => {
+  panel.querySelector('.compose-discard-btn-new')!.addEventListener('click', () => {
     const hasContent = editorEl.innerText.trim().length > 0 || pendingAttachments.length > 0;
     if (hasContent) {
       if (!confirm('Discard this draft?')) return;
     }
-    closeCompose();
+    discardAndClose();
   });
 
   // ── Send ──
   sendBtn.addEventListener('click', async () => {
     const to = toEl.value.trim();
+    const cc = ccEl?.value.trim() ?? '';
     const subject = subjectEl.value.trim();
     const body = editorEl.innerText.trim();
     if (!to || (!body && !pendingAttachments.length) || !state.account) {
@@ -300,23 +400,31 @@ export async function openCompose(opts: ComposeOptions) {
       return;
     }
 
-    // Close panel immediately — send after 5s delay (undo-able)
     const account = state.account;
+    const draftId = instance.draftId;
     const payload = {
       to,
+      cc: cc || undefined,
       subject: subject || '(no subject)',
       body: body || '(attached)',
       threadId: opts.threadId,
       inReplyTo: opts.inReplyTo,
       attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
     };
-    closeCompose();
+    // Clear draft timer and close panel immediately
+    if (instance.draftTimer) clearTimeout(instance.draftTimer);
+    instance.draftId = null; // prevent discard from deleting draft we're about to send
+    closeCompose(panel);
 
     let cancelled = false;
     const timer = setTimeout(async () => {
       if (cancelled) return;
       try {
         await sendEmail(account, payload);
+        // Delete the draft after successful send
+        if (draftId) {
+          try { await deleteDraft(account, draftId); } catch { /* non-fatal */ }
+        }
         showToast('Message sent');
       } catch (err) {
         showToast(`Send failed: ${err instanceof Error ? err.message : String(err)}`, 4000);
@@ -330,8 +438,10 @@ export async function openCompose(opts: ComposeOptions) {
       openCompose({
         ...opts,
         prefillTo: to,
+        prefillCc: cc,
         prefillSubject: subject,
         prefillBody: body,
+        draftId: draftId ?? undefined,
       });
     });
   });
@@ -341,7 +451,7 @@ export async function openCompose(opts: ComposeOptions) {
     if (e.key === 'Escape') {
       if (acList.style.display !== 'none') { closeAc(); return; }
       const hasContent = editorEl.innerText.trim().length > 0 || pendingAttachments.length > 0;
-      if (!hasContent) closeCompose();
+      if (!hasContent) closeCompose(panel);
     }
     // Cmd/Ctrl+Enter to send
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -378,6 +488,27 @@ export async function openComposeReply(opts: {
   await openCompose({
     mode: 'reply',
     to: opts.to,
+    subject: opts.subject.startsWith('Re:') ? opts.subject : `Re: ${opts.subject}`,
+    threadId: opts.threadId,
+    inReplyTo: opts.inReplyTo,
+    quotedText: opts.quotedText,
+    quotedHtml: opts.quotedHtml,
+  });
+}
+
+export async function openComposeReplyAll(opts: {
+  to: string;
+  cc: string;
+  subject: string;
+  threadId: string;
+  inReplyTo?: string;
+  quotedText?: string;
+  quotedHtml?: string;
+}) {
+  await openCompose({
+    mode: 'replyAll',
+    to: opts.to,
+    cc: opts.cc,
     subject: opts.subject.startsWith('Re:') ? opts.subject : `Re: ${opts.subject}`,
     threadId: opts.threadId,
     inReplyTo: opts.inReplyTo,

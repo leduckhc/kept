@@ -2549,6 +2549,18 @@ body {
 .compose-panel-minimized {
   max-height: 44px;
 }
+.compose-show-cc-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 16px 4px;
+  text-align: left;
+}
+.compose-show-cc-btn:hover {
+  text-decoration: underline;
+}
 .compose-panel-header {
   display: flex;
   align-items: center;

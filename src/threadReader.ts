@@ -5,7 +5,7 @@ import { sanitizeEmailHtml } from './sanitize';
 import { getDb } from './db';
 import { showToast, showUndoToast } from './toasts';
 import { esc, formatDate } from './helpers';
-import { openComposeReply, openComposeForward } from './compose';
+import { openComposeReply, openComposeReplyAll, openComposeForward } from './compose';
 import { icon } from './icons';
 
 function getAvatarColor(name: string): string {
@@ -54,6 +54,7 @@ export async function openThread(
       </div>
       <div class="reader-footer-actions">
         <button class="btn-primary" id="btn-reply">${icon.reply('14px')} Reply</button>
+        <button class="btn-primary" id="btn-reply-all">${icon.reply('14px')} Reply All</button>
         <button class="btn-secondary" id="btn-forward">${icon.send('14px')} Forward</button>
       </div>
       <button class="btn-secondary danger" id="btn-block-reader">Block sender</button>
@@ -91,11 +92,19 @@ export async function openThread(
   document.addEventListener('keydown', handleEsc);
 
   let lastMessageId: string | null = null;
+  let lastTo = '';
+  let lastCc = '';
 
   try {
     if (import.meta.env.DEV) console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account.id);
     const result = await fetchMessageBody(state.account, t.gmailThreadId);
     lastMessageId = result.lastMessageId;
+    // Capture last message's To/Cc for Reply All
+    if (result.messages.length > 0) {
+      const lastMsg = result.messages[result.messages.length - 1];
+      lastTo = lastMsg.to;
+      lastCc = lastMsg.cc;
+    }
     const bodyEl = reader.querySelector('.reader-body')!;
     bodyEl.innerHTML = '';
     const msgs = result.messages;
@@ -323,6 +332,26 @@ export async function openThread(
   document.getElementById('btn-reply')!.addEventListener('click', () => {
     openComposeReply({
       to: t.senderEmail,
+      subject: t.subject,
+      threadId: t.gmailThreadId,
+      inReplyTo: lastMessageId ?? undefined,
+      quotedText: lastPlainText,
+    });
+  });
+
+  document.getElementById('btn-reply-all')!.addEventListener('click', () => {
+    // Reply All: combine sender + To + Cc, excluding our own email
+    const myEmail = state.account?.email ?? '';
+    const allRecipients = [t.senderEmail, ...lastTo.split(',').map(s => s.trim()), ...lastCc.split(',').map(s => s.trim())]
+      .map(r => r.replace(/^.*<([^>]+)>.*$/, '$1').trim())
+      .filter(r => r && r.toLowerCase() !== myEmail.toLowerCase());
+    const uniqueRecipients = [...new Set(allRecipients)];
+    // First recipient goes to To, rest to Cc
+    const toAddr = uniqueRecipients[0] ?? t.senderEmail;
+    const ccAddr = uniqueRecipients.slice(1).join(', ');
+    openComposeReplyAll({
+      to: toAddr,
+      cc: ccAddr,
       subject: t.subject,
       threadId: t.gmailThreadId,
       inReplyTo: lastMessageId ?? undefined,

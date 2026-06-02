@@ -642,11 +642,57 @@ async function tryUnsubscribe(account: Account, gmailThreadId: string): Promise<
 // ── Send / reply ──────────────────────────────────────────
 interface SendOptions {
   to: string;
+  cc?: string;
   subject: string;
   body: string;
   threadId?: string;
   inReplyTo?: string;
   attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
+}
+
+interface DraftOptions {
+  to: string;
+  cc?: string;
+  subject: string;
+  body: string;
+  threadId?: string;
+}
+
+// ── Drafts API ────────────────────────────────────────────
+
+export async function createDraft(account: Account, opts: DraftOptions): Promise<string> {
+  const a = await ensureFreshToken(account);
+  const raw = buildMimeRaw(a.email, opts.to, opts.cc, opts.subject, opts.body);
+  const payload: Record<string, unknown> = { message: { raw } };
+  if (opts.threadId) payload.message = { raw, threadId: opts.threadId };
+  const res = await gmailPost(a, '/users/me/drafts', payload) as { id: string };
+  return res.id;
+}
+
+export async function updateDraft(account: Account, draftId: string, opts: DraftOptions): Promise<void> {
+  const a = await ensureFreshToken(account);
+  const raw = buildMimeRaw(a.email, opts.to, opts.cc, opts.subject, opts.body);
+  const payload: Record<string, unknown> = { message: { raw } };
+  if (opts.threadId) payload.message = { raw, threadId: opts.threadId };
+  await gmailPut(a, `/users/me/drafts/${draftId}`, payload);
+}
+
+export async function deleteDraft(account: Account, draftId: string): Promise<void> {
+  const a = await ensureFreshToken(account);
+  await gmailDelete(a, `/users/me/drafts/${draftId}`);
+}
+
+function buildMimeRaw(from: string, to: string, cc: string | undefined, subject: string, body: string): string {
+  const lines = [
+    `From: ${from}`,
+    `To: ${to}`,
+    cc ? `Cc: ${cc}` : '',
+    `Subject: ${subject}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    body,
+  ].filter(Boolean);
+  return btoa(unescape(encodeURIComponent(lines.join('\r\n')))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 export async function sendEmail(account: Account, opts: SendOptions): Promise<void> {
@@ -660,6 +706,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
     const headerLines = [
       `From: ${account.email}`,
       `To: ${opts.to}`,
+      opts.cc ? `Cc: ${opts.cc}` : '',
       `Subject: ${opts.subject}`,
       opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
       `MIME-Version: 1.0`,
@@ -693,6 +740,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
     const lines = [
       `From: ${account.email}`,
       `To: ${opts.to}`,
+      opts.cc ? `Cc: ${opts.cc}` : '',
       `Subject: ${opts.subject}`,
       opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
       'Content-Type: text/plain; charset=UTF-8',
@@ -715,7 +763,7 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 
 // ── Fetch full message body ───────────────────────────────
 export async function fetchMessageBody(account: Account, gmailThreadId: string): Promise<{
-  messages: Array<{ from: string; body: string; htmlBody: string | null; sanitizedHtml: string | null; receivedAt: number; gmailMessageId: string }>;
+  messages: Array<{ from: string; to: string; cc: string; body: string; htmlBody: string | null; sanitizedHtml: string | null; receivedAt: number; gmailMessageId: string }>;
   lastMessageId: string | null;
 }> {
   const a = await ensureFreshToken(account);
@@ -751,7 +799,7 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
       const body = extractTextBody(msg.payload);
       const htmlBody = extractHtmlBody(msg.payload);
       const sanitizedHtml = sanitizedCache.get(msg.id) ?? null;
-      return { from: getH('from'), body, htmlBody, sanitizedHtml, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
+      return { from: getH('from'), to: getH('to'), cc: getH('cc'), body, htmlBody, sanitizedHtml, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
     }),
     lastMessageId,
   };
@@ -884,6 +932,25 @@ async function gmailPost(account: Account, path: string, body: unknown): Promise
   if (!res.ok) throw new Error(`Gmail API error ${res.status}: ${path}`);
   const text = await res.text();
   return text ? JSON.parse(text) : {};
+}
+
+async function gmailPut(account: Account, path: string, body: unknown): Promise<unknown> {
+  const res = await fetch(`${API}${path}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${account.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Gmail API error ${res.status}: ${path}`);
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
+}
+
+async function gmailDelete(account: Account, path: string): Promise<void> {
+  const res = await fetch(`${API}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${account.accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Gmail API error ${res.status}: ${path}`);
 }
 
 // ── Helpers ───────────────────────────────────────────────
