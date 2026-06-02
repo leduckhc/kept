@@ -1963,10 +1963,103 @@ body {
 .followup-prompt a:hover { text-decoration: underline; }
 .followup-dismiss { color: var(--text-muted) !important; opacity: 0.6; }
 
-/* ── Mobile density ──────────────────────────────────────── */
+/* ── Responsive thread rows: MEDIUM (601–1023px) ────────── */
+@media (max-width: 1023px) and (min-width: 601px) {
+  .thread-row {
+    grid-template-columns: 40px auto 1fr auto;
+    grid-template-rows: auto auto;
+    height: auto;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    align-items: baseline;
+  }
+  .thread-row .avatar-wrap {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    align-self: center;
+  }
+  .thread-row .thread-sender {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 160px;
+    margin-right: 8px;
+  }
+  .thread-row .thread-mid {
+    display: contents;
+  }
+  .thread-row .thread-subject-line {
+    grid-column: 3;
+    grid-row: 1;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .thread-row .thread-preview-line {
+    grid-column: 2 / 5;
+    grid-row: 2;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .thread-row .thread-preview-line::before {
+    content: none;
+  }
+  .thread-row .thread-date {
+    grid-column: 4;
+    grid-row: 1;
+  }
+  /* Show hamburger, hide sidebar (tablets) */
+  .btn-hamburger { display: flex !important; }
+}
+
+/* ── Responsive thread rows: SMALL (≤600px) ─────────────── */
 @media (max-width: 600px) {
-  .thread-row { min-height: 40px; grid-template-columns: 40px 1fr auto; }
-  .thread-sender { display: none; }
+  .thread-row {
+    grid-template-columns: 40px 1fr auto;
+    grid-template-rows: auto auto auto;
+    height: auto;
+    min-height: 40px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    align-items: baseline;
+  }
+  .thread-row .avatar-wrap {
+    grid-column: 1;
+    grid-row: 1 / 4;
+    align-self: center;
+  }
+  .thread-row .thread-sender {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .thread-row .thread-mid {
+    display: contents;
+  }
+  .thread-row .thread-subject-line {
+    grid-column: 2 / 4;
+    grid-row: 2;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .thread-row .thread-preview-line {
+    grid-column: 2 / 4;
+    grid-row: 3;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .thread-row .thread-preview-line::before {
+    content: none;
+  }
+  .thread-row .thread-date {
+    grid-column: 3;
+    grid-row: 1;
+  }
 
   /* Hide inline tab buttons on small screens — drawer replaces them */
 
@@ -1985,12 +2078,6 @@ body {
 
   /* Date: cap width so subject gets more room */
   .thread-date { max-width: 48px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
-}
-
-/* ── Mobile layout (<1024px): revert to single-pane ─────── */
-@media (max-width: 1023px) and (min-width: 601px) {
-  /* Show hamburger, hide sidebar (tablets) */
-  .btn-hamburger { display: flex !important; }
 }
 @media (max-width: 1023px) {
   .sidebar { display: none; }
