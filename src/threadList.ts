@@ -415,7 +415,7 @@ export function renderInbox(deps: ThreadListDeps) {
   renderNewSendersSection(container, deps.getActionDeps(), deps.openThread);
 }
 
-function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadListDeps) {
+export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadListDeps) {
   // Wire category rows
   container.querySelectorAll<HTMLElement>('.category-row').forEach(row => {
     const cat = row.dataset.category;
