@@ -190,8 +190,8 @@ async function gmailGetRaw(account: Account, path: string): Promise<Response> {
 }
 
 // ── Attachment detection helper ───────────────────────────
-function hasAttachment(message: any): boolean {
-  function checkParts(parts: any[]): boolean {
+function hasAttachment(message: { payload?: { parts?: MimePart[] } }): boolean {
+  function checkParts(parts: MimePart[]): boolean {
     for (const part of parts) {
       const mime: string = part.mimeType ?? '';
       const filename: string = part.filename ?? '';
@@ -219,7 +219,7 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
       id: string;
       labelIds: string[];
       internalDate: string;
-      payload: { headers: Array<{ name: string; value: string }>; parts?: any[] };
+      payload: { headers: Array<{ name: string; value: string }>; parts?: MimePart[] };
       snippet: string;
     }>;
   };

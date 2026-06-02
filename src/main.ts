@@ -397,8 +397,8 @@ function showShell() {
   initSwipeGestures({ getActionDeps });
 
   // Expose hooks for native menu events (Tauri)
-  (window as any).__kept_sync = () => syncAndRender();
-  (window as any).__kept_settings = () => openSettings();
+  (window as unknown as Record<string, unknown>).__kept_sync = () => syncAndRender();
+  (window as unknown as Record<string, unknown>).__kept_settings = () => openSettings();
 }
 
 // ── Settings panel ─────────────────────────────────────────

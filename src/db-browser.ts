@@ -45,7 +45,7 @@ export default class Database {
   async select<T>(query: string, bindValues?: unknown[]): Promise<T> {
     if (!this.db) throw new Error('Database not initialized');
     const stmt = this.db.prepare(query);
-    if (bindValues?.length) stmt.bind(bindValues as any[]);
+    if (bindValues?.length) stmt.bind(bindValues as (number | string | Uint8Array | null)[]);
 
     const results: Record<string, unknown>[] = [];
     while (stmt.step()) {
@@ -59,7 +59,7 @@ export default class Database {
   async execute(query: string, bindValues?: unknown[]): Promise<QueryResult> {
     if (!this.db) throw new Error('Database not initialized');
     if (bindValues?.length) {
-      this.db.run(query, bindValues as any[]);
+      this.db.run(query, bindValues as (number | string | Uint8Array | null)[]);
     } else {
       this.db.run(query);
     }

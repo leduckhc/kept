@@ -95,12 +95,10 @@ export async function openThread(
   try {
     console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account.id);
     const result = await fetchMessageBody(state.account, t.gmailThreadId);
-    console.log('[threadReader] Got messages:', (result as any)?.messages?.length ?? 'unknown');
-    const bodies = (result as any).bodies ?? (result as any).messages ?? result;
-    lastMessageId = (result as any).lastMessageId ?? null;
+    lastMessageId = result.lastMessageId;
     const bodyEl = reader.querySelector('.reader-body')!;
     bodyEl.innerHTML = '';
-    const msgs = bodies as any[];
+    const msgs = result.messages;
 
     // Thread summary header
     if (msgs.length > 1) {
@@ -134,7 +132,7 @@ export async function openThread(
       bodyEl.appendChild(summaryEl);
     }
 
-    msgs.forEach((m: any, idx: number) => {
+    msgs.forEach((m, idx: number) => {
       const isLast = idx === msgs.length - 1;
       const msgContainer = document.createElement('div');
       msgContainer.className = 'thread-message' + (!isLast ? ' thread-message-collapsed' : '');
@@ -166,15 +164,15 @@ export async function openThread(
       metaDiv.textContent = `${m.from} · ${formatDate(m.receivedAt)}`;
       contentWrap.appendChild(metaDiv);
 
-      const rawHtml: string | null = (m as any).htmlBody ?? null;
-      const cachedSanitized: string | null = (m as any).sanitizedHtml ?? null;
+      const rawHtml: string | null = m.htmlBody ?? null;
+      const cachedSanitized: string | null = m.sanitizedHtml ?? null;
       const sanitized = cachedSanitized || (rawHtml ? sanitizeEmailHtml(rawHtml) : '');
 
       // Cache sanitized HTML back to DB (fire and forget)
-      if (sanitized && !cachedSanitized && (m as any).gmailMessageId) {
+      if (sanitized && !cachedSanitized && m.gmailMessageId) {
         getDb().then(db => db.execute(
           'UPDATE messages SET sanitized_html = ? WHERE gmail_message_id = ?',
-          [sanitized, (m as any).gmailMessageId]
+          [sanitized, m.gmailMessageId]
         )).catch(() => {});
       }
 

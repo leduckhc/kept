@@ -383,14 +383,14 @@ export function renderInbox(deps: ThreadListDeps) {
       loaded += LAZY_CHUNK_SIZE;
       if (loaded < rowHtmls.length) {
         if ('requestIdleCallback' in window) {
-          (window as any).requestIdleCallback(loadMore);
+          window.requestIdleCallback(loadMore);
         } else {
           setTimeout(loadMore, 16);
         }
       }
     };
     if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(loadMore);
+      window.requestIdleCallback(loadMore);
     } else {
       setTimeout(loadMore, 16);
     }
