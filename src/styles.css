@@ -2003,8 +2003,8 @@ body {
     position: relative;
   }
   .inbox {
-    width: 100%;
-    max-width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
     border-right: none;
     background: var(--bg);
     flex: 1;
