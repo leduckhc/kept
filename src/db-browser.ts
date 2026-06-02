@@ -17,13 +17,18 @@ export default class Database {
 
   static async load(path: string): Promise<Database> {
     const instance = new Database(path);
+
+    // Fetch WASM binary manually to avoid MIME type issues with Vite dev server
+    const wasmResp = await fetch('/sql-wasm.wasm');
+    const wasmBinary = await wasmResp.arrayBuffer();
+
     const SQL = await initSqlJs({
-      locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
+      wasmBinary,
     });
 
     // Try loading pre-seeded DB from e2e/kept.db via fetch
     try {
-      const resp = await fetch('/e2e/kept.db');
+      const resp = await fetch('/kept.db');
       if (resp.ok) {
         const buf = await resp.arrayBuffer();
         instance.db = new SQL.Database(new Uint8Array(buf));
