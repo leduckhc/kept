@@ -682,6 +682,45 @@ export async function deleteDraft(account: Account, draftId: string): Promise<vo
   await gmailDelete(a, `/users/me/drafts/${draftId}`);
 }
 
+/** Fetch a draft's full content by Gmail thread ID. Returns null if no draft found. */
+export async function fetchDraftByThread(account: Account, gmailThreadId: string): Promise<{
+  draftId: string;
+  to: string;
+  cc: string;
+  subject: string;
+  body: string;
+} | null> {
+  const a = await ensureFreshToken(account);
+  // List drafts filtered by the thread's message — Gmail doesn't support threadId filter on drafts.list,
+  // so we list recent drafts and match by thread ID (or just get the thread and find the draft message).
+  // Approach: use threads.get to find the draft message ID, then list drafts and match.
+  const draftsRes = await gmailGet(a, '/users/me/drafts?maxResults=100') as {
+    drafts?: Array<{ id: string; message: { id: string; threadId: string } }>;
+  };
+  const drafts = draftsRes.drafts ?? [];
+  const match = drafts.find(d => d.message.threadId === gmailThreadId);
+  if (!match) return null;
+
+  // Fetch the full draft to get headers and body
+  const full = await gmailGet(a, `/users/me/drafts/${match.id}?format=full`) as {
+    id: string;
+    message: {
+      payload: MimePart & { headers: Array<{ name: string; value: string }> };
+    };
+  };
+  const headers = full.message.payload.headers;
+  const getH = (n: string) => headers.find(h => h.name.toLowerCase() === n)?.value ?? '';
+  const body = extractTextBody(full.message.payload);
+
+  return {
+    draftId: full.id,
+    to: getH('to'),
+    cc: getH('cc'),
+    subject: getH('subject'),
+    body,
+  };
+}
+
 function buildMimeRaw(from: string, to: string, cc: string | undefined, subject: string, body: string): string {
   const lines = [
     `From: ${from}`,

@@ -1,7 +1,7 @@
 // main.ts — Kept inbox UI
 import { getAllAccounts, startOAuth, migrateTokensToKeychain, removeAccount } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
-import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection } from './gmail';
+import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection, fetchDraftByThread } from './gmail';
 
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
 import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
@@ -552,7 +552,36 @@ function openComposeForward(subject: string, quotedText?: string) {
 }
 
 function openThread(t: Thread) {
+  // If it's a draft, open in compose panel instead of thread reader
+  if (t.label === 'DRAFT') {
+    return openDraftInCompose(t);
+  }
   return getThreadReader().then(m => m.openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt));
+}
+
+async function openDraftInCompose(t: Thread) {
+  if (!state.account) return;
+  try {
+    const draft = await fetchDraftByThread(state.account, t.gmailThreadId);
+    if (!draft) {
+      // Fallback: open in thread reader if draft not found via API
+      return getThreadReader().then(m => m.openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt));
+    }
+    const compose = await getCompose();
+    // TODO: attachments in drafts are not yet prefilled
+    await compose.openCompose({
+      mode: 'new',
+      prefillTo: draft.to,
+      prefillCc: draft.cc,
+      prefillSubject: draft.subject,
+      prefillBody: draft.body,
+      draftId: draft.draftId,
+      threadId: t.gmailThreadId,
+    });
+  } catch {
+    // On error, fall back to thread reader
+    return getThreadReader().then(m => m.openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt));
+  }
 }
 
 function renderCommandPalette() {
