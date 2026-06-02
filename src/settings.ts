@@ -1,7 +1,7 @@
 // settings.ts — Settings panel logic extracted from main.ts
 import { removeAccount, saveAccount, startOAuth } from './auth';
 import { clearActiveAccountId } from './accountContext';
-import { applyTheme, toggleLayoutMode, setStatus, esc } from './helpers';
+import { applyTheme, toggleLayoutMode, setStatus, flashStatus, esc } from './helpers';
 import { state, setAccount } from './state';
 import { type Thread, loadThreads } from './gmail';
 
@@ -160,9 +160,8 @@ export function openSettings() {
       }
       renderSettingsAccounts();
     } catch (e) {
-      setStatus(`Add account failed: ${e}`);
+      flashStatus(`Add account failed: ${e}`);
     }
-    setTimeout(() => setStatus(''), 5000);
   });
 
   // Animate in

@@ -184,7 +184,11 @@ export async function openCompose(opts: ComposeOptions) {
       if (e.key === 'Escape') { e.stopPropagation(); closeAc(); return; }
     }
   });
-  toEl.addEventListener('blur', () => setTimeout(closeAc, 150));
+  toEl.addEventListener('blur', (e: FocusEvent) => {
+    // Only close autocomplete if focus moved outside the autocomplete list
+    const related = e.relatedTarget as HTMLElement | null;
+    if (!related || !related.closest('.ac-list')) closeAc();
+  });
 
   // ── Rich text toolbar ──
   panel.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {

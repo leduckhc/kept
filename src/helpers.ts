@@ -38,6 +38,15 @@ export function setStatus(msg: string) {
   if (el) el.textContent = msg;
 }
 
+let _statusTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Show a status message that auto-clears after `ms` (default 5000). */
+export function flashStatus(msg: string, ms = 5000) {
+  setStatus(msg);
+  if (_statusTimer) clearTimeout(_statusTimer);
+  _statusTimer = setTimeout(() => { setStatus(''); _statusTimer = null; }, ms);
+}
+
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

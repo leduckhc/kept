@@ -2,7 +2,7 @@
 import { getAllAccounts } from './auth';
 import { type Thread, syncInbox, loadThreads, hasSyncedBefore, invalidateSectionCache, getGroupedSenders, getGroupedDomains } from './gmail';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
-import { setStatus, esc } from './helpers';
+import { setStatus, flashStatus, esc } from './helpers';
 import { state } from './state';
 
 export interface SyncDeps {
@@ -60,8 +60,7 @@ export async function refreshAll() {
     state.threads = await loadThreads(state.account.id);
   }
   renderInbox();
-  setStatus(`Synced — ${state.threads.length} threads`);
-  setTimeout(() => setStatus(''), 5000);
+  flashStatus(`Synced — ${state.threads.length} threads`);
 }
 
 export async function syncAndRender() {
@@ -94,7 +93,7 @@ export async function syncAndRender() {
       ));
       state.threads = await loadUnifiedThreads();
       renderInbox();
-      setStatus(`Synced — ${state.threads.length} threads`);
+      flashStatus(`Synced — ${state.threads.length} threads`);
     } else {
       // Capture thread IDs known before sync to detect new arrivals
       const preSync = await loadThreads(state.account.id);
@@ -105,7 +104,7 @@ export async function syncAndRender() {
       await syncInbox(state.account, n => setStatus(`Syncing… ${n} threads`));
       state.threads = await loadThreads(state.account.id);
       renderInbox();
-      setStatus(`Synced — ${state.threads.length} threads`);
+      flashStatus(`Synced — ${state.threads.length} threads`);
 
       // Refresh known-senders after sync (SENT folder may have grown)
       refreshKnownSenders().catch(() => {});
@@ -131,7 +130,7 @@ export async function syncAndRender() {
   } catch (e) {
     console.error('Sync error:', e);
     const msg = e instanceof Error ? e.message : String(e);
-    setStatus(`Sync error: ${msg}`);
+    flashStatus(`Sync error: ${msg}`);
     // Show error in inbox if it's empty so user sees it
     if (state.threads.length === 0) {
       const container = document.getElementById('inbox');
@@ -145,7 +144,6 @@ export async function syncAndRender() {
   } finally {
     state.syncing = false;
     if (btn) btn.style.opacity = '';
-    setTimeout(() => setStatus(''), 5000);
   }
 }
 
