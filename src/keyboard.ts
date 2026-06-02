@@ -13,7 +13,6 @@ export interface KeyboardDeps {
   openComposeNew: (subject?: string) => void;
   openComposeForward: (subject: string, quotedText?: string) => void;
   switchView: (view: ViewName) => void;
-  toggleFocusMode: () => void;
   toggleBulkSelection: (id: string) => void;
   removeBulkBar: () => void;
   exitBulkMode: () => void;
@@ -107,7 +106,6 @@ export function showCheatSheet() {
           <table class="kb-table">
             <tr><td><kbd class="kb-key">⌘K</kbd></td><td>Command palette</td></tr>
             <tr><td><kbd class="kb-key">⌘⇧N</kbd></td><td>Compose new</td></tr>
-            <tr><td><kbd class="kb-key">⇧F</kbd></td><td>Toggle Focus mode</td></tr>
             <tr><td><kbd class="kb-key">?</kbd></td><td>This shortcut help</td></tr>
           </table>
         </div>
@@ -283,12 +281,7 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
         break;
       }
 
-      case 'F': {
-        if (!e.shiftKey) break;
-        e.preventDefault();
-        deps.toggleFocusMode();
-        break;
-      }
+
 
       case 'U': {
         if (!e.shiftKey) break;

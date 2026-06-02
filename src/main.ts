@@ -14,7 +14,6 @@ import { initSwipeGestures } from './swipe';
 import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute } from './actions';
 import { openInlineReply } from './inlineReply';
 import { icon } from './icons';
-import { NOISE_PREFIXES } from './newSenders';
 
 // Lazy-loaded modules (not needed on startup — code splitting)
 let _composeModule: typeof import('./compose') | null = null;
@@ -105,27 +104,12 @@ function closeNavDrawer() {
   document.getElementById('nav-drawer-backdrop')?.classList.remove('open');
 }
 
-function toggleFocusMode() {
-  state.focusMode = !state.focusMode;
-  localStorage.setItem('focusMode', String(state.focusMode));
-  const btn = document.getElementById('btn-focus');
-  if (btn) btn.classList.toggle('focus-active', state.focusMode);
-  renderInbox();
-}
 
 
-function isKnownSender(email: string): boolean {
-  const lower = email.toLowerCase();
-  if (state.knownSenders.has(lower)) return true;
-  // Fallback: filter out obvious noise patterns
-  return !NOISE_PREFIXES.some(p => lower.startsWith(p));
-}
 
-function applyFocusFilter(list: Thread[]): { visible: Thread[]; hiddenCount: number } {
-  if (!state.focusMode) return { visible: list, hiddenCount: 0 };
-  const visible = list.filter(t => isKnownSender(t.senderEmail));
-  return { visible, hiddenCount: list.length - visible.length };
-}
+
+
+
 
 function getAccountAvatar(): string {
   if (!state.account?.email) return '?';
@@ -260,7 +244,6 @@ function showShell() {
           <input class="search-input" id="search" placeholder="Search…" type="search" />
         </div>
         <div class="toolbar-actions">
-          <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode [Shift+F]">${icon.focus('18px')}</button>
           <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
         </div>
       </div>
@@ -356,7 +339,6 @@ function showShell() {
 
   document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
 
-  document.getElementById('btn-focus')!.addEventListener('click', () => toggleFocusMode());
 
   // Sidebar nav + mobile tab buttons + drawer items
   document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
@@ -483,7 +465,6 @@ function registerKeyboardShortcuts() {
     openComposeNew,
     openComposeForward,
     switchView,
-    toggleFocusMode,
     toggleBulkSelection,
     removeBulkBar,
     exitBulkMode,
@@ -515,7 +496,6 @@ function getThreadListDeps() {
     getActionDeps,
     renderInbox,
     renderScheduledView,
-    applyFocusFilter,
   };
 }
 

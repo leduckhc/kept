@@ -33,7 +33,6 @@ export interface ThreadListDeps {
   getActionDeps: () => ActionDeps;
   renderInbox: () => void;
   renderScheduledView: () => void;
-  applyFocusFilter: (list: Thread[]) => { visible: Thread[]; hiddenCount: number };
 }
 
 export function threadRow(t: Thread, isSnoozed: boolean): string {
@@ -273,10 +272,8 @@ export function renderInbox(deps: ThreadListDeps) {
     return;
   }
 
-  const { visible: focusedThreads, hiddenCount } = deps.applyFocusFilter(state.threads);
-
-  // Apply inline search filter
-  const searchFiltered = isSearchActive() ? getFilteredThreads(focusedThreads) : focusedThreads;
+  // Apply search filter
+  const searchFiltered = isSearchActive() ? getFilteredThreads(state.threads) : state.threads;
 
   if (searchFiltered.length === 0) {
     let emptyTitle: string;
@@ -286,9 +283,7 @@ export function renderInbox(deps: ThreadListDeps) {
       emptyIcon = '🔍'; emptyTitle = 'No results'; emptySubtitle = 'Try a different search term.';
     } else if (state.searchQuery) {
       emptyIcon = '🔍'; emptyTitle = 'No results'; emptySubtitle = 'Try a different search term.';
-    } else if (state.focusMode) {
-      emptyIcon = '◎'; emptyTitle = 'No messages from known senders';
-      emptySubtitle = hiddenCount > 0 ? `${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden by Focus` : 'Focus mode is on.';
+
     } else {
       emptyIcon = '🎉'; emptyTitle = 'All caught up'; emptySubtitle = 'No new messages. Go enjoy your day.';
     }
@@ -297,20 +292,18 @@ export function renderInbox(deps: ThreadListDeps) {
     return;
   }
 
-  const focusBanner = state.focusMode && hiddenCount > 0 && !isSearchActive()
-    ? `<div class="focus-banner">Focus mode — ${hiddenCount} thread${hiddenCount !== 1 ? 's' : ''} hidden</div>`
-    : '';
+
 
   let html: string;
   if (isSearchActive() && getSearchQuery().trim()) {
     // Flat list — no sections while searching
-    html = focusBanner + searchFiltered.map(t => threadRow(t, false)).join('');
+    html = searchFiltered.map(t => threadRow(t, false)).join('');
   } else {
     const sections = groupBySection(searchFiltered, state.groupedSenders, state.groupedDomains);
 
     // Try incremental DOM patching first (skip if searching or focus banner changed)
     const allThreads = sections.flatMap(s => s.threads);
-    if (container.children.length > 0 && !focusBanner && patchThreadList(container, allThreads)) {
+    if (container.children.length > 0 && patchThreadList(container, allThreads)) {
       // Patched in place — just update selection highlight
       container.querySelectorAll<HTMLElement>('.thread-row.is-selected').forEach(el => el.classList.remove('is-selected'));
       if (state.selectedThreadId) {
@@ -323,7 +316,7 @@ export function renderInbox(deps: ThreadListDeps) {
       return;
     }
 
-    html = focusBanner + sections.map(s => {
+    html = sections.map(s => {
       const unread = s.threads.filter(t => t.isUnread).length;
       const badge = unread > 0 ? ` <span class="section-badge">${unread}</span>` : '';
 

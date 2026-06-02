@@ -364,11 +364,7 @@ body {
   background: #6b5ec4;
   border-color: #6b5ec4;
 }
-.btn-pill.btn-focus.focus-active {
-  background: rgba(124,111,212,0.15);
-  border-color: var(--accent);
-  color: var(--accent);
-}
+
 
 
 .btn-icon {
@@ -399,11 +395,7 @@ body {
   background: #6b5ec4;
   color: #fff;
 }
-/* Focus active state */
-.toolbar-actions .btn-focus.focus-active {
-  background: rgba(124,111,212,0.15);
-  color: var(--accent);
-}
+
 
 /* ── Inbox (see .app-body .inbox above for three-pane layout) ── */
 
@@ -1920,23 +1912,7 @@ body {
 .cmd-palette-thread.active { background: var(--surface); }
 .cmd-palette-thread-subject { font-weight: 500; }
 .cmd-palette-thread-meta { color: var(--text-muted); font-size: 12px; }
-/* ── Focus mode ──────────────────────────────────────────── */
-.focus-banner {
-  padding: 5px 12px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--lavender-text);
-  background: var(--lavender-tint);
-  border-bottom: 1px solid var(--lavender-border);
-  text-align: center;
-  letter-spacing: 0.01em;
-}
 
-[data-theme="dark"] .focus-banner {
-  color: #a89de0;
-  background: rgba(124,111,212,0.12);
-  border-bottom-color: rgba(124,111,212,0.2);
-}
 
 /* ── Follow-up prompt ────────────────────────────────────── */
 

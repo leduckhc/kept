@@ -13,7 +13,6 @@ export const state = {
   searchQuery: '',
   syncing: false,
   knownSenders: new Set<string>(),
-  focusMode: localStorage.getItem('focusMode') === 'true',
   currentView: 'Inbox' as ViewName,
   selectedThreadId: null as string | null,
   kbRegistered: false,
