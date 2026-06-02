@@ -250,10 +250,14 @@ function showShell() {
     <div id="app-shell" class="${state.layoutMode === '2-pane' ? 'layout-2pane' : ''}">
       <div class="toolbar">
         <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">☰</button>
-        <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">${icon.pencil('18px')}</button>
-        ${VIEWS.map(v => `<button class="tab-btn mobile-tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
-        <input class="search-input" id="search" placeholder="Search…" type="search" />
-        <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
+        <div class="toolbar-search-wrap">
+          <span class="toolbar-search-icon">${icon.search('14px')}</span>
+          <input class="search-input" id="search" placeholder="Search…" type="search" />
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn-pill btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode [Shift+F]">${icon.focus('16px')}</button>
+          <button class="btn-pill btn-compose" id="btn-compose" title="New message [c]">${icon.pencil('16px')}<span class="compose-label">Compose</span></button>
+        </div>
       </div>
       <div class="nav-drawer-backdrop" id="nav-drawer-backdrop"></div>
       <nav class="nav-drawer" id="nav-drawer">

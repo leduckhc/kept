@@ -67,6 +67,7 @@ export const icon = {
   tag:         (s?: string) => sized(Tag, s),
   chevronRight:(s?: string) => sized(ChevronRight, s),
   chevronDown: (s?: string) => sized(ChevronDown, s),
+  focus:       (s?: string) => sized(Eye, s),
 
   // Thumb icons
   thumbUp:     (s?: string) => sized(ThumbsUp, s),

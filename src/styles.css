@@ -239,68 +239,95 @@ body {
 }
 
 /* Mobile tab buttons hidden on desktop */
-.mobile-tab-btn { display: none; }
 
 /* ── Toolbar ────────────────────────────────────────────── */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  height: 44px;
+  gap: 10px;
+  padding: 0 12px;
+  height: 48px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  position: relative;
 }
 
-.toolbar-title {
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.3px;
+.toolbar-search-wrap {
   flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-width: 0;
 }
-
-/* ── Inline tab navigation ──────────────────────────────── */
-.tab-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 400;
-  color: #999;
-  padding: 0 4px;
-  line-height: 1;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: color 0.1s;
+.toolbar-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  display: flex;
+  pointer-events: none;
 }
-.tab-btn:hover { color: #555; }
-.tab-btn.active {
-  color: #222;
-  font-weight: 400;
-}
-[data-theme="dark"] .tab-btn { color: #666; }
-[data-theme="dark"] .tab-btn:hover { color: #aaa; }
-[data-theme="dark"] .tab-btn.active { color: #f0f0f0; }
-
-
 .search-input {
-  width: 160px;
-  padding: 5px 10px;
+  width: 100%;
+  padding: 7px 12px 7px 32px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 20px;
   background: var(--surface);
   color: var(--text);
   font-size: 13px;
   font-family: var(--font);
   outline: none;
-  transition: width 0.2s ease, border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.search-input:focus,
-.search-input.expanded {
-  width: 280px;
+.search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124,111,212,0.15);
+}
+.search-input::placeholder { color: var(--text-muted); }
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Pill buttons (toolbar) ─────────────────────────────── */
+.btn-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.btn-pill:hover {
+  background: var(--surface-hover);
+  color: var(--text);
   border-color: var(--text-muted);
 }
+.btn-pill.btn-compose {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-pill.btn-compose:hover {
+  background: #6b5ec4;
+  border-color: #6b5ec4;
+}
+.btn-pill.btn-focus.focus-active {
+  background: rgba(124,111,212,0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.compose-label { font-weight: 500; }
 
 .btn-icon {
   background: none;
@@ -1941,41 +1968,44 @@ body {
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
-  font-size: 13px;
-  white-space: nowrap;
+  position: absolute;
+  inset: 0;
+  padding: 0 12px;
+  background: var(--bg);
+  z-index: 10;
 }
 
 .bulk-count {
   font-weight: 600;
-  margin-right: 4px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  margin-right: auto;
+  color: var(--text);
 }
 
 .bulk-action-btn {
-  background: none;
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 5px;
-  padding: 3px 10px;
+  border-radius: 20px;
+  padding: 6px 14px;
   font-size: 12px;
   font-family: var(--font);
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.1s, border-color 0.1s;
 }
-.bulk-action-btn:hover { background: var(--surface-hover); }
+.bulk-action-btn:hover { background: var(--surface-hover); border-color: var(--text-muted); }
 
 .bulk-cancel-btn {
   background: none;
   border: none;
   color: var(--text-muted);
-  border-radius: 5px;
-  padding: 3px 6px;
+  border-radius: 20px;
+  padding: 6px 10px;
   font-size: 14px;
   font-family: var(--font);
   cursor: pointer;
   transition: color 0.1s;
-  margin-left: auto;
 }
 .bulk-cancel-btn:hover { color: var(--text); }
 
@@ -2098,25 +2128,6 @@ body {
 .cmd-palette-thread-subject { font-weight: 500; }
 .cmd-palette-thread-meta { color: var(--text-muted); font-size: 12px; }
 /* ── Focus mode ──────────────────────────────────────────── */
-.btn-focus {
-  font-size: 15px;
-}
-
-.btn-focus.focus-active {
-  color: var(--lavender-accent);
-  background: var(--lavender-tint);
-}
-
-.btn-focus.focus-active:hover {
-  color: var(--lavender-text);
-  background: var(--lavender-tint);
-}
-
-[data-theme="dark"] .btn-focus.focus-active {
-  color: #a89de0;
-  background: rgba(124,111,212,0.18);
-}
-
 .focus-banner {
   padding: 5px 12px;
   font-size: 11px;
@@ -2156,7 +2167,6 @@ body {
   .thread-sender { display: none; }
 
   /* Hide inline tab buttons on small screens — drawer replaces them */
-  .mobile-tab-btn { display: none !important; }
 
   /* Show hamburger button */
   .btn-hamburger { display: flex !important; }
@@ -2170,14 +2180,17 @@ body {
   /* Search input: shrink min-width */
   .search-input { min-width: 80px; flex: 1; }
 
+  /* Hide compose text label on phone */
+  .compose-label { display: none; }
+  .btn-pill.btn-compose { padding: 6px 10px; }
+
   /* Date: cap width so subject gets more room */
   .thread-date { max-width: 48px; overflow: hidden; text-overflow: ellipsis; font-size: 10px; }
 }
 
 /* ── Mobile layout (<1024px): revert to single-pane ─────── */
 @media (max-width: 1023px) and (min-width: 601px) {
-  /* Show mobile tab buttons AND hamburger, hide sidebar (tablets) */
-  .mobile-tab-btn { display: inline-block !important; }
+  /* Show hamburger, hide sidebar (tablets) */
   .btn-hamburger { display: flex !important; }
 }
 @media (max-width: 1023px) {
