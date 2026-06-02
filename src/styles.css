@@ -439,9 +439,10 @@ body {
   top: 0;
   width: 32px;
   height: 32px;
-  border: 2px solid var(--bg-primary, #1a1a2e);
   box-sizing: border-box;
 }
+.stacked-avatar:nth-child(2) { opacity: 0.7; }
+.stacked-avatar:nth-child(3) { opacity: 0.4; }
 
 /* Middle column — subject + snippet inline */
 .thread-mid {

@@ -83,10 +83,10 @@ export function stackedAvatarsHtml(threads: Thread[], maxCount = 3): string {
     const gravatar = t.senderEmail ? gravatarUrl(t.senderEmail) : '';
     const faviconImg = faviconUrl ? `<img class="avatar-favicon" src="${faviconUrl}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
     const gravatarImg = gravatar ? `<img class="avatar-gravatar" src="${gravatar}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
-    const offset = i * 12; // px overlap shift
+    const offset = i * 8; // px overlap shift — tight stacking
     return `<div class="avatar stacked-avatar" style="background:${color};left:${offset}px;z-index:${maxCount - i}" data-initial="${initial}">${faviconImg}${gravatarImg}</div>`;
   });
-  const totalWidth = 32 + (unique.length - 1) * 12;
+  const totalWidth = 32 + (unique.length - 1) * 8;
   return `<div class="stacked-avatars" style="width:${totalWidth}px">${avatars.join('')}</div>`;
 }
 

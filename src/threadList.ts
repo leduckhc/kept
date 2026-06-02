@@ -10,6 +10,7 @@ import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
 import { icon } from './icons';
 import { showUndoToast } from './toasts';
+import { Newspaper, Megaphone } from 'lucide-static';
 import { renderNewSendersSection } from './newSenders';
 
 const MAX_INITIAL_RENDER = 100;
@@ -93,8 +94,10 @@ export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]):
   const label = type === 'newsletters' ? 'Newsletters' : 'Updates';
   const hasUnread = threads.some(t => t.isUnread);
 
-  // Stacked overlapping avatars from top senders
-  const avatarStack = stackedAvatarsHtml(threads, 3);
+  // Generic category icon
+  const categoryIcon = type === 'newsletters'
+    ? `<div class="avatar category-avatar" style="background:#7c3aed">${icon.custom(Newspaper, '20px')}</div>`
+    : `<div class="avatar category-avatar" style="background:#0891b2">${icon.custom(Megaphone, '20px')}</div>`;
 
   // Group by sender for badges
   const bySender: Record<string, { name: string; email: string; count: number }> = {};
@@ -118,7 +121,7 @@ export function categoryRow(type: 'newsletters' | 'updates', threads: Thread[]):
   }).join('');
 
   return `<div class="thread-row category-row${hasUnread ? ' unread' : ''}" data-category="${type}">
-    <div class="avatar-wrap">${avatarStack}</div>
+    <div class="avatar-wrap">${categoryIcon}</div>
     <span class="thread-sender">${label}</span>
     <div class="thread-mid">
       <div class="category-senders">${badges}</div>
@@ -140,7 +143,7 @@ export function senderGroupRow(senderEmail: string, senderName: string, threads:
 
   return `<div class="thread-row sender-group-row${hasUnread ? ' unread' : ''}" data-sender-email="${esc(senderEmail)}">
     ${dot}
-    <div class="avatar-wrap">${avatarHtml(latest)}</div>
+    <div class="avatar-wrap">${stackedAvatarsHtml(threads, 3)}</div>
     <span class="thread-sender">${esc(displayName)} <span class="sender-group-count">#${threads.length}</span></span>
     <div class="thread-mid">
       <span class="thread-subject-line">${esc(latest.subject)}</span>
