@@ -68,13 +68,8 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
          <button class="btn-action ${starClass}" title="${t.isStarred ? 'Unstar' : 'Star'}">${t.isStarred ? icon.star('16px') : icon.starOutline('16px')}</button>
        </div>`;
 
-  const bulkCheckbox = state.bulkMode
-    ? `<input type="checkbox" class="bulk-checkbox" ${state.selectedIds.has(t.id) ? 'checked' : ''} aria-label="Select thread" />`
-    : '';
-
   return `
     <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}${hasReminder ? ' awaiting-reply' : ''}${state.bulkMode && state.selectedIds.has(t.id) ? ' bulk-selected' : ''}${state.bulkMode ? ' bulk-mode' : ''}" data-id="${t.id}">
-      ${bulkCheckbox}
       ${dot}
       <div class="avatar-wrap">
         ${avatarHtml(t)}

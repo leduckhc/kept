@@ -1930,15 +1930,6 @@ body {
   grid-template-columns: 22px 40px 1fr auto;
 }
 
-.bulk-checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--lavender-accent);
-  flex-shrink: 0;
-  justify-self: center;
-}
-
 .thread-row.bulk-selected {
   background: var(--surface-active);
   border-left: 2px solid var(--accent);

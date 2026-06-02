@@ -37,8 +37,6 @@ export function toggleBulkSelection(id: string, updateBulkBar: () => void, shift
         state.selectedIds.add(rid);
         const row = rows[i];
         row.classList.add('bulk-selected');
-        const cb = row.querySelector<HTMLInputElement>('.bulk-checkbox');
-        if (cb) cb.checked = true;
       }
       state.lastBulkSelectedId = id;
       updateBulkBar();
@@ -55,8 +53,6 @@ export function toggleBulkSelection(id: string, updateBulkBar: () => void, shift
   const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
   if (row) {
     row.classList.toggle('bulk-selected', state.selectedIds.has(id));
-    const cb = row.querySelector<HTMLInputElement>('.bulk-checkbox');
-    if (cb) cb.checked = state.selectedIds.has(id);
   }
   updateBulkBar();
 }
