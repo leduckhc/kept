@@ -73,11 +73,11 @@ export function updateBulkBar(
   bar.id = 'bulk-bar';
   bar.className = 'bulk-bar';
   bar.innerHTML = `
-    <button class="bulk-cancel-btn" id="bulk-cancel">${icon.close('16px')}</button>
+    <button class="bulk-cancel-btn" id="bulk-cancel" title="Cancel selection">${icon.close('16px')}</button>
     <span class="bulk-count">${state.selectedIds.size} selected</span>
-    <button class="bulk-action-btn" id="bulk-archive">Archive</button>
-    <button class="bulk-action-btn" id="bulk-trash">Trash</button>
-    <button class="bulk-action-btn" id="bulk-read">Mark Read</button>
+    <button class="bulk-action-btn" id="bulk-archive" title="Archive">${icon.archive('16px')}</button>
+    <button class="bulk-action-btn" id="bulk-trash" title="Trash">${icon.trash('16px')}</button>
+    <button class="bulk-action-btn" id="bulk-read" title="Mark Read">${icon.markRead('16px')}</button>
   `;
 
   const toolbar = document.querySelector('.toolbar');

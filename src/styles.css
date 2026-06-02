@@ -146,6 +146,13 @@ body {
   transition: all 0.12s ease;
 }
 .sidebar-btn:hover { color: var(--text); background: var(--hover); }
+/* Sidebar tooltips appear to the right */
+.sidebar-btn:hover::after {
+  bottom: auto;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
 .sidebar-btn.active {
   color: var(--accent);
 }
@@ -292,6 +299,41 @@ body {
 }
 
 /* ── Pill buttons (toolbar) ─────────────────────────────── */
+/* ── Tooltip system (CSS-only, from title attr) ── */
+.btn-icon[title],
+.bulk-action-btn[title],
+.bulk-cancel-btn[title],
+.sidebar-btn[title],
+.toolbar-btn[title],
+.nav-drawer-item[title] {
+  position: relative;
+}
+.btn-icon[title]:hover::after,
+.bulk-action-btn[title]:hover::after,
+.bulk-cancel-btn[title]:hover::after,
+.sidebar-btn[title]:hover::after,
+.toolbar-btn[title]:hover::after,
+.nav-drawer-item[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--tooltip-bg, rgba(30,30,30,0.92));
+  color: var(--tooltip-text, #fff);
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 9999;
+  pointer-events: none;
+  animation: tooltip-in 0.12s ease-out;
+}
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(2px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .btn-pill {
   display: flex;
   align-items: center;
@@ -328,20 +370,40 @@ body {
   color: var(--accent);
 }
 
-.compose-label { font-weight: 500; }
 
 .btn-icon {
   background: none;
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 6px;
+  border-radius: 8px;
   font-size: 16px;
   line-height: 1;
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: color 0.1s, background 0.1s;
 }
 .btn-icon:hover { color: var(--text); background: var(--surface); }
+
+/* Compose icon — accent colored */
+.toolbar-actions .btn-compose {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+}
+.toolbar-actions .btn-compose:hover {
+  background: #6b5ec4;
+  color: #fff;
+}
+/* Focus active state */
+.toolbar-actions .btn-focus.focus-active {
+  background: rgba(124,111,212,0.15);
+  color: var(--accent);
+}
 
 /* ── Inbox (see .app-body .inbox above for three-pane layout) ── */
 
@@ -1712,18 +1774,20 @@ body {
 }
 
 .bulk-action-btn {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 20px;
-  padding: 6px 14px;
-  font-size: 12px;
-  font-family: var(--font);
-  font-weight: 500;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 6px;
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
+  transition: background 0.1s, color 0.1s;
 }
-.bulk-action-btn:hover { background: var(--surface-hover); border-color: var(--text-muted); }
+.bulk-action-btn:hover { background: var(--surface-hover); color: var(--text); }
 
 .bulk-cancel-btn {
   background: none;
@@ -1908,10 +1972,6 @@ body {
 
   /* Search input: shrink min-width */
   .search-input { min-width: 80px; flex: 1; }
-
-  /* Hide compose text label on phone */
-  .compose-label { display: none; }
-  .btn-pill.btn-compose { padding: 6px 10px; }
 
   /* Date: cap width so subject gets more room */
   .thread-date { max-width: 48px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }

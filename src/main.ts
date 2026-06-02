@@ -260,8 +260,8 @@ function showShell() {
           <input class="search-input" id="search" placeholder="Search…" type="search" />
         </div>
         <div class="toolbar-actions">
-          <button class="btn-pill btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode [Shift+F]">${icon.focus('16px')}</button>
-          <button class="btn-pill btn-compose" id="btn-compose" title="New message [c]">${icon.pencil('16px')}<span class="compose-label">Compose</span></button>
+          <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode [Shift+F]">${icon.focus('18px')}</button>
+          <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
         </div>
       </div>
       <div class="nav-drawer-backdrop" id="nav-drawer-backdrop"></div>
