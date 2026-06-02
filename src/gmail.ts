@@ -1024,7 +1024,6 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[], gro
   }
 
   const sections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> = [
-    { label: 'New senders', threads: newSenders },
     { label: 'Today', threads: removeGrouped(todayGroup), categoryThreads: { newsletters: allNewsletters, updates: allUpdates }, senderGroups: sectionSenderGroups['Today'], domainGroups: sectionDomainGroups['Today'] },
     { label: 'Yesterday', threads: removeGrouped(yesterdayGroup), senderGroups: sectionSenderGroups['Yesterday'], domainGroups: sectionDomainGroups['Yesterday'] },
     { label: 'This week', threads: removeGrouped(thisWeek), senderGroups: sectionSenderGroups['This week'], domainGroups: sectionDomainGroups['This week'] },
