@@ -498,7 +498,7 @@ export async function archiveThread(account: Account, thread: Thread): Promise<v
 export async function archiveThreads(account: Account, threads: Thread[]): Promise<void> {
   if (threads.length === 0) return;
   const a = await ensureFreshToken(account);
-  await chunkedParallel(threads, 20, t =>
+  await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] })
   );
   const db = await getDb();
@@ -517,7 +517,7 @@ export async function unarchiveThread(account: Account, thread: Thread): Promise
 export async function unarchiveThreads(account: Account, threads: Thread[]): Promise<void> {
   if (threads.length === 0) return;
   const a = await ensureFreshToken(account);
-  await chunkedParallel(threads, 20, t =>
+  await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] })
   );
   const db = await getDb();
@@ -536,7 +536,7 @@ export async function trashThread(account: Account, thread: Thread): Promise<voi
 export async function trashThreads(account: Account, threads: Thread[]): Promise<void> {
   if (threads.length === 0) return;
   const a = await ensureFreshToken(account);
-  await chunkedParallel(threads, 20, t =>
+  await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/trash`, {})
   );
   const db = await getDb();
@@ -552,7 +552,7 @@ export async function untrashThread(account: Account, thread: Thread): Promise<v
 export async function untrashThreads(account: Account, threads: Thread[]): Promise<void> {
   if (threads.length === 0) return;
   const a = await ensureFreshToken(account);
-  await chunkedParallel(threads, 20, t =>
+  await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/untrash`, {})
   );
   const db = await getDb();
