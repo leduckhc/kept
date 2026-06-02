@@ -445,20 +445,16 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (categoryThreads.length === 0) return;
       const acct = accountFor(categoryThreads[0]);
       if (!acct) return;
-      // Remove from UI immediately (optimistic)
+      // Optimistic UI + immediate undo toast
       state.threads = state.threads.filter(t => t.category !== cat);
       deps.renderInbox();
-      // Single batched API call
-      try {
-        await archiveThreads(acct, categoryThreads);
-      } catch (err) {
-        console.error('Batch archive failed:', err);
-      }
       showUndoToast(`Archived ${categoryThreads.length} ${cat}`, async () => {
         await unarchiveThreads(acct, categoryThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
       });
+      // Fire API in background (non-blocking)
+      archiveThreads(acct, categoryThreads).catch(err => console.error('Batch archive failed:', err));
     });
     // Delete all threads in this category (batched)
     row.querySelector('.btn-trash-all')?.addEventListener('click', async (e) => {
@@ -469,16 +465,12 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => t.category !== cat);
       deps.renderInbox();
-      try {
-        await trashThreads(acct, categoryThreads);
-      } catch (err) {
-        console.error('Batch trash failed:', err);
-      }
       showUndoToast(`Deleted ${categoryThreads.length} ${cat}`, async () => {
         await untrashThreads(acct, categoryThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
       });
+      trashThreads(acct, categoryThreads).catch(err => console.error('Batch trash failed:', err));
     });
   });
 
@@ -502,12 +494,12 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => t.senderEmail !== email);
       deps.renderInbox();
-      try { await archiveThreads(acct, senderThreads); } catch (err) { console.error('Batch archive failed:', err); }
       showUndoToast(`Archived ${senderThreads.length} from ${senderThreads[0].senderName || email}`, async () => {
         await unarchiveThreads(acct, senderThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
       });
+      archiveThreads(acct, senderThreads).catch(err => console.error('Batch archive failed:', err));
     });
     // Batch trash for sender group
     row.querySelector('.btn-trash')?.addEventListener('click', async (e) => {
@@ -519,12 +511,12 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => t.senderEmail !== email);
       deps.renderInbox();
-      try { await trashThreads(acct, senderThreads); } catch (err) { console.error('Batch trash failed:', err); }
       showUndoToast(`Deleted ${senderThreads.length} from ${senderThreads[0].senderName || email}`, async () => {
         await untrashThreads(acct, senderThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
       });
+      trashThreads(acct, senderThreads).catch(err => console.error('Batch trash failed:', err));
     });
   });
 
@@ -548,12 +540,12 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => !t.senderEmail.endsWith('@' + domain));
       deps.renderInbox();
-      try { await archiveThreads(acct, domainThreads); } catch (err) { console.error('Batch archive failed:', err); }
       showUndoToast(`Archived ${domainThreads.length} from ${domain}`, async () => {
         await unarchiveThreads(acct, domainThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
       });
+      archiveThreads(acct, domainThreads).catch(err => console.error('Batch archive failed:', err));
     });
     // Batch trash for domain group
     row.querySelector('.btn-trash')?.addEventListener('click', async (e) => {
@@ -565,12 +557,12 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => !t.senderEmail.endsWith('@' + domain));
       deps.renderInbox();
-      try { await trashThreads(acct, domainThreads); } catch (err) { console.error('Batch trash failed:', err); }
       showUndoToast(`Deleted ${domainThreads.length} from ${domain}`, async () => {
         await untrashThreads(acct, domainThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
       });
+      trashThreads(acct, domainThreads).catch(err => console.error('Batch trash failed:', err));
     });
   });
 }
