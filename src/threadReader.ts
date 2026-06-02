@@ -93,7 +93,7 @@ export async function openThread(
   let lastMessageId: string | null = null;
 
   try {
-    console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account.id);
+    if (import.meta.env.DEV) console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account.id);
     const result = await fetchMessageBody(state.account, t.gmailThreadId);
     lastMessageId = result.lastMessageId;
     const bodyEl = reader.querySelector('.reader-body')!;

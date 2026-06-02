@@ -118,7 +118,7 @@ async function syncFull(account: Account, accountId: string, label: string = 'IN
     pageToken = data.nextPageToken;
     page++;
     if (page >= MAX_SYNC_PAGES) {
-      console.log(`syncFull(${label}): hit MAX_SYNC_PAGES, stopping`);
+      if (import.meta.env.DEV) console.log(`syncFull(${label}): hit MAX_SYNC_PAGES, stopping`);
       break;
     }
   } while (pageToken);
@@ -177,7 +177,7 @@ async function trySyncIncremental(
     return true;
   } catch (e) {
     // Network or unexpected error — fall back to full sync
-    console.warn('Incremental sync failed, falling back to full sync:', e);
+    if (import.meta.env.DEV) console.warn('Incremental sync failed, falling back to full sync:', e);
     return false;
   }
 }
