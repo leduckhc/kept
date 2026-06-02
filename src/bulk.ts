@@ -23,12 +23,35 @@ export function exitBulkMode(renderInbox: () => void) {
   renderInbox();
 }
 
-export function toggleBulkSelection(id: string, updateBulkBar: () => void) {
+export function toggleBulkSelection(id: string, updateBulkBar: () => void, shiftKey = false) {
+  if (shiftKey && state.lastBulkSelectedId) {
+    // Range select: find all visible thread rows between last and current
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('.thread-row[data-id]'));
+    const ids = rows.map(r => r.dataset.id!);
+    const startIdx = ids.indexOf(state.lastBulkSelectedId);
+    const endIdx = ids.indexOf(id);
+    if (startIdx !== -1 && endIdx !== -1) {
+      const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+      for (let i = from; i <= to; i++) {
+        const rid = ids[i];
+        state.selectedIds.add(rid);
+        const row = rows[i];
+        row.classList.add('bulk-selected');
+        const cb = row.querySelector<HTMLInputElement>('.bulk-checkbox');
+        if (cb) cb.checked = true;
+      }
+      state.lastBulkSelectedId = id;
+      updateBulkBar();
+      return;
+    }
+  }
+  // Normal toggle
   if (state.selectedIds.has(id)) {
     state.selectedIds.delete(id);
   } else {
     state.selectedIds.add(id);
   }
+  state.lastBulkSelectedId = id;
   const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
   if (row) {
     row.classList.toggle('bulk-selected', state.selectedIds.has(id));

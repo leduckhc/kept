@@ -848,7 +848,7 @@ function registerKeyboardShortcuts() {
 }
 
 function exitBulkMode() { _exitBulkMode(renderInbox); }
-function toggleBulkSelection(id: string) { _toggleBulkSelection(id, updateBulkBar); }
+function toggleBulkSelection(id: string, shiftKey?: boolean) { _toggleBulkSelection(id, updateBulkBar, shiftKey); }
 function updateBulkBar() { _updateBulkBar(getActionDeps, exitBulkMode, openBulkSnoozePicker); }
 function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement) { _openBulkSnoozePicker(ids, anchorRow, exitBulkMode); }
 

@@ -27,7 +27,7 @@ export function renderEmptyState(emptyIcon: string, title: string, subtitle: str
 export interface ThreadListDeps {
   openThread: (t: Thread) => void;
   openInlineReply: (t: Thread, row: HTMLElement) => void;
-  toggleBulkSelection: (id: string) => void;
+  toggleBulkSelection: (id: string, shiftKey?: boolean) => void;
   removeBulkBar: () => void;
   updateBulkBar: () => void;
   getActionDeps: () => ActionDeps;
@@ -676,7 +676,7 @@ export function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed
     row.querySelector<HTMLElement>('.avatar-wrap')?.addEventListener('click', e => {
       e.stopPropagation();
       if (!state.bulkMode) state.bulkMode = true;
-      deps.toggleBulkSelection(t.id);
+      deps.toggleBulkSelection(t.id, e.shiftKey);
       if (state.selectedIds.size === 0) {
         state.bulkMode = false;
         deps.removeBulkBar();
@@ -687,7 +687,7 @@ export function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed
       if ((e.target as HTMLElement).closest('.thread-actions')) return;
       if ((e.target as HTMLElement).closest('.avatar-wrap')) return;
       if (state.bulkMode) {
-        deps.toggleBulkSelection(t.id);
+        deps.toggleBulkSelection(t.id, e.shiftKey);
         return;
       }
       deps.openThread(t);
@@ -799,7 +799,7 @@ function wireNewRows(rows: NodeListOf<HTMLElement>, list: Thread[], isSnoozed: b
     row.querySelector<HTMLElement>('.avatar-wrap')?.addEventListener('click', e => {
       e.stopPropagation();
       if (!state.bulkMode) state.bulkMode = true;
-      deps.toggleBulkSelection(t.id);
+      deps.toggleBulkSelection(t.id, e.shiftKey);
       if (state.selectedIds.size === 0) {
         state.bulkMode = false;
         deps.removeBulkBar();
@@ -810,7 +810,7 @@ function wireNewRows(rows: NodeListOf<HTMLElement>, list: Thread[], isSnoozed: b
       if ((e.target as HTMLElement).closest('.thread-actions')) return;
       if ((e.target as HTMLElement).closest('.avatar-wrap')) return;
       if (state.bulkMode) {
-        deps.toggleBulkSelection(t.id);
+        deps.toggleBulkSelection(t.id, e.shiftKey);
         return;
       }
       deps.openThread(t);

@@ -20,6 +20,7 @@ export const state = {
   currentInlineReply: null as HTMLElement | null,
   bulkMode: false,
   selectedIds: new Set<string>(),
+  lastBulkSelectedId: null as string | null,
   gPending: false,
   gTimeout: null as ReturnType<typeof setTimeout> | null,
   layoutMode: (localStorage.getItem('kept.layoutMode') || '3-pane') as LayoutMode,
