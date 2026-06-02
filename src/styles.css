@@ -2892,11 +2892,15 @@ body {
   background: var(--bg);
   z-index: 900;
   overflow: hidden;
-  transition: width 0.2s, max-height 0.2s;
+  transition: width 0.2s, max-height 0.2s, height 0.2s, right 0.2s, border-radius 0.2s;
 }
 .compose-panel-expanded {
-  width: 680px;
-  max-height: 85vh;
+  width: 100vw;
+  max-height: 100vh;
+  height: 100vh;
+  right: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .compose-panel-minimized {
   max-height: 44px;
