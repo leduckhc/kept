@@ -15,7 +15,9 @@
     "lint": "eslint src/",
     "e2e:pilot": "bash e2e/pilot/run.sh",
     "dev:pilot": "cargo tauri dev",
-    "check": "tsc --noEmit && eslint src/ --max-warnings 0 && vitest run && node node_modules/vite/bin/vite.js build"
+    "check": "tsc --noEmit && eslint src/ --max-warnings 0 && vitest run && node node_modules/vite/bin/vite.js build",
+    "test:e2e": "playwright test",
+    "test:e2e:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@fabianlars/tauri-plugin-oauth": "^2.0.0",
@@ -31,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
     "@tauri-apps/cli": "^2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/sql.js": "^1.4.11",

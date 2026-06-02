@@ -11,3 +11,8 @@ src-tauri/gen/
 
 # E2E test database
 e2e/kept.db
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
