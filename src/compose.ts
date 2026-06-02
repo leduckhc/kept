@@ -123,7 +123,9 @@ export async function openCompose(opts: ComposeOptions) {
   // Auto-append signature
   const sig = state.account?.signature;
   if (sig && !opts.quotedHtml && !opts.quotedText) {
-    editorEl.innerHTML = `<br><div class="compose-signature" style="color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px;margin-top:8px;font-size:13px;white-space:pre-wrap">-- \n${esc(sig)}</div>`;
+    // Replace literal \n sequences with real newlines (DB may store escaped form)
+    const sigText = sig.replace(/\\n/g, '\n');
+    editorEl.innerHTML = `<br><div class="compose-signature" style="color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px;margin-top:8px;font-size:13px;white-space:pre-wrap">-- \n${esc(sigText)}</div>`;
   }
 
   // ── Autocomplete ──

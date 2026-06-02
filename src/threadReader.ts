@@ -270,6 +270,9 @@ export async function openThread(
   } catch (err) {
     console.error('[threadReader] Failed to load messages:', err);
     reader.querySelector('.reader-body')!.innerHTML = `<p style="color:var(--text-muted)">Could not load messages. ${esc(String(err))}</p>`;
+    // Hide reply/forward actions when messages failed to load
+    const footer = reader.querySelector('.reader-footer') as HTMLElement | null;
+    if (footer) footer.style.display = 'none';
   }
 
   // ── Reply / Forward buttons open floating compose ──
