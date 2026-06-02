@@ -466,7 +466,7 @@ body {
 /* ── Thread row ─────────────────────────────────────────── */
 .thread-row {
   display: grid;
-  grid-template-columns: 8px 40px 212px 1fr auto;
+  grid-template-columns: 4px 40px 212px 1fr auto;
   align-items: center;
   gap: 10px;
   height: 36px;
@@ -1960,7 +1960,7 @@ body {
 /* ── Responsive thread rows: MEDIUM (601–1023px) ────────── */
 @media (max-width: 1023px) and (min-width: 601px) {
   .thread-row {
-    grid-template-columns: 8px 40px auto 1fr auto;
+    grid-template-columns: 4px 40px auto 1fr auto;
     grid-template-rows: auto auto;
     height: auto;
     padding-top: 6px;
@@ -2016,7 +2016,7 @@ body {
 /* ── Responsive thread rows: SMALL (≤600px) ─────────────── */
 @media (max-width: 600px) {
   .thread-row {
-    grid-template-columns: 8px 40px 1fr auto;
+    grid-template-columns: 4px 40px 1fr auto;
     grid-template-rows: auto auto auto;
     height: auto;
     min-height: 40px;
