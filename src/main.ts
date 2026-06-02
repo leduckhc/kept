@@ -89,6 +89,19 @@ async function refreshKnownSenders() {
   }
 }
 
+function toggleNavDrawer() {
+  const drawer = document.getElementById('nav-drawer');
+  const backdrop = document.getElementById('nav-drawer-backdrop');
+  if (!drawer || !backdrop) return;
+  const open = drawer.classList.toggle('open');
+  backdrop.classList.toggle('open', open);
+}
+
+function closeNavDrawer() {
+  document.getElementById('nav-drawer')?.classList.remove('open');
+  document.getElementById('nav-drawer-backdrop')?.classList.remove('open');
+}
+
 function toggleFocusMode() {
   state.focusMode = !state.focusMode;
   localStorage.setItem('focusMode', String(state.focusMode));
@@ -231,11 +244,17 @@ function showShell() {
   document.getElementById('app')!.innerHTML = `
     <div id="app-shell" class="${state.layoutMode === '2-pane' ? 'layout-2pane' : ''}">
       <div class="toolbar">
+        <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">☰</button>
         <button class="btn-icon btn-compose" id="btn-compose" title="New message [c]">${icon.pencil('18px')}</button>
         ${VIEWS.map(v => `<button class="tab-btn mobile-tab-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.name}</button>`).join('')}
         <input class="search-input" id="search" placeholder="Search…" type="search" />
         <button class="btn-icon btn-focus${state.focusMode ? ' focus-active' : ''}" id="btn-focus" title="Focus mode — show only known senders [Shift+F]">◎</button>
       </div>
+      <div class="nav-drawer-backdrop" id="nav-drawer-backdrop"></div>
+      <nav class="nav-drawer" id="nav-drawer">
+        <div class="nav-drawer-header">Kept</div>
+        ${VIEWS.map(v => `<button class="nav-drawer-item${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.icon}<span>${v.name}</span></button>`).join('')}
+      </nav>
       <div class="app-body">
         <nav class="sidebar" id="sidebar">
           ${VIEWS.map(v => `<button class="sidebar-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}" title="${v.name}">${v.icon}</button>`).join('')}
@@ -325,10 +344,17 @@ function showShell() {
 
   document.getElementById('btn-focus')!.addEventListener('click', () => toggleFocusMode());
 
-  // Sidebar nav + mobile tab buttons
-  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchView(btn.dataset.view as ViewName));
+  // Sidebar nav + mobile tab buttons + drawer items
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn, .nav-drawer-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchView(btn.dataset.view as ViewName);
+      closeNavDrawer();
+    });
   });
+
+  // Hamburger menu
+  document.getElementById('btn-hamburger')!.addEventListener('click', () => toggleNavDrawer());
+  document.getElementById('nav-drawer-backdrop')!.addEventListener('click', () => closeNavDrawer());
 
   // Resizable pane handle
   initResizeHandle();
@@ -589,8 +615,8 @@ function renderSettingsAccounts() {
 // ── View switching ────────────────────────────────────────
 function switchView(view: ViewName) {
   state.currentView = view;
-  // Update sidebar + mobile tab buttons
-  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn').forEach(btn => {
+  // Update sidebar + mobile tab buttons + drawer items
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn, .nav-drawer-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
   // Render appropriate content
