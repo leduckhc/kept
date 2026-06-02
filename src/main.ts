@@ -354,7 +354,7 @@ function showShell() {
   document.getElementById('btn-focus')!.addEventListener('click', () => toggleFocusMode());
 
   // Sidebar nav + mobile tab buttons + drawer items
-  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn, .nav-drawer-item').forEach(btn => {
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
     btn.addEventListener('click', () => {
       switchView(btn.dataset.view as ViewName);
       closeNavDrawer();
@@ -625,7 +625,7 @@ function renderSettingsAccounts() {
 function switchView(view: ViewName) {
   state.currentView = view;
   // Update sidebar + mobile tab buttons + drawer items
-  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .mobile-tab-btn, .nav-drawer-item').forEach(btn => {
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
   // Render appropriate content
