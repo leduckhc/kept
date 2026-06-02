@@ -57,6 +57,7 @@ const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Drafts',    icon: icon.pencil('18px') },
   { name: 'Starred',   icon: icon.star('18px') },
   { name: 'Scheduled', icon: icon.calendar('18px') },
+  { name: 'Trash',     icon: icon.trash('18px') },
 ];
 
 async function refreshKnownSenders() {
@@ -651,7 +652,7 @@ async function reloadInboxThreads() {
 function renderLabelView(view: ViewName) {
   const container = document.getElementById('inbox');
   if (!container) return;
-  const VIEW_TO_LABEL: Record<string, string> = { Sent: 'SENT', Drafts: 'DRAFT', Starred: 'STARRED' };
+  const VIEW_TO_LABEL: Record<string, string> = { Sent: 'SENT', Drafts: 'DRAFT', Starred: 'STARRED', Trash: 'TRASH' };
   const gmailLabel = VIEW_TO_LABEL[view];
   if (!state.account || !gmailLabel) return;
   loadThreads(state.account.id, gmailLabel).then(ts => {

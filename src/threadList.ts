@@ -1,4 +1,4 @@
-import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection, archiveThread, unarchiveThread, loadThreads } from './gmail';
+import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection, archiveThreads, unarchiveThreads, trashThreads, untrashThreads, loadThreads } from './gmail';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 import { state } from './state';
 import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze, accountFor } from './actions';
@@ -436,31 +436,44 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
         }
       });
     });
-    // Archive all threads in this category
+    // Archive all threads in this category (batched)
     row.querySelector('.btn-archive-all')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       const categoryThreads = state.threads.filter(t => t.category === cat);
       if (categoryThreads.length === 0) return;
-      // Remove from UI immediately
+      const acct = accountFor(categoryThreads[0]);
+      if (!acct) return;
+      // Remove from UI immediately (optimistic)
       state.threads = state.threads.filter(t => t.category !== cat);
       deps.renderInbox();
-      // Archive in background
-      const archived: Thread[] = [];
-      for (const t of categoryThreads) {
-        const acct = accountFor(t);
-        if (!acct) continue;
-        try {
-          await archiveThread(acct, t);
-          archived.push(t);
-        } catch (err) {
-          console.error('Archive failed for', t.id, err);
-        }
+      // Single batched API call
+      try {
+        await archiveThreads(acct, categoryThreads);
+      } catch (err) {
+        console.error('Batch archive failed:', err);
       }
-      showUndoToast(`Archived ${archived.length} ${cat}`, async () => {
-        for (const t of archived) {
-          const acct = accountFor(t);
-          if (acct) await unarchiveThread(acct, t).catch(() => {});
-        }
+      showUndoToast(`Archived ${categoryThreads.length} ${cat}`, async () => {
+        await unarchiveThreads(acct, categoryThreads).catch(() => {});
+        state.threads = state.account ? await loadThreads(state.account.id) : [];
+        deps.renderInbox();
+      });
+    });
+    // Delete all threads in this category (batched)
+    row.querySelector('.btn-trash-all')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const categoryThreads = state.threads.filter(t => t.category === cat);
+      if (categoryThreads.length === 0) return;
+      const acct = accountFor(categoryThreads[0]);
+      if (!acct) return;
+      state.threads = state.threads.filter(t => t.category !== cat);
+      deps.renderInbox();
+      try {
+        await trashThreads(acct, categoryThreads);
+      } catch (err) {
+        console.error('Batch trash failed:', err);
+      }
+      showUndoToast(`Deleted ${categoryThreads.length} ${cat}`, async () => {
+        await untrashThreads(acct, categoryThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
       });
@@ -477,6 +490,40 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
         deps.renderInbox();
       }
     });
+    // Batch archive for sender group
+    row.querySelector('.btn-archive')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!email) return;
+      const senderThreads = state.threads.filter(t => t.senderEmail === email);
+      if (senderThreads.length === 0) return;
+      const acct = accountFor(senderThreads[0]);
+      if (!acct) return;
+      state.threads = state.threads.filter(t => t.senderEmail !== email);
+      deps.renderInbox();
+      try { await archiveThreads(acct, senderThreads); } catch (err) { console.error('Batch archive failed:', err); }
+      showUndoToast(`Archived ${senderThreads.length} from ${senderThreads[0].senderName || email}`, async () => {
+        await unarchiveThreads(acct, senderThreads).catch(() => {});
+        state.threads = state.account ? await loadThreads(state.account.id) : [];
+        deps.renderInbox();
+      });
+    });
+    // Batch trash for sender group
+    row.querySelector('.btn-trash')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!email) return;
+      const senderThreads = state.threads.filter(t => t.senderEmail === email);
+      if (senderThreads.length === 0) return;
+      const acct = accountFor(senderThreads[0]);
+      if (!acct) return;
+      state.threads = state.threads.filter(t => t.senderEmail !== email);
+      deps.renderInbox();
+      try { await trashThreads(acct, senderThreads); } catch (err) { console.error('Batch trash failed:', err); }
+      showUndoToast(`Deleted ${senderThreads.length} from ${senderThreads[0].senderName || email}`, async () => {
+        await untrashThreads(acct, senderThreads).catch(() => {});
+        state.threads = state.account ? await loadThreads(state.account.id) : [];
+        deps.renderInbox();
+      });
+    });
   });
 
   // Wire domain group rows
@@ -488,6 +535,40 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
         state.domainFilter = domain;
         deps.renderInbox();
       }
+    });
+    // Batch archive for domain group
+    row.querySelector('.btn-archive')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!domain) return;
+      const domainThreads = state.threads.filter(t => t.senderEmail.endsWith('@' + domain));
+      if (domainThreads.length === 0) return;
+      const acct = accountFor(domainThreads[0]);
+      if (!acct) return;
+      state.threads = state.threads.filter(t => !t.senderEmail.endsWith('@' + domain));
+      deps.renderInbox();
+      try { await archiveThreads(acct, domainThreads); } catch (err) { console.error('Batch archive failed:', err); }
+      showUndoToast(`Archived ${domainThreads.length} from ${domain}`, async () => {
+        await unarchiveThreads(acct, domainThreads).catch(() => {});
+        state.threads = state.account ? await loadThreads(state.account.id) : [];
+        deps.renderInbox();
+      });
+    });
+    // Batch trash for domain group
+    row.querySelector('.btn-trash')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!domain) return;
+      const domainThreads = state.threads.filter(t => t.senderEmail.endsWith('@' + domain));
+      if (domainThreads.length === 0) return;
+      const acct = accountFor(domainThreads[0]);
+      if (!acct) return;
+      state.threads = state.threads.filter(t => !t.senderEmail.endsWith('@' + domain));
+      deps.renderInbox();
+      try { await trashThreads(acct, domainThreads); } catch (err) { console.error('Batch trash failed:', err); }
+      showUndoToast(`Deleted ${domainThreads.length} from ${domain}`, async () => {
+        await untrashThreads(acct, domainThreads).catch(() => {});
+        state.threads = state.account ? await loadThreads(state.account.id) : [];
+        deps.renderInbox();
+      });
     });
   });
 }

@@ -290,7 +290,7 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
   let activeLabel: string;
   let activeSearch: string | undefined;
 
-  const KNOWN_LABELS = ['INBOX', 'SENT', 'DRAFT', 'STARRED'];
+  const KNOWN_LABELS = ['INBOX', 'SENT', 'DRAFT', 'STARRED', 'TRASH'];
   if (labelOrSearch && KNOWN_LABELS.includes(labelOrSearch)) {
     activeLabel = labelOrSearch;
     activeSearch = search;
@@ -370,6 +370,8 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
     sql = `SELECT * FROM threads WHERE account_id = ? AND is_starred = 1 AND is_archived = 0 AND is_blocked = 0
            AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
     params.push(nowMs);
+  } else if (activeLabel === 'TRASH') {
+    sql = `SELECT * FROM threads WHERE account_id = ? AND label = 'TRASH' ORDER BY received_at DESC LIMIT 500`;
   } else {
     sql = `SELECT * FROM threads WHERE account_id = ? AND label = ? AND is_archived = 0 AND is_blocked = 0
            AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
@@ -484,6 +486,18 @@ export async function archiveThread(account: Account, thread: Thread): Promise<v
   await db.execute('UPDATE threads SET is_archived = 1 WHERE id = ?', [thread.id]);
 }
 
+/** Batch archive: parallel API calls, single token refresh, single DB update. */
+export async function archiveThreads(account: Account, threads: Thread[]): Promise<void> {
+  if (threads.length === 0) return;
+  const a = await ensureFreshToken(account);
+  await Promise.all(threads.map(t =>
+    gmailPost(a, `/users/me/threads/${t.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] })
+  ));
+  const db = await getDb();
+  const ids = threads.map(t => t.id);
+  await db.execute(`UPDATE threads SET is_archived = 1 WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+}
+
 export async function unarchiveThread(account: Account, thread: Thread): Promise<void> {
   const a = await ensureFreshToken(account);
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] });
@@ -491,15 +505,51 @@ export async function unarchiveThread(account: Account, thread: Thread): Promise
   await db.execute('UPDATE threads SET is_archived = 0 WHERE id = ?', [thread.id]);
 }
 
+/** Batch unarchive: parallel API calls, single token refresh. */
+export async function unarchiveThreads(account: Account, threads: Thread[]): Promise<void> {
+  if (threads.length === 0) return;
+  const a = await ensureFreshToken(account);
+  await Promise.all(threads.map(t =>
+    gmailPost(a, `/users/me/threads/${t.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] })
+  ));
+  const db = await getDb();
+  const ids = threads.map(t => t.id);
+  await db.execute(`UPDATE threads SET is_archived = 0 WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+}
+
 export async function trashThread(account: Account, thread: Thread): Promise<void> {
   const a = await ensureFreshToken(account);
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/trash`, {});
   const db = await getDb();
-  await db.execute('UPDATE threads SET is_archived = 1 WHERE id = ?', [thread.id]);
+  await db.execute('UPDATE threads SET is_archived = 1, label = \'TRASH\' WHERE id = ?', [thread.id]);
+}
+
+/** Batch trash: parallel API calls, single token refresh. */
+export async function trashThreads(account: Account, threads: Thread[]): Promise<void> {
+  if (threads.length === 0) return;
+  const a = await ensureFreshToken(account);
+  await Promise.all(threads.map(t =>
+    gmailPost(a, `/users/me/threads/${t.gmailThreadId}/trash`, {})
+  ));
+  const db = await getDb();
+  const ids = threads.map(t => t.id);
+  await db.execute(`UPDATE threads SET is_archived = 1, label = 'TRASH' WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
 }
 
 export async function untrashThread(account: Account, thread: Thread): Promise<void> {
   await gmailPost(account, `/users/me/threads/${thread.gmailThreadId}/untrash`, {});
+}
+
+/** Batch untrash: parallel API calls. */
+export async function untrashThreads(account: Account, threads: Thread[]): Promise<void> {
+  if (threads.length === 0) return;
+  const a = await ensureFreshToken(account);
+  await Promise.all(threads.map(t =>
+    gmailPost(a, `/users/me/threads/${t.gmailThreadId}/untrash`, {})
+  ));
+  const db = await getDb();
+  const ids = threads.map(t => t.id);
+  await db.execute(`UPDATE threads SET is_archived = 0, label = 'INBOX' WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
 }
 
 export async function blockSender(account: Account, thread: Thread): Promise<void> {
