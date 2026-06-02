@@ -27,7 +27,7 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0a0a0a;
+  --bg: #1f2121;
   --surface: #111111;
   --surface-hover: #1a1a1a;
   --surface-active: #1a1a2e;
@@ -213,7 +213,7 @@ body {
 
 .reader-pane {
   flex: 1;
-  background: #111;
+  background: var(--bg);
   min-width: 0;
   overflow: hidden;
   display: flex;
