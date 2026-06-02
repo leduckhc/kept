@@ -45,15 +45,13 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
     const accountId = state.account?.id;
     if (!accountId) return;
     if (isGrouped) {
-      removeGroupedSender(accountId, t.senderEmail).then(() => {
-        state.groupedSenders = state.groupedSenders.filter(e => e !== t.senderEmail);
-        deps.renderInbox();
-      }).catch(() => setStatus('Ungroup failed'));
+      state.groupedSenders = state.groupedSenders.filter(e => e !== t.senderEmail);
+      deps.renderInbox();
+      removeGroupedSender(accountId, t.senderEmail).catch(() => setStatus('Ungroup failed'));
     } else {
-      addGroupedSender(accountId, t.senderEmail).then(() => {
-        state.groupedSenders = [...state.groupedSenders, t.senderEmail];
-        deps.renderInbox();
-      }).catch(() => setStatus('Group failed'));
+      state.groupedSenders = [...state.groupedSenders, t.senderEmail];
+      deps.renderInbox();
+      addGroupedSender(accountId, t.senderEmail).catch(() => setStatus('Group failed'));
     }
   }});
   const senderDomain = t.senderEmail.split('@')[1] ?? '';
@@ -64,15 +62,13 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
       const accountId = state.account?.id;
       if (!accountId) return;
       if (isDomainGrouped) {
-        removeGroupedDomain(accountId, senderDomain).then(() => {
-          state.groupedDomains = state.groupedDomains.filter(d => d !== senderDomain);
-          deps.renderInbox();
-        }).catch(() => setStatus('Ungroup domain failed'));
+        state.groupedDomains = state.groupedDomains.filter(d => d !== senderDomain);
+        deps.renderInbox();
+        removeGroupedDomain(accountId, senderDomain).catch(() => setStatus('Ungroup domain failed'));
       } else {
-        addGroupedDomain(accountId, senderDomain).then(() => {
-          state.groupedDomains = [...state.groupedDomains, senderDomain];
-          deps.renderInbox();
-        }).catch(() => setStatus('Group domain failed'));
+        state.groupedDomains = [...state.groupedDomains, senderDomain];
+        deps.renderInbox();
+        addGroupedDomain(accountId, senderDomain).catch(() => setStatus('Group domain failed'));
       }
     }});
   }
