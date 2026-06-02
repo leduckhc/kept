@@ -139,7 +139,7 @@ body {
   justify-content: center;
   background: none;
   border: none;
-  border-radius: 12px;
+  border-radius: 20px;
   cursor: pointer;
   font-size: 16px;
   color: var(--text-muted);
@@ -379,7 +379,7 @@ body {
   cursor: pointer;
   color: var(--text-muted);
   padding: 6px;
-  border-radius: 12px;
+  border-radius: 20px;
   font-size: 16px;
   line-height: 1;
   min-width: 32px;
@@ -451,7 +451,7 @@ body {
   overflow: hidden;
   isolation: isolate;
   touch-action: pan-y;
-  border-radius: 10px;
+  border-radius: 20px;
   margin: 0 4px;
 }
 .thread-row:hover { background: var(--surface-hover); }
