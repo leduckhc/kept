@@ -267,7 +267,6 @@ function showShell() {
         </div>
       </div>
       <div class="statusbar">
-        <span id="status-left">${state.account?.email ?? ''}</span>
         <span id="status-right"></span>
       </div>
       <div class="settings-panel" id="settings-panel" aria-hidden="true">

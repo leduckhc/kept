@@ -16,8 +16,8 @@
         "title": "Kept",
         "width": 1100,
         "height": 750,
-        "minWidth": 700,
-        "minHeight": 500
+        "minWidth": 375,
+        "minHeight": 600
       }
     ],
     "security": {
