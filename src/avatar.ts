@@ -1,4 +1,5 @@
 import type { Thread } from './gmail';
+import { getCachedPhotoUrl } from './senderPhotos';
 
 export const AVATAR_COLORS = [
   '#d97706', '#7c3aed', '#0891b2', '#16a34a',
@@ -77,10 +78,12 @@ export function avatarHtml(t: Thread): string {
   const color = AVATAR_COLORS[hashStr(t.senderEmail) % AVATAR_COLORS.length];
   const domain = t.senderEmail.split('@')[1] ?? '';
   const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
-  const gravatar = t.senderEmail ? gravatarUrl(t.senderEmail) : '';
+  const googlePhoto = getCachedPhotoUrl(t.senderEmail);
+  const gravatar = !googlePhoto && t.senderEmail ? gravatarUrl(t.senderEmail) : '';
   const faviconImg = faviconUrl ? `<img class="avatar-favicon" src="${faviconUrl}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+  const googleImg = googlePhoto ? `<img class="avatar-google" src="${googlePhoto}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
   const gravatarImg = gravatar ? `<img class="avatar-gravatar" src="${gravatar}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
-  return `<div class="avatar" style="background:${color}" data-initial="${initial}">${faviconImg}${gravatarImg}</div>`;
+  return `<div class="avatar" style="background:${color}" data-initial="${initial}" data-email="${t.senderEmail}">${faviconImg}${googleImg}${gravatarImg}</div>`;
 }
 
 /** Stacked overlapping avatars for group rows (up to K senders). */
@@ -101,11 +104,13 @@ export function stackedAvatarsHtml(threads: Thread[], maxCount = 3): string {
     const color = AVATAR_COLORS[hashStr(t.senderEmail) % AVATAR_COLORS.length];
     const domain = t.senderEmail.split('@')[1] ?? '';
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
-    const gravatar = t.senderEmail ? gravatarUrl(t.senderEmail) : '';
+    const googlePhoto = getCachedPhotoUrl(t.senderEmail);
+    const gravatar = !googlePhoto && t.senderEmail ? gravatarUrl(t.senderEmail) : '';
     const faviconImg = faviconUrl ? `<img class="avatar-favicon" src="${faviconUrl}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+    const googleImg = googlePhoto ? `<img class="avatar-google" src="${googlePhoto}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
     const gravatarImg = gravatar ? `<img class="avatar-gravatar" src="${gravatar}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
     const offset = i * 8; // px overlap shift — tight stacking
-    return `<div class="avatar stacked-avatar" style="background:${color};left:${offset}px;z-index:${maxCount - i}" data-initial="${initial}">${faviconImg}${gravatarImg}</div>`;
+    return `<div class="avatar stacked-avatar" style="background:${color};left:${offset}px;z-index:${maxCount - i}" data-initial="${initial}" data-email="${t.senderEmail}">${faviconImg}${googleImg}${gravatarImg}</div>`;
   });
   const totalWidth = 32 + (unique.length - 1) * 8;
   return `<div class="stacked-avatars" style="width:${totalWidth}px">${avatars.join('')}</div>`;
@@ -116,4 +121,31 @@ export function avatarColor(s: string): string {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
   return colors[Math.abs(h) % colors.length];
+}
+
+/** Patch rendered avatars with newly resolved Google photos (call after resolvePhotos). */
+export function patchAvatarsWithPhotos(resolved: Map<string, string>): void {
+  if (resolved.size === 0) return;
+  for (const [email, photoUrl] of resolved) {
+    const els = document.querySelectorAll<HTMLElement>(`.avatar[data-email="${CSS.escape(email)}"]`);
+    for (const el of els) {
+      // Remove gravatar img if present (Google photo supersedes)
+      el.querySelector('.avatar-gravatar')?.remove();
+      // Add Google photo if not already present
+      if (!el.querySelector('.avatar-google')) {
+        const img = document.createElement('img');
+        img.className = 'avatar-google';
+        img.src = photoUrl;
+        img.loading = 'lazy';
+        img.onerror = () => { img.style.display = 'none'; };
+        // Insert after favicon (before any remaining gravatar)
+        const favicon = el.querySelector('.avatar-favicon');
+        if (favicon) {
+          favicon.after(img);
+        } else {
+          el.prepend(img);
+        }
+      }
+    }
+  }
 }

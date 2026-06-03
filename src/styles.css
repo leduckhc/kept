@@ -533,6 +533,9 @@ body {
 .avatar .avatar-gravatar {
   z-index: 1;
 }
+.avatar .avatar-google {
+  z-index: 2;
+}
 
 /* Avatar wrap — clickable for selection */
 .avatar-wrap { cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; }

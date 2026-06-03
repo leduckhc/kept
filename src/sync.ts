@@ -4,6 +4,8 @@ import { type Thread, syncInbox, loadThreads, hasSyncedBefore, invalidateSection
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { setStatus, flashStatus, esc } from './helpers';
 import { state } from './state';
+import { loadPhotoCache, resolvePhotos, hasCachedResult } from './senderPhotos';
+import { patchAvatarsWithPhotos } from './avatar';
 
 export interface SyncDeps {
   renderInbox: () => void;
@@ -21,6 +23,9 @@ export function initSync(deps: SyncDeps) {
 export async function refreshAll() {
   if (!state.account || !_deps) return;
   const { renderInbox, loadUnifiedThreads } = _deps;
+
+  // Load photo cache from DB on first call
+  await loadPhotoCache();
 
   // Reload grouped senders & domains for current account
   state.groupedSenders = await getGroupedSenders(state.account.id);
@@ -127,6 +132,9 @@ export async function syncAndRender() {
     // Update tray badge / dock badge with total unread count
     const unreadCount = state.threads.filter(t => t.isUnread).length;
     updateBadge(unreadCount).catch(() => {});
+
+    // Background: resolve Google profile photos for visible senders
+    resolveVisiblePhotos().catch(() => {});
   } catch (e) {
     console.error('Sync error:', e);
     const msg = e instanceof Error ? e.message : String(e);
@@ -154,4 +162,15 @@ export async function loadUnifiedThreads(): Promise<Thread[]> {
   const merged = perAccount.flat();
   merged.sort((a, b) => b.receivedAt - a.receivedAt);
   return merged;
+}
+
+/** Resolve Google profile photos for sender emails visible in current inbox (non-blocking). */
+async function resolveVisiblePhotos(): Promise<void> {
+  if (!state.account || import.meta.env.VITE_E2E === '1') return;
+  // Collect unique emails from current threads that aren't already cached
+  const emails = [...new Set(state.threads.map(t => t.senderEmail.toLowerCase()))];
+  const uncached = emails.filter(e => !hasCachedResult(e));
+  if (uncached.length === 0) return;
+  const resolved = await resolvePhotos(uncached, state.account);
+  patchAvatarsWithPhotos(resolved);
 }

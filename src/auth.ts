@@ -23,6 +23,7 @@ const SCOPES = [
   'profile',
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/contacts.other.readonly',
 ].join(' ');
 
 export interface Account {

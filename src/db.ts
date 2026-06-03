@@ -185,4 +185,13 @@ async function migrate(db: Database): Promise<void> {
     )
   `).catch(() => {});
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_attachments_thread ON attachments(thread_id)`).catch(() => {});
+
+  // Sender photo cache (Google People API / Gravatar)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS sender_photos (
+      email TEXT PRIMARY KEY,
+      photo_url TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    )
+  `).catch(() => {});
 }
