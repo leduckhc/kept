@@ -98,192 +98,208 @@ export async function openThread(
   let lastTo = '';
   let lastCc = '';
 
-  try {
-    if (import.meta.env.DEV) console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account.id); // eslint-disable-line no-console
-    const result = await fetchMessageBody(state.account, t.gmailThreadId);
-    lastMessageId = result.lastMessageId;
-    // Capture last message's To/Cc for Reply All
-    if (result.messages.length > 0) {
-      const lastMsg = result.messages[result.messages.length - 1];
-      lastTo = lastMsg.to;
-      lastCc = lastMsg.cc;
-    }
+  async function loadMessages() {
     const bodyEl = reader.querySelector('.reader-body')!;
-    bodyEl.innerHTML = '';
-    const msgs = result.messages;
-
-    // Thread summary header
-    if (msgs.length > 1) {
-      const myEmail = state.account?.email ?? '';
-      const lastMsg = msgs[msgs.length - 1];
-      const lastFrom = lastMsg.from ?? '';
-      const lastIsMe = lastFrom.includes(myEmail);
-      const lastSenderName = lastFrom.replace(/<.*>/, '').trim() || lastFrom;
-
-      const uniqueSenders: string[] = [];
-      for (const m of msgs) {
-        const name = (m.from ?? '').replace(/<.*>/, '').trim() || m.from;
-        if (!uniqueSenders.includes(name)) uniqueSenders.push(name);
-      }
-      const shown = uniqueSenders.slice(0, 4);
-      const overflow = uniqueSenders.length - shown.length;
-
-      const avatarsHtml = shown.map(name => {
-        const initial = name[0]?.toUpperCase() ?? '?';
-        const color = getAvatarColor(name);
-        return `<span class="thread-avatar" style="background:${color}" title="${esc(name)}">${esc(initial)}</span>`;
-      }).join('') + (overflow > 0 ? `<span class="thread-avatar" style="background:#555">+${overflow}</span>` : '');
-
-      const statusText = lastIsMe
-        ? 'You replied'
-        : `Awaiting reply from ${esc(lastSenderName)}`;
-
-      const summaryEl = document.createElement('div');
-      summaryEl.className = 'thread-summary';
-      summaryEl.innerHTML = `<span class="thread-count-badge">${msgs.length} messages</span><div class="thread-participants">${avatarsHtml}</div><span class="thread-status">${statusText}</span>`;
-      bodyEl.appendChild(summaryEl);
-    }
-
-    msgs.forEach((m, idx: number) => {
-      const isLast = idx === msgs.length - 1;
-      const msgContainer = document.createElement('div');
-      msgContainer.className = 'thread-message' + (!isLast ? ' thread-message-collapsed' : '');
-
-      const senderName = m.from.replace(/<.*>/, '').trim() || m.from;
-      const senderInitial = senderName[0]?.toUpperCase() ?? '?';
-      const avatarColor = getAvatarColor(senderName);
-      const senderEmail = (m.from.match(/<(.+)>/) ?? [])[1] ?? '';
-      const preview = (m.body || '').slice(0, 80).replace(/\n/g, ' ');
-
-      const headerBar = document.createElement('div');
-      headerBar.className = 'thread-message-header';
-      headerBar.innerHTML = `
-        <span class="msg-avatar" style="background:${avatarColor}">${esc(senderInitial)}</span>
-        <span class="thread-msg-sender">${esc(senderName)}</span>${senderEmail ? `<span class="thread-msg-email">${esc(senderEmail)}</span>` : ''}
-        ${isLast ? '' : `<span class="thread-msg-preview">${esc(preview)}</span>`}
-        <span class="thread-msg-date">${formatDate(m.receivedAt)}</span>
-        <span class="thread-msg-chevron">›</span>`;
-      headerBar.addEventListener('click', () => {
-        msgContainer.classList.toggle('thread-message-collapsed');
-      });
-      msgContainer.appendChild(headerBar);
-
-      const contentWrap = document.createElement('div');
-      contentWrap.className = 'thread-message-content';
-
-      const metaDiv = document.createElement('div');
-      metaDiv.className = 'thread-msg-meta';
-      metaDiv.textContent = `${m.from} · ${formatDate(m.receivedAt)}`;
-      contentWrap.appendChild(metaDiv);
-
-      const rawHtml: string | null = m.htmlBody ?? null;
-      const cachedSanitized: string | null = m.sanitizedHtml ?? null;
-      const sanitized = cachedSanitized || (rawHtml ? sanitizeEmailHtml(rawHtml) : '');
-
-      // Cache sanitized HTML back to DB (fire and forget)
-      if (sanitized && !cachedSanitized && m.gmailMessageId) {
-        getDb().then(db => db.execute(
-          'UPDATE messages SET sanitized_html = ? WHERE gmail_message_id = ?',
-          [sanitized, m.gmailMessageId]
-        )).catch(() => {});
-      }
-
-      if (sanitized) {
-        // Direct sanitized HTML rendering (no iframe) — like Gmail, Outlook Web, Apple Mail
-        const emailBodyDiv = document.createElement('div');
-        emailBodyDiv.className = 'email-body-rendered';
-        emailBodyDiv.innerHTML = sanitized;
-
-        // Hide quoted/trimmed content (gmail_quote, blockquotes after main content)
-        emailBodyDiv.querySelectorAll('blockquote, .gmail_quote, .gmail_extra').forEach(el => {
-          (el as HTMLElement).classList.add('quoted-hidden');
-          const btn = document.createElement('button');
-          btn.className = 'btn-show-trimmed';
-          btn.textContent = '··· Show trimmed content';
-          btn.addEventListener('click', () => {
-            (el as HTMLElement).classList.remove('quoted-hidden');
-            btn.remove();
-          });
-          el.parentNode?.insertBefore(btn, el);
-        });
-
-        // Load images button
-        const loadImgBtn = document.createElement('button');
-        loadImgBtn.className = 'btn-load-images';
-        loadImgBtn.textContent = '🖼 Load images';
-        loadImgBtn.style.cssText = 'display:none; margin-bottom:8px; font-size:12px;';
-        loadImgBtn.addEventListener('click', () => {
-          emailBodyDiv.querySelectorAll<HTMLImageElement>('img[data-original-src]').forEach(img => {
-            const orig = img.getAttribute('data-original-src')!;
-            img.setAttribute('src', orig);
-            img.removeAttribute('data-original-src');
-          });
-          loadImgBtn.remove();
-        });
-
-        const blockedImgs = emailBodyDiv.querySelectorAll('img[data-original-src]');
-        if (blockedImgs.length > 0) loadImgBtn.style.display = 'inline-block';
-
-        contentWrap.appendChild(loadImgBtn);
-        contentWrap.appendChild(emailBodyDiv);
-      } else {
-        const plainText: string = m.body ?? '';
-        const lines = plainText.slice(0, 20000).split('\n');
-        const quoteStart = lines.findIndex((line, i) =>
-          line.startsWith('>') || (i > 0 && /^On .+ wrote:/.test(line))
-        );
-
-        const visibleText = quoteStart > 0 ? lines.slice(0, quoteStart).join('\n') : plainText.slice(0, 20000);
-        const quotedText = quoteStart > 0 ? lines.slice(quoteStart).join('\n') : '';
-
-        const bodyDiv = document.createElement('div');
-        bodyDiv.style.cssText = 'white-space:pre-wrap; font-size:14px;';
-        bodyDiv.textContent = visibleText;
-        contentWrap.appendChild(bodyDiv);
-
-        if (quotedText) {
-          const quotedDiv = document.createElement('div');
-          quotedDiv.className = 'quoted-hidden';
-          quotedDiv.style.cssText = 'white-space:pre-wrap; font-size:13px; color:#888;';
-          quotedDiv.textContent = quotedText;
-          const toggleBtn = document.createElement('button');
-          toggleBtn.className = 'btn-show-trimmed';
-          toggleBtn.textContent = '··· Show trimmed content';
-          toggleBtn.addEventListener('click', () => {
-            quotedDiv.classList.remove('quoted-hidden');
-            toggleBtn.remove();
-          });
-          contentWrap.appendChild(toggleBtn);
-          contentWrap.appendChild(quotedDiv);
-        }
-
-        if (plainText.length > 20000) {
-          const showMore = document.createElement('button');
-          showMore.className = 'btn-show-more';
-          showMore.textContent = 'Show full email';
-          showMore.addEventListener('click', () => {
-            bodyDiv.textContent = plainText;
-            showMore.remove();
-          });
-          contentWrap.appendChild(showMore);
-        }
-      }
-
-      msgContainer.appendChild(contentWrap);
-      bodyEl.appendChild(msgContainer);
-    });
-
-    bodyEl.scrollTop = 0;
-
-    // Render attachment chips below messages
-    renderAttachmentChips(bodyEl, t.gmailThreadId);
-  } catch (err) {
-    console.error('[threadReader] Failed to load messages:', err);
-    reader.querySelector('.reader-body')!.innerHTML = `<p style="color:var(--text-muted)">Could not load messages. ${esc(String(err))}</p>`;
-    // Hide reply/forward actions when messages failed to load
     const footer = reader.querySelector('.reader-footer') as HTMLElement | null;
-    if (footer) footer.style.display = 'none';
+    try {
+      if (import.meta.env.DEV) console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account!.id); // eslint-disable-line no-console
+      const result = await fetchMessageBody(state.account!, t.gmailThreadId);
+      lastMessageId = result.lastMessageId;
+      // Capture last message's To/Cc for Reply All
+      if (result.messages.length > 0) {
+        const lastMsg = result.messages[result.messages.length - 1];
+        lastTo = lastMsg.to;
+        lastCc = lastMsg.cc;
+      }
+      bodyEl.innerHTML = '';
+      const msgs = result.messages;
+      if (msgs.length > 1) {
+        const myEmail = state.account?.email ?? '';
+        const lastMsg = msgs[msgs.length - 1];
+        const lastFrom = lastMsg.from ?? '';
+        const lastIsMe = lastFrom.includes(myEmail);
+        const lastSenderName = lastFrom.replace(/<.*>/, '').trim() || lastFrom;
+
+        const uniqueSenders: string[] = [];
+        for (const m of msgs) {
+          const name = (m.from ?? '').replace(/<.*>/, '').trim() || m.from;
+          if (!uniqueSenders.includes(name)) uniqueSenders.push(name);
+        }
+        const shown = uniqueSenders.slice(0, 4);
+        const overflow = uniqueSenders.length - shown.length;
+
+        const avatarsHtml = shown.map(name => {
+          const initial = name[0]?.toUpperCase() ?? '?';
+          const color = getAvatarColor(name);
+          return `<span class="thread-avatar" style="background:${color}" title="${esc(name)}">${esc(initial)}</span>`;
+        }).join('') + (overflow > 0 ? `<span class="thread-avatar" style="background:#555">+${overflow}</span>` : '');
+
+        const statusText = lastIsMe
+          ? 'You replied'
+          : `Awaiting reply from ${esc(lastSenderName)}`;
+
+        const summaryEl = document.createElement('div');
+        summaryEl.className = 'thread-summary';
+        summaryEl.innerHTML = `<span class="thread-count-badge">${msgs.length} messages</span><div class="thread-participants">${avatarsHtml}</div><span class="thread-status">${statusText}</span>`;
+        bodyEl.appendChild(summaryEl);
+      }
+
+      msgs.forEach((m, idx: number) => {
+        const isLast = idx === msgs.length - 1;
+        const msgContainer = document.createElement('div');
+        msgContainer.className = 'thread-message' + (!isLast ? ' thread-message-collapsed' : '');
+
+        const senderName = m.from.replace(/<.*>/, '').trim() || m.from;
+        const senderInitial = senderName[0]?.toUpperCase() ?? '?';
+        const avatarColor = getAvatarColor(senderName);
+        const senderEmail = (m.from.match(/<(.+)>/) ?? [])[1] ?? '';
+        const preview = (m.body || '').slice(0, 80).replace(/\n/g, ' ');
+
+        const headerBar = document.createElement('div');
+        headerBar.className = 'thread-message-header';
+        headerBar.innerHTML = `
+          <span class="msg-avatar" style="background:${avatarColor}">${esc(senderInitial)}</span>
+          <span class="thread-msg-sender">${esc(senderName)}</span>${senderEmail ? `<span class="thread-msg-email">${esc(senderEmail)}</span>` : ''}
+          ${isLast ? '' : `<span class="thread-msg-preview">${esc(preview)}</span>`}
+          <span class="thread-msg-date">${formatDate(m.receivedAt)}</span>
+          <span class="thread-msg-chevron">›</span>`;
+        headerBar.addEventListener('click', () => {
+          msgContainer.classList.toggle('thread-message-collapsed');
+        });
+        msgContainer.appendChild(headerBar);
+
+        const contentWrap = document.createElement('div');
+        contentWrap.className = 'thread-message-content';
+
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'thread-msg-meta';
+        metaDiv.textContent = `${m.from} · ${formatDate(m.receivedAt)}`;
+        contentWrap.appendChild(metaDiv);
+
+        const rawHtml: string | null = m.htmlBody ?? null;
+        const cachedSanitized: string | null = m.sanitizedHtml ?? null;
+        const sanitized = cachedSanitized || (rawHtml ? sanitizeEmailHtml(rawHtml) : '');
+
+        // Cache sanitized HTML back to DB (fire and forget)
+        if (sanitized && !cachedSanitized && m.gmailMessageId) {
+          getDb().then(db => db.execute(
+            'UPDATE messages SET sanitized_html = ? WHERE gmail_message_id = ?',
+            [sanitized, m.gmailMessageId]
+          )).catch(() => {});
+        }
+
+        if (sanitized) {
+          // Direct sanitized HTML rendering (no iframe) — like Gmail, Outlook Web, Apple Mail
+          const emailBodyDiv = document.createElement('div');
+          emailBodyDiv.className = 'email-body-rendered';
+          emailBodyDiv.innerHTML = sanitized;
+
+          // Hide quoted/trimmed content (gmail_quote, blockquotes after main content)
+          emailBodyDiv.querySelectorAll('blockquote, .gmail_quote, .gmail_extra').forEach(el => {
+            (el as HTMLElement).classList.add('quoted-hidden');
+            const btn = document.createElement('button');
+            btn.className = 'btn-show-trimmed';
+            btn.textContent = '··· Show trimmed content';
+            btn.addEventListener('click', () => {
+              (el as HTMLElement).classList.remove('quoted-hidden');
+              btn.remove();
+            });
+            el.parentNode?.insertBefore(btn, el);
+          });
+
+          // Load images button
+          const loadImgBtn = document.createElement('button');
+          loadImgBtn.className = 'btn-load-images';
+          loadImgBtn.textContent = '🖼 Load images';
+          loadImgBtn.style.cssText = 'display:none; margin-bottom:8px; font-size:12px;';
+          loadImgBtn.addEventListener('click', () => {
+            emailBodyDiv.querySelectorAll<HTMLImageElement>('img[data-original-src]').forEach(img => {
+              const orig = img.getAttribute('data-original-src')!;
+              img.setAttribute('src', orig);
+              img.removeAttribute('data-original-src');
+            });
+            loadImgBtn.remove();
+          });
+
+          const blockedImgs = emailBodyDiv.querySelectorAll('img[data-original-src]');
+          if (blockedImgs.length > 0) loadImgBtn.style.display = 'inline-block';
+
+          contentWrap.appendChild(loadImgBtn);
+          contentWrap.appendChild(emailBodyDiv);
+        } else {
+          const plainText: string = m.body ?? '';
+          const lines = plainText.slice(0, 20000).split('\n');
+          const quoteStart = lines.findIndex((line, i) =>
+            line.startsWith('>') || (i > 0 && /^On .+ wrote:/.test(line))
+          );
+
+          const visibleText = quoteStart > 0 ? lines.slice(0, quoteStart).join('\n') : plainText.slice(0, 20000);
+          const quotedText = quoteStart > 0 ? lines.slice(quoteStart).join('\n') : '';
+
+          const bodyDiv = document.createElement('div');
+          bodyDiv.style.cssText = 'white-space:pre-wrap; font-size:14px;';
+          bodyDiv.textContent = visibleText;
+          contentWrap.appendChild(bodyDiv);
+
+          if (quotedText) {
+            const quotedDiv = document.createElement('div');
+            quotedDiv.className = 'quoted-hidden';
+            quotedDiv.style.cssText = 'white-space:pre-wrap; font-size:13px; color:#888;';
+            quotedDiv.textContent = quotedText;
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'btn-show-trimmed';
+            toggleBtn.textContent = '··· Show trimmed content';
+            toggleBtn.addEventListener('click', () => {
+              quotedDiv.classList.remove('quoted-hidden');
+              toggleBtn.remove();
+            });
+            contentWrap.appendChild(toggleBtn);
+            contentWrap.appendChild(quotedDiv);
+          }
+
+          if (plainText.length > 20000) {
+            const showMore = document.createElement('button');
+            showMore.className = 'btn-show-more';
+            showMore.textContent = 'Show full email';
+            showMore.addEventListener('click', () => {
+              bodyDiv.textContent = plainText;
+              showMore.remove();
+            });
+            contentWrap.appendChild(showMore);
+          }
+        }
+
+        msgContainer.appendChild(contentWrap);
+        bodyEl.appendChild(msgContainer);
+      });
+
+      bodyEl.scrollTop = 0;
+
+      // Render attachment chips below messages
+      renderAttachmentChips(bodyEl, t.gmailThreadId);
+      // Show reply/forward on success
+      if (footer) footer.style.display = '';
+    } catch (err) {
+      console.error('[threadReader] Failed to load messages:', err);
+      bodyEl.innerHTML = `
+        <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
+          <p style="margin:0 0 8px;font-size:14px">Couldn't load this email</p>
+          <button class="retry-load-btn" style="
+            background:var(--accent);color:#fff;border:none;border-radius:20px;
+            padding:8px 20px;font-size:13px;cursor:pointer;font-weight:500;
+          ">Retry</button>
+          <details style="margin-top:12px;font-size:11px;color:var(--text-muted)">
+            <summary style="cursor:pointer">Details</summary>
+            <pre style="white-space:pre-wrap;margin-top:4px">${esc(String(err))}</pre>
+          </details>
+        </div>`;
+      bodyEl.querySelector('.retry-load-btn')!.addEventListener('click', () => loadMessages());
+      // Hide reply/forward actions when messages failed to load
+      if (footer) footer.style.display = 'none';
+    }
   }
+
+  await loadMessages();
 
   // ── Reply / Forward buttons open floating compose ──
   let lastPlainText = '';
