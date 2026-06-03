@@ -127,7 +127,7 @@ async function boot() {
 
   // Initialize extracted modules
   initSettings({ renderInbox, refreshAll, showAuth, loadUnifiedThreads });
-  initSync({ renderInbox, loadUnifiedThreads, refreshKnownSenders });
+  initSync({ renderCurrentView, loadUnifiedThreads, refreshKnownSenders });
 
   // Show auth screen immediately — don't block on DB
   showAuth();
@@ -579,6 +579,11 @@ function getThreadListDeps() {
 function renderInbox() { _renderInbox(getThreadListDeps()); }
 function renderSnoozedView() { return _renderSnoozedView(getThreadListDeps()); }
 function renderStarredView() { return _renderStarredView(getThreadListDeps()); }
+
+/** Re-render whatever view is currently active (used after sync). */
+function renderCurrentView() {
+  switchView(state.currentView);
+}
 
 function openComposeNew(prefillSubject = '') {
   return getCompose().then(m => m.openComposeNew(prefillSubject, openSnippetPicker, showFollowupPrompt));

@@ -8,7 +8,7 @@ import { loadPhotoCache, resolvePhotos, hasCachedResult } from './senderPhotos';
 import { patchAvatarsWithPhotos } from './avatar';
 
 export interface SyncDeps {
-  renderInbox: () => void;
+  renderCurrentView: () => void;
   loadUnifiedThreads: () => Promise<Thread[]>;
   refreshKnownSenders: () => Promise<void>;
 }
@@ -22,7 +22,7 @@ export function initSync(deps: SyncDeps) {
 /** On boot: load active account threads, then kick off parallel sync for all accounts. */
 export async function refreshAll() {
   if (!state.account || !_deps) return;
-  const { renderInbox, loadUnifiedThreads } = _deps;
+  const { renderCurrentView, loadUnifiedThreads } = _deps;
 
   // Load photo cache from DB on first call
   await loadPhotoCache();
@@ -36,7 +36,7 @@ export async function refreshAll() {
   } else {
     state.threads = await loadThreads(state.account.id);
   }
-  renderInbox();
+  renderCurrentView();
 
   // Request notification permission early (non-blocking)
   ensureNotificationPermission().catch(() => {});
@@ -64,13 +64,13 @@ export async function refreshAll() {
   } else {
     state.threads = await loadThreads(state.account.id);
   }
-  renderInbox();
+  renderCurrentView();
   flashStatus(`Synced — ${state.threads.length} threads`);
 }
 
 export async function syncAndRender() {
   if (state.syncing || !state.account || !_deps) return;
-  const { renderInbox, loadUnifiedThreads, refreshKnownSenders } = _deps;
+  const { renderCurrentView, loadUnifiedThreads, refreshKnownSenders } = _deps;
 
   // E2E mode: just reload from DB, no network
   if (import.meta.env.VITE_E2E === '1') {
@@ -79,7 +79,7 @@ export async function syncAndRender() {
     } else {
       state.threads = await loadThreads(state.account.id);
     }
-    renderInbox();
+    renderCurrentView();
     setStatus(`E2E mode — ${state.threads.length} threads`);
     return;
   }
@@ -97,7 +97,7 @@ export async function syncAndRender() {
           .catch(err => console.error(`Sync error for ${a.email}:`, err))
       ));
       state.threads = await loadUnifiedThreads();
-      renderInbox();
+      renderCurrentView();
       flashStatus(`Synced — ${state.threads.length} threads`);
     } else {
       // Capture thread IDs known before sync to detect new arrivals
@@ -108,7 +108,7 @@ export async function syncAndRender() {
 
       await syncInbox(state.account, n => setStatus(`Syncing… ${n} threads`));
       state.threads = await loadThreads(state.account.id);
-      renderInbox();
+      renderCurrentView();
       flashStatus(`Synced — ${state.threads.length} threads`);
 
       // Refresh known-senders after sync (SENT folder may have grown)

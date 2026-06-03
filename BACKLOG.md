@@ -17,9 +17,9 @@
 - [x] **Inbox section labels → Title Case** — ~~ALL-CAPS~~ → Title Capitalization. Done (84fb3fd).
 - [ ] **Sender cards aligned with avatar on email threads** — The new sender cards must be visually aligned with the avatar in threaded email views.
 - [x] **Right-align Compose button with Date/Time column** — Toolbar right padding now matches thread-row padding. Done (84fb3fd).
-- [ ] **New senders (first) card left-aligned with avatar** — The "new sender" card that appears on first contact must be left-aligned with the avatar, not offset or centered.
-- [ ] **Nav bar tooltips must appear to the right of the button, not below** — Sidebar icon tooltips currently render below the button; they should render to the right for consistency and to avoid clipping.
-- [ ] **Arrow-key navigation overrides hover** — When user hovers an item then starts using arrow keys, keyboard navigation takes precedence and the hovered item must lose its hover highlight immediately. Hover state should not compete with keyboard-active state.
+- [x] **New senders (first) card left-aligned with avatar** — Row padding now matches thread-row avatar alignment. Done (a50ebeb).
+- [x] **Nav bar tooltips must appear to the right of the button, not below** — Sidebar tooltip rule now a standalone block after the generic tooltip system; no longer overridden. Done (a50ebeb).
+- [x] **Arrow-key navigation overrides hover** — `.keyboard-nav` class added on arrow/j/k; removed on mousemove. Suppresses hover highlight when keyboard is active. Done (a50ebeb).
 - [ ] **Email sync must preserve current view** — Auto-sync (and manual refresh) redraws Inbox regardless of which page is active. If user is on Drafts, Sent, or any other folder, sync should re-fetch and redraw that same folder — not reset to Inbox. Sidebar icon stays correct but content resets.
 - [x] **Bottom spacing on email list** — 40px bottom padding on .inbox. Done (84fb3fd).
 
