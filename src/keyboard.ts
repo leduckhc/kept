@@ -116,12 +116,10 @@ export function showCheatSheet() {
   document.body.appendChild(overlay);
 }
 
-export function openThreadWithReply(t: Thread, openThread: (t: Thread) => void) {
-  openThread(t);
-  setTimeout(() => {
-    const btn = document.getElementById('btn-reply') as HTMLButtonElement | null;
-    if (btn && btn.style.display !== 'none') btn.click();
-  }, 50);
+export async function openThreadWithReply(t: Thread, openThread: (t: Thread) => Promise<void> | void) {
+  await openThread(t);
+  const btn = document.getElementById('btn-reply') as HTMLButtonElement | null;
+  if (btn && btn.style.display !== 'none') btn.click();
 }
 
 export function scrollReaderMessage(direction: 1 | -1) {

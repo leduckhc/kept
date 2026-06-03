@@ -367,36 +367,7 @@ body {
   to   { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
-.btn-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: 13px;
-  font-family: var(--font);
-  cursor: pointer;
-  white-space: nowrap;
-  min-height: 32px;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
-}
-.btn-pill:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-  border-color: var(--text-muted);
-}
-.btn-pill.btn-compose {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-.btn-pill.btn-compose:hover {
-  background: #6b5ec4;
-  border-color: #6b5ec4;
-}
+
 
 
 
@@ -2117,16 +2088,8 @@ body {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-@keyframes fadeOut {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
 @keyframes slideUp {
   from { transform: translateY(20px); opacity: 0; }
-}
-@keyframes slideDown {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(8px); }
 }
 @keyframes slideOutLeft {
   from { opacity: 1; transform: translateX(0); max-height: 80px; }
@@ -2153,36 +2116,21 @@ body {
 #cmd-palette-backdrop {
   animation: fadeIn 150ms ease both;
 }
-#cmd-palette-backdrop.closing {
-  animation: fadeOut 120ms ease forwards;
-}
 #cmd-palette {
   animation: scaleIn 100ms ease-out both;
-}
-#cmd-palette-backdrop.closing #cmd-palette {
-  animation: slideDown 120ms ease forwards;
 }
 
 /* Keyboard cheatsheet */
 #kb-cheatsheet {
   animation: fadeIn 150ms ease both;
 }
-#kb-cheatsheet.closing {
-  animation: fadeOut 120ms ease forwards;
-}
 #kb-cheatsheet .kb-modal {
   animation: scaleIn 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-#kb-cheatsheet.closing .kb-modal {
-  animation: slideDown 120ms ease forwards;
 }
 
 /* ── Full-page reader slide-up ───────────────────────────── */
 .reader-fullpage {
   animation: slideUp 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-.reader-fullpage.closing {
-  animation: slideDown 120ms ease forwards;
 }
 
 /* ── View transition (inbox/starred/snoozed) ─────────────── */

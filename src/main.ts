@@ -372,7 +372,7 @@ function showShell() {
   function expandSearch() {
     searchWrap.classList.remove('collapsed');
     searchWrap.classList.add('expanded');
-    setTimeout(() => searchEl.focus(), 50);
+    requestAnimationFrame(() => searchEl.focus());
   }
   function collapseSearch() {
     if (searchEl.value) return; // don't collapse if there's a query
