@@ -196,6 +196,17 @@ function patchThreadList(container: HTMLElement, newThreads: Thread[]): boolean 
 
   if (existingRows.size === 0) return false;
 
+  // Detect stale group rows whose threads were bulk-removed — force full rebuild
+  const groupRows = container.querySelectorAll<HTMLElement>('.category-row, .sender-group-row, .domain-group-row');
+  for (const row of groupRows) {
+    const cat = row.dataset.category;
+    const email = row.dataset.senderEmail;
+    const domain = row.dataset.domain;
+    if (cat && !state.threads.some(t => t.category === cat)) return false;
+    if (email && !state.threads.some(t => t.senderEmail === email)) return false;
+    if (domain && !state.threads.some(t => t.senderEmail.endsWith('@' + domain))) return false;
+  }
+
   const newIds = new Set(newThreads.map(t => t.id));
   const addedCount = newThreads.filter(t => !existingRows.has(t.id)).length;
   const removedCount = [...existingRows.keys()].filter(id => !newIds.has(id)).length;
