@@ -207,6 +207,26 @@ function patchThreadList(container: HTMLElement, newThreads: Thread[]): boolean 
     if (domain && !state.threads.some(t => t.senderEmail.endsWith('@' + domain))) return false;
   }
 
+  // Detect new groups that don't yet have a DOM row — force full rebuild
+  for (const email of state.groupedSenders) {
+    if (state.threads.some(t => t.senderEmail === email) &&
+        !container.querySelector(`.sender-group-row[data-sender-email="${email}"]`)) return false;
+  }
+  for (const domain of state.groupedDomains) {
+    if (state.threads.some(t => t.senderEmail.endsWith('@' + domain)) &&
+        !container.querySelector(`.domain-group-row[data-domain="${domain}"]`)) return false;
+  }
+
+  // Detect removed groups that still have a DOM row — force full rebuild
+  const senderGroupRows = container.querySelectorAll<HTMLElement>('.sender-group-row[data-sender-email]');
+  for (const row of senderGroupRows) {
+    if (!state.groupedSenders.includes(row.dataset.senderEmail!)) return false;
+  }
+  const domainGroupRows = container.querySelectorAll<HTMLElement>('.domain-group-row[data-domain]');
+  for (const row of domainGroupRows) {
+    if (!state.groupedDomains.includes(row.dataset.domain!)) return false;
+  }
+
   const newIds = new Set(newThreads.map(t => t.id));
   const addedCount = newThreads.filter(t => !existingRows.has(t.id)).length;
   const removedCount = [...existingRows.keys()].filter(id => !newIds.has(id)).length;
