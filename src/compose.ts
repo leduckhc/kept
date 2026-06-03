@@ -118,11 +118,7 @@ export async function openCompose(opts: ComposeOptions) {
           placeholder="name@example.com"
           autocomplete="off" aria-autocomplete="list" />
         <ul class="compose-ac" style="display:none"></ul>
-        ${!showCcBcc ? '<button class="compose-cc-bcc-pill" type="button">Cc Bcc</button>' : `
-        <div class="compose-cc-bcc-pill-split">
-          <span class="pill-item active">Cc</span>
-          <span class="pill-item active">Bcc</span>
-        </div>`}
+        ${!showCcBcc ? '<button class="compose-cc-bcc-pill" type="button">Cc/Bcc</button>' : ''}
       </div>
       <div class="compose-field compose-cc-field" style="display:${showCcBcc ? '' : 'none'}">
         <label class="compose-label">Cc</label>
@@ -194,12 +190,6 @@ export async function openCompose(opts: ComposeOptions) {
       const bccField = panel.querySelector<HTMLElement>('.compose-bcc-field');
       if (ccField) { ccField.style.display = ''; ccField.classList.add('compose-cc-bcc-animated'); }
       if (bccField) { bccField.style.display = ''; bccField.classList.add('compose-cc-bcc-animated'); }
-      // Replace pill with split pills
-      const splitHtml = `<div class="compose-cc-bcc-pill-split">
-        <span class="pill-item active">Cc</span>
-        <span class="pill-item active">Bcc</span>
-      </div>`;
-      ccBccPill.insertAdjacentHTML('afterend', splitHtml);
       ccBccPill.remove();
     });
   }
