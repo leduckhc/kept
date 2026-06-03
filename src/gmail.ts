@@ -213,7 +213,16 @@ function hasAttachment(message: { payload?: { parts?: MimePart[] } }): boolean {
 
 async function syncThread(account: Account, gmailThreadId: string, accountId: string, label: string = 'INBOX'): Promise<void> {
   const db = await getDb();
-  const data = await gmailGet(account, `/users/me/threads/${gmailThreadId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`) as {
+
+  // Fetch thread metadata; if 404, thread was deleted on server — remove locally
+  const res = await gmailGetRaw(account, `/users/me/threads/${gmailThreadId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`);
+  if (res.status === 404) {
+    await db.execute('DELETE FROM threads WHERE id = ?', [gmailThreadId]);
+    return;
+  }
+  if (!res.ok) throw new Error(`Gmail API error ${res.status}: /users/me/threads/${gmailThreadId}`);
+
+  const data = await res.json() as {
     id: string;
     messages: Array<{
       id: string;
