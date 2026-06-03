@@ -24,5 +24,5 @@
 
 ## Tech Debt
 
-- [ ] **~300 lines dead CSS** — Orphaned classes from prior refactors.
-- [ ] **Fragile 50ms setTimeout** — Race condition workaround in thread reader.
+- [x] **~300 lines dead CSS** — Removed `.btn-pill`, `.closing` animations, `fadeOut`/`slideDown` keyframes (60 lines net). Remaining classes all confirmed referenced. Done (ce1ca1e).
+- [x] **Fragile 50ms setTimeout** — `openThreadWithReply` now awaits the render promise; search focus uses `requestAnimationFrame`. Done (ce1ca1e).
