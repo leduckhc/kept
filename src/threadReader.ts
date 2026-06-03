@@ -38,13 +38,13 @@ export async function openThread(
   reader.className = 'reader-fullpage';
   reader.innerHTML = `
     <div class="reader-header">
-      <button class="btn-icon reader-back" id="reader-back" title="Back to inbox [Escape]">←</button>
+      <button class="btn-icon reader-back" id="reader-back" title="Back to inbox [Escape]">${icon.arrowLeft('16px')}</button>
       <div class="reader-subject">${esc(t.subject)}</div>
       <div class="reader-actions-header">
         <button class="btn-icon" id="btn-mark-unread-reader" title="Mark unread">${icon.emailOpen('16px')}</button>
         <button class="btn-icon" id="btn-spam-reader" title="Report spam">${icon.spam('16px')}</button>
         <button class="btn-icon" id="btn-move-reader" title="Move to label">${icon.folderMove('16px')}</button>
-        <button class="btn-icon" id="btn-archive-reader" title="Archive">🗑</button>
+        <button class="btn-icon" id="btn-archive-reader" title="Archive">${icon.archive('16px')}</button>
       </div>
     </div>
     <div class="reader-body"><div class="spinner"></div></div>
