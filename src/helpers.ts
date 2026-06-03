@@ -35,7 +35,10 @@ export function toggleLayoutMode() {
 
 export function setStatus(msg: string) {
   const el = document.getElementById('status-right');
-  if (el) el.textContent = msg;
+  if (!el) return;
+  el.textContent = msg;
+  const bar = el.closest('.statusbar');
+  if (bar) bar.classList.toggle('visible', msg.length > 0);
 }
 
 let _statusTimer: ReturnType<typeof setTimeout> | null = null;
