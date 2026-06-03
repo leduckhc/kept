@@ -531,13 +531,13 @@ export async function archiveThread(account: Account, thread: Thread): Promise<v
 /** Batch archive: chunked parallel API calls to avoid Gmail rate limits. */
 export async function archiveThreads(account: Account, threads: Thread[]): Promise<void> {
   if (threads.length === 0) return;
+  const db = await getDb();
+  const ids = threads.map(t => t.id);
+  await db.execute(`UPDATE threads SET is_archived = 1 WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
   const a = await ensureFreshToken(account);
   await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] })
   );
-  const db = await getDb();
-  const ids = threads.map(t => t.id);
-  await db.execute(`UPDATE threads SET is_archived = 1 WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
 }
 
 export async function unarchiveThread(account: Account, thread: Thread): Promise<void> {
@@ -550,13 +550,13 @@ export async function unarchiveThread(account: Account, thread: Thread): Promise
 /** Batch unarchive: chunked parallel API calls to avoid Gmail rate limits. */
 export async function unarchiveThreads(account: Account, threads: Thread[]): Promise<void> {
   if (threads.length === 0) return;
+  const db = await getDb();
+  const ids = threads.map(t => t.id);
+  await db.execute(`UPDATE threads SET is_archived = 0 WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
   const a = await ensureFreshToken(account);
   await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] })
   );
-  const db = await getDb();
-  const ids = threads.map(t => t.id);
-  await db.execute(`UPDATE threads SET is_archived = 0 WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
 }
 
 export async function trashThread(account: Account, thread: Thread): Promise<void> {
@@ -569,13 +569,13 @@ export async function trashThread(account: Account, thread: Thread): Promise<voi
 /** Batch trash: chunked parallel API calls to avoid Gmail rate limits. */
 export async function trashThreads(account: Account, threads: Thread[]): Promise<void> {
   if (threads.length === 0) return;
+  const db = await getDb();
+  const ids = threads.map(t => t.id);
+  await db.execute(`UPDATE threads SET is_archived = 1, label = 'TRASH' WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
   const a = await ensureFreshToken(account);
   await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/trash`, {})
   );
-  const db = await getDb();
-  const ids = threads.map(t => t.id);
-  await db.execute(`UPDATE threads SET is_archived = 1, label = 'TRASH' WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
 }
 
 export async function untrashThread(account: Account, thread: Thread): Promise<void> {
@@ -585,13 +585,13 @@ export async function untrashThread(account: Account, thread: Thread): Promise<v
 /** Batch untrash: chunked parallel API calls to avoid Gmail rate limits. */
 export async function untrashThreads(account: Account, threads: Thread[]): Promise<void> {
   if (threads.length === 0) return;
+  const db = await getDb();
+  const ids = threads.map(t => t.id);
+  await db.execute(`UPDATE threads SET is_archived = 0, label = 'INBOX' WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
   const a = await ensureFreshToken(account);
   await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/untrash`, {})
   );
-  const db = await getDb();
-  const ids = threads.map(t => t.id);
-  await db.execute(`UPDATE threads SET is_archived = 0, label = 'INBOX' WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
 }
 
 export async function blockSender(account: Account, thread: Thread): Promise<void> {
