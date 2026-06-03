@@ -8,6 +8,7 @@ import { showToast, showUndoToast } from './toasts';
 import { avatarColor } from './avatar';
 import { esc } from './helpers';
 import { icon } from './icons';
+import { saveLocalDraft, deleteLocalDraft, linkGmailDraft, newDraftId, type LocalDraft } from './localDrafts';
 
 export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward';
 
@@ -35,6 +36,7 @@ interface ComposeInstance {
   panel: HTMLElement;
   minimized: boolean;
   draftId: string | null;
+  localDraftId: string;
   draftTimer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -166,6 +168,7 @@ export async function openCompose(opts: ComposeOptions) {
     panel,
     minimized: false,
     draftId: opts.draftId ?? null,
+    localDraftId: newDraftId(),
     draftTimer: null,
   };
   activePanels.push(instance);
@@ -333,16 +336,36 @@ export async function openCompose(opts: ComposeOptions) {
       if (!state.account) return;
       const to = toEl.value.trim();
       const cc = ccEl?.value.trim() ?? '';
+      const bcc = bccEl?.value.trim() ?? '';
       const subject = subjectEl.value.trim();
       const body = editorEl.innerText.trim();
+      const htmlBody = editorEl.innerHTML;
       // Only save if there's meaningful content
       if (!to && !subject && !body) return;
+
+      // 1) Save locally (instant, offline-safe)
+      const now = Date.now();
+      const localDraft: LocalDraft = {
+        id: instance.localDraftId,
+        accountId: state.account.id,
+        gmailDraftId: instance.draftId,
+        mode: opts.mode ?? 'new',
+        to, cc, bcc, subject, body, htmlBody,
+        threadId: opts.threadId ?? null,
+        inReplyTo: opts.inReplyTo ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      try { await saveLocalDraft(localDraft); } catch { /* non-fatal */ }
+
+      // 2) Sync to Gmail API (non-blocking, best-effort)
       try {
         if (instance.draftId) {
           await updateDraft(state.account, instance.draftId, { to, cc, subject, body, threadId: opts.threadId });
         } else {
           const id = await createDraft(state.account, { to, cc, subject, body, threadId: opts.threadId });
           instance.draftId = id;
+          linkGmailDraft(instance.localDraftId, id).catch(() => {});
         }
       } catch { /* non-fatal — draft save failure shouldn't block compose */ }
     }, 3000);
@@ -380,6 +403,8 @@ export async function openCompose(opts: ComposeOptions) {
   });
 
   async function discardAndClose() {
+    // Delete local draft
+    deleteLocalDraft(instance.localDraftId).catch(() => {});
     // Delete draft from Gmail if one was saved
     if (instance.draftId && state.account) {
       try { await deleteDraft(state.account, instance.draftId); } catch { /* non-fatal */ }
@@ -431,6 +456,7 @@ export async function openCompose(opts: ComposeOptions) {
     // Clear draft timer and close panel immediately
     if (instance.draftTimer) clearTimeout(instance.draftTimer);
     instance.draftId = null; // prevent discard from deleting draft we're about to send
+    const localId = instance.localDraftId;
     closeCompose(panel);
 
     let cancelled = false;
@@ -439,6 +465,7 @@ export async function openCompose(opts: ComposeOptions) {
       try {
         await sendEmail(account, payload);
         // Delete the draft after successful send
+        deleteLocalDraft(localId).catch(() => {});
         if (draftId) {
           try { await deleteDraft(account, draftId); } catch { /* non-fatal */ }
         }

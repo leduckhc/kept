@@ -194,4 +194,25 @@ async function migrate(db: Database): Promise<void> {
       fetched_at INTEGER NOT NULL
     )
   `).catch(() => {});
+
+  // Local drafts (offline-first compose persistence)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS local_drafts (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      gmail_draft_id TEXT,
+      mode TEXT NOT NULL DEFAULT 'new',
+      "to" TEXT NOT NULL DEFAULT '',
+      cc TEXT NOT NULL DEFAULT '',
+      bcc TEXT NOT NULL DEFAULT '',
+      subject TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      html_body TEXT NOT NULL DEFAULT '',
+      thread_id TEXT,
+      in_reply_to TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES accounts(id)
+    )
+  `).catch(() => {});
 }
