@@ -13,41 +13,62 @@ export function hashStr(s: string): number {
   return Math.abs(h);
 }
 
-// Lightweight MD5 for Gravatar URLs (not security-sensitive).
-export function md5(str: string): string {
-  const add32 = (a: number, b: number) => (a + b) & 0xffffffff;
-  const cmn = (q: number, a: number, b: number, x: number, s: number, t: number) => {
-    a = add32(add32(a, q), add32(x, t));
-    return add32((a << s) | (a >>> (32 - s)), b);
-  };
-  const ff = (a: number, b: number, c: number, d: number, x: number, s: number, t: number) => cmn((b & c) | (~b & d), a, b, x, s, t);
-  const gg = (a: number, b: number, c: number, d: number, x: number, s: number, t: number) => cmn((b & d) | (c & ~d), a, b, x, s, t);
-  const hh = (a: number, b: number, c: number, d: number, x: number, s: number, t: number) => cmn(b ^ c ^ d, a, b, x, s, t);
-  const ii = (a: number, b: number, c: number, d: number, x: number, s: number, t: number) => cmn(c ^ (b | ~d), a, b, x, s, t);
-  const utf8 = unescape(encodeURIComponent(str));
-  const bytes = Array.from(utf8, c => c.charCodeAt(0));
-  const len = bytes.length;
-  bytes.push(0x80);
-  while (bytes.length % 64 !== 56) bytes.push(0);
+// SHA-256 for Gravatar URLs (sync, pure JS — not security-sensitive).
+export function sha256Sync(str: string): string {
+  const utf8 = new TextEncoder().encode(str);
+  // SHA-256 constants
+  const K: number[] = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ];
+  const rotr = (n: number, x: number) => (x >>> n) | (x << (32 - n));
+  // Pre-processing: pad message
+  const len = utf8.length;
   const bitLen = len * 8;
-  bytes.push(bitLen & 0xff, (bitLen >> 8) & 0xff, (bitLen >> 16) & 0xff, (bitLen >> 24) & 0xff, 0, 0, 0, 0);
-  let [a, b, c, d] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
-  for (let i = 0; i < bytes.length; i += 64) {
-    const M: number[] = [];
-    for (let j = 0; j < 16; j++) M[j] = bytes[i+j*4] | (bytes[i+j*4+1] << 8) | (bytes[i+j*4+2] << 16) | (bytes[i+j*4+3] << 24);
-    const [aa, bb, cc, dd] = [a, b, c, d];
-    [a,b,c,d] = [ff(a,b,c,d,M[0],7,-680876936),ff(d,a,b,c,M[1],12,-389564586),ff(c,d,a,b,M[2],17,606105819),ff(b,c,d,a,M[3],22,-1044525330),ff(a,b,c,d,M[4],7,-176418897),ff(d,a,b,c,M[5],12,1200080426),ff(c,d,a,b,M[6],17,-1473231341),ff(b,c,d,a,M[7],22,-45705983),ff(a,b,c,d,M[8],7,1770035416),ff(d,a,b,c,M[9],12,-1958414417),ff(c,d,a,b,M[10],17,-42063),ff(b,c,d,a,M[11],22,-1990404162),ff(a,b,c,d,M[12],7,1804603682),ff(d,a,b,c,M[13],12,-40341101),ff(c,d,a,b,M[14],17,-1502002290),ff(b,c,d,a,M[15],22,1236535329)];
-    [a,b,c,d] = [gg(a,b,c,d,M[1],5,-165796510),gg(d,a,b,c,M[6],9,-1069501632),gg(c,d,a,b,M[11],14,643717713),gg(b,c,d,a,M[0],20,-373897302),gg(a,b,c,d,M[5],5,-701558691),gg(d,a,b,c,M[10],9,38016083),gg(c,d,a,b,M[15],14,-660478335),gg(b,c,d,a,M[4],20,-405537848),gg(a,b,c,d,M[9],5,568446438),gg(d,a,b,c,M[14],9,-1019803690),gg(c,d,a,b,M[3],14,-187363961),gg(b,c,d,a,M[8],20,1163531501),gg(a,b,c,d,M[13],5,-1444681467),gg(d,a,b,c,M[2],9,-51403784),gg(c,d,a,b,M[7],14,1735328473),gg(b,c,d,a,M[12],20,-1926607734)];
-    [a,b,c,d] = [hh(a,b,c,d,M[5],4,-378558),hh(d,a,b,c,M[8],11,-2022574463),hh(c,d,a,b,M[11],16,1839030562),hh(b,c,d,a,M[14],23,-35309556),hh(a,b,c,d,M[1],4,-1530992060),hh(d,a,b,c,M[4],11,1272893353),hh(c,d,a,b,M[7],16,-155497632),hh(b,c,d,a,M[10],23,-1094730640),hh(a,b,c,d,M[13],4,681279174),hh(d,a,b,c,M[0],11,-358537222),hh(c,d,a,b,M[3],16,-722521979),hh(b,c,d,a,M[6],23,76029189),hh(a,b,c,d,M[9],4,-640364487),hh(d,a,b,c,M[12],11,-421815835),hh(c,d,a,b,M[15],16,530742520),hh(b,c,d,a,M[2],23,-995338651)];
-    [a,b,c,d] = [ii(a,b,c,d,M[0],6,-198630844),ii(d,a,b,c,M[7],10,1126891415),ii(c,d,a,b,M[14],15,-1416354905),ii(b,c,d,a,M[5],21,-57434055),ii(a,b,c,d,M[12],6,1700485571),ii(d,a,b,c,M[3],10,-1894986606),ii(c,d,a,b,M[10],15,-1051523),ii(b,c,d,a,M[1],21,-2054922799),ii(a,b,c,d,M[8],6,1873313359),ii(d,a,b,c,M[15],10,-30611744),ii(c,d,a,b,M[6],15,-1560198380),ii(b,c,d,a,M[13],21,1309151649),ii(a,b,c,d,M[4],6,-145523070),ii(d,a,b,c,M[11],10,-1120210379),ii(c,d,a,b,M[2],15,718787259),ii(b,c,d,a,M[9],21,-343485551)];
-    [a, b, c, d] = [add32(a, aa), add32(b, bb), add32(c, cc), add32(d, dd)];
+  const padded = new Uint8Array(((len + 9 + 63) & ~63));
+  padded.set(utf8);
+  padded[len] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 4, bitLen, false);
+  // Initialize hash
+  let [h0,h1,h2,h3,h4,h5,h6,h7] = [
+    0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19
+  ];
+  // Process blocks
+  for (let i = 0; i < padded.length; i += 64) {
+    const w = new Int32Array(64);
+    for (let j = 0; j < 16; j++) w[j] = view.getInt32(i + j * 4, false);
+    for (let j = 16; j < 64; j++) {
+      const s0 = rotr(7, w[j-15]>>>0) ^ rotr(18, w[j-15]>>>0) ^ (w[j-15] >>> 3);
+      const s1 = rotr(17, w[j-2]>>>0) ^ rotr(19, w[j-2]>>>0) ^ (w[j-2] >>> 10);
+      w[j] = (w[j-16] + s0 + w[j-7] + s1) | 0;
+    }
+    let [a,b,c,d,e,f,g,h] = [h0,h1,h2,h3,h4,h5,h6,h7];
+    for (let j = 0; j < 64; j++) {
+      const S1 = rotr(6, e>>>0) ^ rotr(11, e>>>0) ^ rotr(25, e>>>0);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + K[j] + w[j]) | 0;
+      const S0 = rotr(2, a>>>0) ^ rotr(13, a>>>0) ^ rotr(22, a>>>0);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) | 0;
+      h = g; g = f; f = e; e = (d + temp1) | 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) | 0;
+    }
+    h0 = (h0+a)|0; h1 = (h1+b)|0; h2 = (h2+c)|0; h3 = (h3+d)|0;
+    h4 = (h4+e)|0; h5 = (h5+f)|0; h6 = (h6+g)|0; h7 = (h7+h)|0;
   }
-  return [a, b, c, d].map(n => (n >>> 0).toString(16).padStart(8, '0').replace(/(..)/g, (_, x) => x[1] + x[0]).replace(/(....)/g, (_, x) => x[2] + x[3] + x[0] + x[1])).join('');
+  return [h0,h1,h2,h3,h4,h5,h6,h7].map(n => (n >>> 0).toString(16).padStart(8, '0')).join('');
 }
 
 export function gravatarUrl(email: string): string {
-  const hash = md5(email.trim().toLowerCase());
-  return `https://www.gravatar.com/avatar/${hash}?s=64&d=404`;
+  const hash = sha256Sync(email.trim().toLowerCase());
+  return `https://gravatar.com/avatar/${hash}?s=64&d=404`;
 }
 
 export function avatarHtml(t: Thread): string {
