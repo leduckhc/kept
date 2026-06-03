@@ -45,6 +45,11 @@ export function selectThread(id: string | null) {
     .forEach(r => r.classList.remove('is-selected'));
   state.selectedThreadId = id;
   if (!id) return;
+  // Activate keyboard-nav mode (suppresses hover highlights)
+  const inbox = document.getElementById('inbox');
+  if (inbox && !inbox.classList.contains('keyboard-nav')) {
+    inbox.classList.add('keyboard-nav');
+  }
   const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
   if (row) {
     row.classList.add('is-selected');
@@ -153,6 +158,12 @@ export function scrollReaderMessage(direction: 1 | -1) {
 export function registerKeyboardShortcuts(deps: KeyboardDeps) {
   if (state.kbRegistered) return;
   state.kbRegistered = true;
+
+  // Exit keyboard-nav mode on any mouse movement
+  document.addEventListener('mousemove', () => {
+    const inbox = document.getElementById('inbox');
+    if (inbox) inbox.classList.remove('keyboard-nav');
+  }, { passive: true });
 
   document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
