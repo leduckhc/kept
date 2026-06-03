@@ -324,6 +324,7 @@ body {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* ── Pill buttons (toolbar) ─────────────────────────────── */
