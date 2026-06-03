@@ -15,6 +15,7 @@ export interface ComposeOptions {
   mode: ComposeMode;
   to?: string;
   cc?: string;
+  bcc?: string;
   subject?: string;
   quotedHtml?: string;
   quotedText?: string;
@@ -23,6 +24,7 @@ export interface ComposeOptions {
   attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
   prefillTo?: string;
   prefillCc?: string;
+  prefillBcc?: string;
   prefillSubject?: string;
   prefillBody?: string;
   draftId?: string; // existing Gmail draft ID (for updates)
@@ -95,7 +97,7 @@ export async function openCompose(opts: ComposeOptions) {
     : opts.mode === 'forward' ? 'Forward'
     : 'New Message';
 
-  const showCc = opts.mode === 'replyAll' || !!opts.cc;
+  const showCcBcc = opts.mode === 'replyAll' || !!opts.cc || !!opts.bcc;
 
   const panel = document.createElement('div');
   panel.className = 'compose-panel';
@@ -109,21 +111,31 @@ export async function openCompose(opts: ComposeOptions) {
       </div>
     </div>
     <div class="compose-panel-body">
-      <div class="compose-field">
+      <div class="compose-field compose-to-row">
         <label class="compose-label">To</label>
         <input class="compose-input compose-to" type="text"
           value="${esc(opts.to ?? '')}"
           placeholder="name@example.com"
           autocomplete="off" aria-autocomplete="list" />
         <ul class="compose-ac" style="display:none"></ul>
+        ${!showCcBcc ? '<button class="compose-cc-bcc-pill" type="button">Cc Bcc</button>' : `
+        <div class="compose-cc-bcc-pill-split">
+          <span class="pill-item active">Cc</span>
+          <span class="pill-item active">Bcc</span>
+        </div>`}
       </div>
-      <div class="compose-field compose-cc-field" style="display:${showCc ? '' : 'none'}">
+      <div class="compose-field compose-cc-field" style="display:${showCcBcc ? '' : 'none'}">
         <label class="compose-label">Cc</label>
         <input class="compose-input compose-cc" type="text"
           value="${esc(opts.cc ?? '')}"
           placeholder="cc@example.com" />
       </div>
-      ${!showCc ? '<button class="compose-show-cc-btn">Cc</button>' : ''}
+      <div class="compose-field compose-bcc-field" style="display:${showCcBcc ? '' : 'none'}">
+        <label class="compose-label">Bcc</label>
+        <input class="compose-input compose-bcc" type="text"
+          value="${esc(opts.bcc ?? '')}"
+          placeholder="bcc@example.com" />
+      </div>
       <div class="compose-field">
         <label class="compose-label">Subject</label>
         <input class="compose-input compose-subject" type="text"
@@ -165,6 +177,7 @@ export async function openCompose(opts: ComposeOptions) {
 
   const toEl = panel.querySelector<HTMLInputElement>('.compose-to')!;
   const ccEl = panel.querySelector<HTMLInputElement>('.compose-cc');
+  const bccEl = panel.querySelector<HTMLInputElement>('.compose-bcc');
   const subjectEl = panel.querySelector<HTMLInputElement>('.compose-subject')!;
   const editorEl = panel.querySelector<HTMLElement>('.compose-editor-new')!;
   const sendBtn = panel.querySelector<HTMLButtonElement>('.compose-send-btn-new')!;
@@ -173,13 +186,21 @@ export async function openCompose(opts: ComposeOptions) {
   const fileInput = panel.querySelector<HTMLInputElement>('.compose-file-input')!;
   const bodyWrap = panel.querySelector<HTMLElement>('.compose-panel-body')!;
 
-  // ── Show Cc field button ──
-  const showCcBtn = panel.querySelector<HTMLButtonElement>('.compose-show-cc-btn');
-  if (showCcBtn) {
-    showCcBtn.addEventListener('click', () => {
+  // ── Cc/Bcc pill button ──
+  const ccBccPill = panel.querySelector<HTMLButtonElement>('.compose-cc-bcc-pill');
+  if (ccBccPill) {
+    ccBccPill.addEventListener('click', () => {
       const ccField = panel.querySelector<HTMLElement>('.compose-cc-field');
-      if (ccField) ccField.style.display = '';
-      showCcBtn.remove();
+      const bccField = panel.querySelector<HTMLElement>('.compose-bcc-field');
+      if (ccField) { ccField.style.display = ''; ccField.classList.add('compose-cc-bcc-animated'); }
+      if (bccField) { bccField.style.display = ''; bccField.classList.add('compose-cc-bcc-animated'); }
+      // Replace pill with split pills
+      const splitHtml = `<div class="compose-cc-bcc-pill-split">
+        <span class="pill-item active">Cc</span>
+        <span class="pill-item active">Bcc</span>
+      </div>`;
+      ccBccPill.insertAdjacentHTML('afterend', splitHtml);
+      ccBccPill.remove();
     });
   }
 
@@ -203,6 +224,7 @@ export async function openCompose(opts: ComposeOptions) {
   // ── Prefill from undo-send restore ──
   if (opts.prefillTo) toEl.value = opts.prefillTo;
   if (opts.prefillCc && ccEl) ccEl.value = opts.prefillCc;
+  if (opts.prefillBcc && bccEl) bccEl.value = opts.prefillBcc;
   if (opts.prefillSubject) subjectEl.value = opts.prefillSubject;
   if (opts.prefillBody) editorEl.innerText = opts.prefillBody;
 
@@ -395,6 +417,7 @@ export async function openCompose(opts: ComposeOptions) {
   sendBtn.addEventListener('click', async () => {
     const to = toEl.value.trim();
     const cc = ccEl?.value.trim() ?? '';
+    const bcc = bccEl?.value.trim() ?? '';
     const subject = subjectEl.value.trim();
     const body = editorEl.innerText.trim();
     if (!to || (!body && !pendingAttachments.length) || !state.account) {
@@ -407,6 +430,7 @@ export async function openCompose(opts: ComposeOptions) {
     const payload = {
       to,
       cc: cc || undefined,
+      bcc: bcc || undefined,
       subject: subject || '(no subject)',
       body: body || '(attached)',
       htmlBody: editorEl.innerHTML.trim() || undefined,
@@ -442,6 +466,7 @@ export async function openCompose(opts: ComposeOptions) {
         ...opts,
         prefillTo: to,
         prefillCc: cc,
+        prefillBcc: bcc,
         prefillSubject: subject,
         prefillBody: body,
         draftId: draftId ?? undefined,

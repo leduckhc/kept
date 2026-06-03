@@ -8,8 +8,7 @@
 
 - [ ] **Code signing + distribution** — Apple Developer ($99/yr) for macOS+iOS, Windows cert for SmartScreen, Android self-sign. Not needed until ready to distribute outside dev machine.
 - [ ] **AI thread summaries + smart reply chips** — Local Ollama integration. Deferred until app is daily-driver stable.
-- [ ] **Rich text send** — Send `text/html` alternative part (~30min scope).
-- [ ] **Thread actions** — Mark unread, spam, move-to-label.
+
 - [ ] **Background send daemon** — OS-level sidecar (launchd/systemd/Task Scheduler) to dispatch scheduled sends when app is closed. Ship alongside code-signing/installer work.
 - [ ] **E2E test suite** — Infrastructure ready; actual test files not written.
 

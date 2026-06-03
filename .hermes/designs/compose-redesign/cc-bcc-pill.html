@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kept Compose — Cc/Bcc Pill Interaction</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f8f7fc;
+    --border: #e8e5f0;
+    --text: #1a1a2e;
+    --text-muted: #6b6b8a;
+    --accent: #7c6bc4;
+    --accent-bg: rgba(124, 107, 196, 0.1);
+    --header-bg: #1a1a2e;
+    --radius: 16px;
+    --chip-radius: 20px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+    background: #f0eef5;
+    padding: 48px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 56px;
+    min-height: 100vh;
+  }
+
+  .state-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .state-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    text-align: center;
+    max-width: 400px;
+  }
+
+  .compose-panel {
+    width: 480px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: var(--radius);
+    box-shadow:
+      0 1px 3px rgba(26, 26, 46, 0.04),
+      0 8px 32px rgba(124, 107, 196, 0.08),
+      0 0 0 1px rgba(232, 229, 240, 0.6);
+    overflow: hidden;
+  }
+
+  .compose-header {
+    background: var(--header-bg);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .compose-header h3 {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 12px;
+  }
+
+  .header-btn {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .compose-body {
+    padding: 0;
+  }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    min-height: 44px;
+    gap: 8px;
+  }
+
+  .field-row:last-child {
+    border-bottom: none;
+  }
+
+  .field-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    min-width: 32px;
+    flex-shrink: 0;
+    font-weight: 400;
+  }
+
+  .field-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: var(--chip-radius);
+    white-space: nowrap;
+  }
+
+  .field-input {
+    font-size: 14px;
+    color: var(--text);
+    border: none;
+    outline: none;
+    background: transparent;
+    flex: 1;
+    min-width: 80px;
+  }
+
+  .field-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+
+  .cc-bcc-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+  }
+
+  .cc-bcc-pill:hover {
+    background: var(--accent-bg);
+    border-color: rgba(124, 107, 196, 0.3);
+    color: var(--accent);
+  }
+
+  .cc-bcc-pill-split {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .cc-bcc-pill-split .pill-item {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: var(--accent-bg);
+    border: 1px solid rgba(124, 107, 196, 0.2);
+    border-radius: 12px;
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.2px;
+  }
+
+  .pill-item.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  .subject-row {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .subject-input {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    width: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+  }
+
+  .subject-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.4;
+  }
+
+  .body-area {
+    padding: 16px 20px;
+    min-height: 80px;
+  }
+
+  .body-text {
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .body-placeholder {
+    font-size: 14px;
+    color: var(--text-muted);
+    opacity: 0.4;
+  }
+
+  .bcc-text {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: normal;
+  }
+
+  /* Animation hint for State 2 */
+  .field-row.animated {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+      max-height: 0;
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      max-height: 60px;
+    }
+  }
+
+  .section { display: flex; flex-direction: column; align-items: center; }
+</style>
+</head>
+<body>
+
+<!-- STATE 1: Default — Cc/Bcc hidden -->
+<div class="section">
+  <div class="state-label">State 1 — Default</div>
+  <div class="state-desc">Cc/Bcc pill sits quietly on the right of the To field</div>
+  <div class="compose-panel">
+    <div class="compose-header">
+      <h3>New Message</h3>
+      <div class="header-actions">
+        <div class="header-btn"></div>
+        <div class="header-btn"></div>
+        <div class="header-btn"></div>
+      </div>
+    </div>
+    <div class="compose-body">
+      <div class="field-row">
+        <span class="field-label">To</span>
+        <div class="field-content">
+          <span class="chip">Sarah Chen</span>
+        </div>
+        <span class="cc-bcc-pill">Cc Bcc</span>
+      </div>
+      <div class="subject-row">
+        <input type="text" class="subject-input" value="Q3 Design Review — Updated Mocks" readonly>
+      </div>
+      <div class="body-area">
+        <div class="body-text">
+          Hi Sarah,<br><br>
+          Attached are the updated mockups for the Q3 redesign. Let me know if the navigation changes align with what we discussed on Thursday.<br><br>
+          Best,<br>Milan
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATE 2: Cc/Bcc fields revealed -->
+<div class="section">
+  <div class="state-label">State 2 — Fields Revealed</div>
+  <div class="state-desc">Pill splits into toggles; Cc and Bcc fields slide in smoothly</div>
+  <div class="compose-panel">
+    <div class="compose-header">
+      <h3>New Message</h3>
+      <div class="header-actions">
+        <div class="header-btn"></div>
+        <div class="header-btn"></div>
+        <div class="header-btn"></div>
+      </div>
+    </div>
+    <div class="compose-body">
+      <div class="field-row">
+        <span class="field-label">To</span>
+        <div class="field-content">
+          <span class="chip">Sarah Chen</span>
+        </div>
+        <div class="cc-bcc-pill-split">
+          <span class="pill-item active">Cc</span>
+          <span class="pill-item active">Bcc</span>
+        </div>
+      </div>
+      <div class="field-row animated">
+        <span class="field-label">Cc</span>
+        <div class="field-content">
+          <input type="text" class="field-input" placeholder="Add recipients…" readonly>
+        </div>
+      </div>
+      <div class="field-row animated" style="animation-delay: 0.05s;">
+        <span class="field-label">Bcc</span>
+        <div class="field-content">
+          <input type="text" class="field-input" placeholder="Add recipients…" readonly>
+        </div>
+      </div>
+      <div class="subject-row">
+        <input type="text" class="subject-input" value="Q3 Design Review — Updated Mocks" readonly>
+      </div>
+      <div class="body-area">
+        <div class="body-text">
+          Hi Sarah,<br><br>
+          Attached are the updated mockups for the Q3 redesign. Let me know if the navigation changes align with what we discussed on Thursday.<br><br>
+          Best,<br>Milan
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATE 3: Cc/Bcc populated -->
+<div class="section">
+  <div class="state-label">State 3 — Populated</div>
+  <div class="state-desc">Multiple recipients across all fields — clean and scannable</div>
+  <div class="compose-panel">
+    <div class="compose-header">
+      <h3>New Message</h3>
+      <div class="header-actions">
+        <div class="header-btn"></div>
+        <div class="header-btn"></div>
+        <div class="header-btn"></div>
+      </div>
+    </div>
+    <div class="compose-body">
+      <div class="field-row">
+        <span class="field-label">To</span>
+        <div class="field-content">
+          <span class="chip">Sarah Chen</span>
+          <span class="chip">James Liu</span>
+        </div>
+        <div class="cc-bcc-pill-split">
+          <span class="pill-item active">Cc</span>
+          <span class="pill-item active">Bcc</span>
+        </div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Cc</span>
+        <div class="field-content">
+          <span class="chip">Design Team</span>
+        </div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Bcc</span>
+        <div class="field-content">
+          <span class="bcc-text">milan@kept.app</span>
+          <input type="text" class="field-input" readonly>
+        </div>
+      </div>
+      <div class="subject-row">
+        <input type="text" class="subject-input" value="Q3 Design Review — Updated Mocks" readonly>
+      </div>
+      <div class="body-area">
+        <div class="body-text">
+          Hi Sarah and James,<br><br>
+          Attached are the updated mockups for the Q3 redesign. I've cc'd the design team so everyone stays in the loop. Let me know if the navigation changes align with what we discussed on Thursday.<br><br>
+          Best,<br>Milan
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

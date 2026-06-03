@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compose Redesign — Comparison</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f8f7fc;
+    --border: #e8e5f0;
+    --text: #1a1a2e;
+    --text-muted: #6b6b8a;
+    --accent: #7c6bc4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+    background: var(--surface);
+    color: var(--text);
+    padding: 32px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+    margin-bottom: 8px;
+  }
+
+  header h1 span { color: var(--accent); }
+
+  header p {
+    font-size: 15px;
+    color: var(--text-muted);
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  .variant {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .variant-label {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    padding: 10px;
+    background: var(--bg);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  .variant-label span {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  iframe {
+    width: 100%;
+    height: 1800px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+
+  .nav {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .nav a {
+    padding: 8px 20px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .nav a:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #f5f2ff;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>Kept</span> Compose Panel Redesign</h1>
+  <p>Three design directions for the floating compose panel. Each shows new email, reply with quote, and compose with attachments.</p>
+</header>
+
+<div class="nav">
+  <a href="variant-a-superhuman.html" target="_blank">Open A fullscreen ↗</a>
+  <a href="variant-b-linear.html" target="_blank">Open B fullscreen ↗</a>
+  <a href="variant-c-notion.html" target="_blank">Open C fullscreen ↗</a>
+</div>
+
+<div class="grid">
+  <div class="variant">
+    <div class="variant-label">A — Superhuman Clean<span>Frosted glass, borderless fields, spacious</span></div>
+    <iframe src="variant-a-superhuman.html"></iframe>
+  </div>
+  <div class="variant">
+    <div class="variant-label">B — Linear Precision<span>Geometric, monospace subject, keyboard hints</span></div>
+    <iframe src="variant-b-linear.html"></iframe>
+  </div>
+  <div class="variant">
+    <div class="variant-label">C — Notion Soft<span>Pill inputs, generous padding, formatting bar</span></div>
+    <iframe src="variant-c-notion.html"></iframe>
+  </div>
+</div>
+
+</body>
+</html>

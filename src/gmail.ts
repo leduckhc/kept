@@ -675,6 +675,7 @@ async function tryUnsubscribe(account: Account, gmailThreadId: string): Promise<
 interface SendOptions {
   to: string;
   cc?: string;
+  bcc?: string;
   subject: string;
   body: string;
   htmlBody?: string;
@@ -799,6 +800,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
       `From: ${account.email}`,
       `To: ${opts.to}`,
       opts.cc ? `Cc: ${opts.cc}` : '',
+      opts.bcc ? `Bcc: ${opts.bcc}` : '',
       `Subject: ${opts.subject}`,
       opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
       `MIME-Version: 1.0`,
@@ -846,6 +848,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
       `From: ${account.email}`,
       `To: ${opts.to}`,
       opts.cc ? `Cc: ${opts.cc}` : '',
+      opts.bcc ? `Bcc: ${opts.bcc}` : '',
       `Subject: ${opts.subject}`,
       opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
       `MIME-Version: 1.0`,
@@ -860,6 +863,7 @@ export async function sendEmail(account: Account, opts: SendOptions): Promise<vo
       `From: ${account.email}`,
       `To: ${opts.to}`,
       opts.cc ? `Cc: ${opts.cc}` : '',
+      opts.bcc ? `Bcc: ${opts.bcc}` : '',
       `Subject: ${opts.subject}`,
       opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : '',
       'Content-Type: text/plain; charset=UTF-8',

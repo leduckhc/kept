@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Variant A — Superhuman Clean</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f8f7fc;
+    --border: #e8e5f0;
+    --text: #1a1a2e;
+    --text-muted: #6b6b8a;
+    --accent: #7c6bc4;
+    --accent-light: #ede9f8;
+    --shadow: 0 8px 40px rgba(124, 107, 196, 0.12), 0 2px 12px rgba(0,0,0,0.06);
+    --panel-width: 480px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+    background: var(--surface);
+    color: var(--text);
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 60px;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+  h1 span { color: var(--accent); }
+
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    text-align: center;
+  }
+
+  .panel {
+    width: var(--panel-width);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--text);
+    color: white;
+  }
+
+  .panel-header .title {
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0.95;
+  }
+
+  .panel-header .controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .panel-header .controls span {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    opacity: 0.6;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    line-height: 1;
+  }
+
+  .panel-header .controls span:hover { opacity: 1; }
+
+  .panel-body {
+    padding: 0;
+  }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid rgba(232, 229, 240, 0.5);
+  }
+
+  .field-row:last-of-type {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .field-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    min-width: 56px;
+    font-weight: 400;
+  }
+
+  .field-value {
+    font-size: 14px;
+    color: var(--text);
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-weight: 400;
+  }
+
+  .field-value.placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    background: var(--accent-light);
+    border-radius: 12px;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .chip .remove {
+    font-size: 11px;
+    opacity: 0.6;
+    cursor: pointer;
+  }
+
+  .editor {
+    padding: 16px 20px;
+    min-height: 200px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .editor .placeholder-text {
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+
+  .editor .quoted {
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    margin-top: 16px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .editor .quoted .meta {
+    font-size: 12px;
+    margin-bottom: 6px;
+    opacity: 0.7;
+  }
+
+  .attachments {
+    padding: 8px 20px 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 450;
+  }
+
+  .attachment-chip .icon {
+    font-size: 14px;
+    opacity: 0.6;
+  }
+
+  .attachment-chip .size {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-left: 2px;
+  }
+
+  .panel-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .send-btn {
+    padding: 8px 24px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.2px;
+  }
+
+  .send-btn:hover {
+    background: #6a59b3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(124, 107, 196, 0.3);
+  }
+
+  .footer-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .footer-actions .icon-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 16px;
+    color: var(--text-muted);
+  }
+
+  .footer-actions .icon-btn:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<h1>Variant A — <span>Superhuman Clean</span></h1>
+
+<!-- NEW EMAIL -->
+<div>
+  <div class="section-label">1. New Email — Empty Compose</div>
+  <div class="panel">
+    <div class="panel-header">
+      <span class="title">New Message</span>
+      <div class="controls">
+        <span>−</span>
+        <span>⤢</span>
+        <span>×</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="field-row">
+        <span class="field-label">To</span>
+        <span class="field-value placeholder">Recipients</span>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Subject</span>
+        <span class="field-value placeholder">Subject</span>
+      </div>
+      <div class="editor">
+        <span class="placeholder-text">Write your message...</span>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <button class="send-btn">Send</button>
+      <div class="footer-actions">
+        <span class="icon-btn">📎</span>
+        <span class="icon-btn">🔗</span>
+        <span class="icon-btn">😊</span>
+        <span class="icon-btn">🗑</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REPLY -->
+<div>
+  <div class="section-label">2. Reply — With Quoted Text</div>
+  <div class="panel">
+    <div class="panel-header">
+      <span class="title">Re: Q3 Product Roadmap Review</span>
+      <div class="controls">
+        <span>−</span>
+        <span>⤢</span>
+        <span>×</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="field-row">
+        <span class="field-label">To</span>
+        <span class="chip">Sarah Chen <span class="remove">×</span></span>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Subject</span>
+        <span class="field-value">Re: Q3 Product Roadmap Review</span>
+      </div>
+      <div class="editor">
+        <p>Thanks Sarah — I've reviewed the timeline and the API milestone looks solid. Let's sync Thursday to align on the design sprint dates.</p>
+        <div class="quoted">
+          <div class="meta">On May 28, 2026, Sarah Chen &lt;sarah@acme.co&gt; wrote:</div>
+          <p>Hi Milan, wanted to get your thoughts on the updated roadmap. The API integration is scheduled for July, and we'll need design sign-off by June 15th. Can we set up a quick call this week?</p>
+        </div>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <button class="send-btn">Send</button>
+      <div class="footer-actions">
+        <span class="icon-btn">📎</span>
+        <span class="icon-btn">🔗</span>
+        <span class="icon-btn">😊</span>
+        <span class="icon-btn">🗑</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ATTACHMENTS -->
+<div>
+  <div class="section-label">3. With Attachments</div>
+  <div class="panel">
+    <div class="panel-header">
+      <span class="title">New Message</span>
+      <div class="controls">
+        <span>−</span>
+        <span>⤢</span>
+        <span>×</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="field-row">
+        <span class="field-label">To</span>
+        <span class="chip">Design Team <span class="remove">×</span></span>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Subject</span>
+        <span class="field-value">Updated brand assets — final versions</span>
+      </div>
+      <div class="editor">
+        <p>Hey team, attached are the final logo exports and the updated brand guidelines PDF. Let me know if you need any other formats.</p>
+      </div>
+      <div class="attachments">
+        <div class="attachment-chip">
+          <span class="icon">📄</span>
+          Brand-Guidelines-v3.pdf
+          <span class="size">2.4 MB</span>
+        </div>
+        <div class="attachment-chip">
+          <span class="icon">🖼</span>
+          Logo-Suite-Final.zip
+          <span class="size">8.1 MB</span>
+        </div>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <button class="send-btn">Send</button>
+      <div class="footer-actions">
+        <span class="icon-btn">📎</span>
+        <span class="icon-btn">🔗</span>
+        <span class="icon-btn">😊</span>
+        <span class="icon-btn">🗑</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

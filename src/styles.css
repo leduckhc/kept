@@ -2721,17 +2721,70 @@ body {
 .compose-panel-minimized {
   max-height: 44px;
 }
-.compose-show-cc-btn {
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: 12px;
+.compose-cc-bcc-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
   cursor: pointer;
-  padding: 0 16px 4px;
-  text-align: left;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
 }
-.compose-show-cc-btn:hover {
-  text-decoration: underline;
+.compose-cc-bcc-pill:hover {
+  background: rgba(124, 107, 196, 0.1);
+  border-color: rgba(124, 107, 196, 0.3);
+  color: var(--accent);
+}
+.compose-to-row {
+  display: flex;
+  align-items: center;
+}
+.compose-to-row .compose-input {
+  flex: 1;
+}
+.compose-cc-bcc-pill-split {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.compose-cc-bcc-pill-split .pill-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: rgba(124, 107, 196, 0.1);
+  border: 1px solid rgba(124, 107, 196, 0.2);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+.compose-cc-bcc-pill-split .pill-item.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.compose-cc-bcc-animated {
+  animation: composeCcBccSlideIn 0.3s ease-out;
+}
+@keyframes composeCcBccSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 60px;
+  }
 }
 .compose-panel-header {
   display: flex;
