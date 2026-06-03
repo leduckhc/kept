@@ -1,4 +1,4 @@
-import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection, archiveThreads, unarchiveThreads, trashThreads, untrashThreads, loadThreads } from './gmail';
+import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection, archiveThreads, trashThreads, untrashThreads, loadThreads } from './gmail';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 import { state } from './state';
 import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze, accountFor } from './actions';
@@ -447,14 +447,9 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (categoryThreads.length === 0) return;
       const acct = accountFor(categoryThreads[0]);
       if (!acct) return;
-      // Optimistic UI + immediate undo toast
+      // Optimistic UI
       state.threads = state.threads.filter(t => t.category !== cat);
       deps.renderInbox();
-      showUndoToast(`Archived ${categoryThreads.length} ${cat}`, async () => {
-        await unarchiveThreads(acct, categoryThreads).catch(() => {});
-        state.threads = state.account ? await loadThreads(state.account.id) : [];
-        deps.renderInbox();
-      });
       // Fire API in background (non-blocking)
       archiveThreads(acct, categoryThreads).catch(err => console.error('Batch archive failed:', err));
     });
@@ -496,11 +491,6 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => t.senderEmail !== email);
       deps.renderInbox();
-      showUndoToast(`Archived ${senderThreads.length} from ${senderThreads[0].senderName || email}`, async () => {
-        await unarchiveThreads(acct, senderThreads).catch(() => {});
-        state.threads = state.account ? await loadThreads(state.account.id) : [];
-        deps.renderInbox();
-      });
       archiveThreads(acct, senderThreads).catch(err => console.error('Batch archive failed:', err));
     });
     // Batch trash for sender group
@@ -542,11 +532,6 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => !t.senderEmail.endsWith('@' + domain));
       deps.renderInbox();
-      showUndoToast(`Archived ${domainThreads.length} from ${domain}`, async () => {
-        await unarchiveThreads(acct, domainThreads).catch(() => {});
-        state.threads = state.account ? await loadThreads(state.account.id) : [];
-        deps.renderInbox();
-      });
       archiveThreads(acct, domainThreads).catch(err => console.error('Batch archive failed:', err));
     });
     // Batch trash for domain group
