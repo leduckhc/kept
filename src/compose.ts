@@ -471,6 +471,20 @@ export async function openCompose(opts: ComposeOptions) {
         }
         showToast('Message sent');
       } catch (err) {
+        // Re-save local draft so the email is recoverable from Drafts view
+        const failedDraft: LocalDraft = {
+          id: localId,
+          accountId: account.id,
+          gmailDraftId: draftId,
+          mode: opts.mode ?? 'new',
+          to: payload.to, cc: payload.cc ?? '', bcc: payload.bcc ?? '',
+          subject: payload.subject, body: payload.body,
+          htmlBody: payload.htmlBody ?? '',
+          threadId: payload.threadId ?? null,
+          inReplyTo: payload.inReplyTo ?? null,
+          createdAt: Date.now(), updatedAt: Date.now(),
+        };
+        saveLocalDraft(failedDraft).catch(() => {});
         showToast(`Send failed: ${err instanceof Error ? err.message : String(err)}`, 4000);
       }
     }, 5000);
