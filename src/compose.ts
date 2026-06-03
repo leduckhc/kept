@@ -148,8 +148,8 @@ export async function openCompose(opts: ComposeOptions) {
     </div>
     <div class="compose-panel-footer">
       <button class="compose-send-btn-new">${icon.send('14px')} Send</button>
-      <button class="compose-schedule-btn">${icon.calendar('14px')} ▾</button>
-      <button class="compose-discard-btn-new">Discard</button>
+      <button class="compose-schedule-btn" title="Schedule send">${icon.calendar('16px')}</button>
+      <button class="compose-discard-btn-new" title="Discard">${icon.trash('16px')}</button>
     </div>`;
 
   document.body.appendChild(panel);
