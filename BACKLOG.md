@@ -20,7 +20,7 @@
 - [x] **New senders (first) card left-aligned with avatar** — Row padding now matches thread-row avatar alignment. Done (a50ebeb).
 - [x] **Nav bar tooltips must appear to the right of the button, not below** — Sidebar tooltip rule now a standalone block after the generic tooltip system; no longer overridden. Done (a50ebeb).
 - [x] **Arrow-key navigation overrides hover** — `.keyboard-nav` class added on arrow/j/k; removed on mousemove. Suppresses hover highlight when keyboard is active. Done (a50ebeb).
-- [ ] **Email sync must preserve current view** — Auto-sync (and manual refresh) redraws Inbox regardless of which page is active. If user is on Drafts, Sent, or any other folder, sync should re-fetch and redraw that same folder — not reset to Inbox. Sidebar icon stays correct but content resets.
+- [x] **Email sync must preserve current view** — `syncAndRender` and `refreshAll` now call `renderCurrentView()` which re-renders the active view (Drafts, Sent, etc.) instead of always resetting to Inbox. Done (af73eab).
 - [x] **Bottom spacing on email list** — 40px bottom padding on .inbox. Done (84fb3fd).
 
 ## Tech Debt
