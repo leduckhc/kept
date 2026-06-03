@@ -184,9 +184,9 @@ async function trySyncIncremental(
 
 /** gmailGet variant that returns the raw Response so we can inspect status codes */
 async function gmailGetRaw(account: Account, path: string): Promise<Response> {
-  return fetch(`${API}${path}`, {
+  return fetchWithRetry(`${API}${path}`, {
     headers: { Authorization: `Bearer ${account.accessToken}` },
-  });
+  }, path);
 }
 
 // ── Attachment detection helper ───────────────────────────
@@ -1047,41 +1047,59 @@ export function extractHtmlBody(payload: MimePart, depth = 0): string | null {
 }
 
 // ── HTTP helpers ──────────────────────────────────────────
+/** Retry fetch on 429/5xx with exponential backoff (max 3 attempts). */
+async function fetchWithRetry(url: string, init: RequestInit, path: string): Promise<Response> {
+  const MAX = 3;
+  for (let attempt = 1; attempt <= MAX; attempt++) {
+    const res = await fetch(url, init);
+    if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
+      if (attempt === MAX) return res; // let caller handle final failure
+      const retryAfter = res.headers.get('Retry-After');
+      const delay = retryAfter ? Math.min(parseInt(retryAfter, 10) * 1000, 30000) : 1000 * Math.pow(2, attempt - 1);
+      console.warn(`Gmail ${res.status} on ${path}, retry ${attempt}/${MAX} in ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    return res;
+  }
+  throw new Error(`fetchWithRetry: unreachable`);
+}
+
 async function gmailGet(account: Account, path: string): Promise<unknown> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetchWithRetry(`${API}${path}`, {
     headers: { Authorization: `Bearer ${account.accessToken}` },
-  });
+  }, path);
   if (!res.ok) throw new Error(`Gmail API error ${res.status}: ${path}`);
   return res.json();
 }
 
 async function gmailPost(account: Account, path: string, body: unknown): Promise<unknown> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetchWithRetry(`${API}${path}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${account.accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }, path);
   if (!res.ok) throw new Error(`Gmail API error ${res.status}: ${path}`);
   const text = await res.text();
   return text ? JSON.parse(text) : {};
 }
 
 async function gmailPut(account: Account, path: string, body: unknown): Promise<unknown> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetchWithRetry(`${API}${path}`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${account.accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }, path);
   if (!res.ok) throw new Error(`Gmail API error ${res.status}: ${path}`);
   const text = await res.text();
   return text ? JSON.parse(text) : {};
 }
 
 async function gmailDelete(account: Account, path: string): Promise<void> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetchWithRetry(`${API}${path}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${account.accessToken}` },
-  });
+  }, path);
   if (!res.ok) throw new Error(`Gmail API error ${res.status}: ${path}`);
 }
 
