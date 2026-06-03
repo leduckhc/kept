@@ -2697,12 +2697,16 @@ body {
   flex-direction: column;
   border-radius: 16px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-  background: rgba(255,255,255,0.92);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   z-index: 900;
   overflow: hidden;
   transition: width 0.2s, max-height 0.2s, height 0.2s, right 0.2s, border-radius 0.2s;
+}
+[data-theme="dark"] .compose-panel {
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
 }
 .compose-panel-expanded {
   width: 100vw;
@@ -2760,7 +2764,7 @@ body {
   justify-content: space-between;
   padding: 8px 16px;
   background: var(--surface);
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   user-select: none;
   border-radius: 16px 16px 0 0;
@@ -2781,7 +2785,8 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  opacity: 0.6;
+  color: var(--text-muted);
+  opacity: 0.8;
   transition: opacity 0.15s;
 }
 .compose-panel-actions .btn-icon:hover {
@@ -2798,7 +2803,7 @@ body {
 .compose-field {
   position: relative;
   padding: 4px 0;
-  border-bottom: 1px solid rgba(0,0,0,0.04);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2925,7 +2930,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  border-top: 1px solid rgba(0,0,0,0.05);
+  border-top: 1px solid var(--border);
   background: transparent;
 }
 .compose-send-btn-new {
