@@ -185,7 +185,7 @@ body {
   background: var(--bg);
   border-right: 1px solid var(--border);
   overflow-y: auto;
-  padding: 0;
+  padding: 0 0 40px;
 }
 
 /* ── Reader pane ────────────────────────────────────────── */
@@ -254,7 +254,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 12px;
+  padding: 0 calc(clamp(12px, 3vw, 36px) + 4px) 0 12px;
   height: 48px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -436,8 +436,7 @@ body {
   padding: 8px 12px 8px calc(4px + clamp(12px, 3vw, 36px) + 4px + 10px);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0.03em;
   color: var(--text-muted);
   position: sticky;
   top: 0;
