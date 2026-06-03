@@ -2,6 +2,7 @@
 import { getAllAccounts, startOAuth, migrateTokensToKeychain, removeAccount } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
 import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection, fetchDraftByThread } from './gmail';
+import { loadLocalDrafts, type LocalDraft } from './localDrafts';
 
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
 import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
@@ -461,26 +462,62 @@ async function reloadInboxThreads() {
   renderInbox();
 }
 
+/** Convert a LocalDraft into a Thread object for rendering in the Drafts view. */
+function localDraftToThread(d: LocalDraft): Thread {
+  return {
+    id: d.id,
+    subject: d.subject || '(no subject)',
+    snippet: d.body.slice(0, 100),
+    senderName: 'Draft',
+    senderEmail: d.to || '',
+    receivedAt: d.updatedAt,
+    isUnread: false,
+    isArchived: false,
+    isStarred: false,
+    hasAttachment: false,
+    gmailThreadId: d.gmailDraftId ?? d.id,
+    snoozedUntil: null,
+    snoozeLabel: null,
+    messageCount: 1,
+    label: 'DRAFT',
+    accountId: d.accountId,
+    isMuted: false,
+    category: 'personal',
+  };
+}
+
 function renderLabelView(view: ViewName) {
   const container = document.getElementById('inbox');
   if (!container) return;
   const VIEW_TO_LABEL: Record<string, string> = { Sent: 'SENT', Drafts: 'DRAFT', Starred: 'STARRED', Trash: 'TRASH', Archive: 'ARCHIVE' };
   const gmailLabel = VIEW_TO_LABEL[view];
   if (!state.account || !gmailLabel) return;
-  loadThreads(state.account.id, gmailLabel).then(ts => {
-    // Don't overwrite state.threads — render label view in-place
-    if (state.currentView !== view) return; // user already navigated away
+
+  const accountId = state.account.id;
+  const threadsPromise = loadThreads(accountId, gmailLabel);
+  // For Drafts view, also load local drafts and merge
+  const localDraftsPromise = gmailLabel === 'DRAFT' ? loadLocalDrafts(accountId) : Promise.resolve([] as LocalDraft[]);
+
+  Promise.all([threadsPromise, localDraftsPromise]).then(([ts, localDrafts]) => {
+    if (state.currentView !== view) return;
     const container = document.getElementById('inbox');
     if (!container) return;
-    // Render using the same thread row template but with label-specific data
-    const sections = groupBySection(ts);
+
+    // Convert local drafts to Thread objects (dedup by gmailDraftId)
+    const existingGmailIds = new Set(ts.map(t => t.gmailThreadId));
+    const localAsThreads: Thread[] = localDrafts
+      .filter(d => !d.gmailDraftId || !existingGmailIds.has(d.gmailDraftId))
+      .map(localDraftToThread);
+    const merged = [...localAsThreads, ...ts];
+
+    const sections = groupBySection(merged);
     const html = sections.map(s => {
       return `
       <div class="section-header">${s.label}</div>
       ${s.threads.map(t => threadRow(t, false)).join('')}`;
     }).join('');
     container.innerHTML = html || `<div class="empty-state"><div class="empty-text">No ${view.toLowerCase()} messages</div></div>`;
-    wireThreadRows(container, ts, false, getThreadListDeps());
+    wireThreadRows(container, merged, false, getThreadListDeps());
   });
 }
 
@@ -561,6 +598,28 @@ function openThread(t: Thread) {
 
 async function openDraftInCompose(t: Thread) {
   if (!state.account) return;
+
+  // Local draft — open directly from local_drafts table
+  if (t.id.startsWith('local_')) {
+    const drafts = await loadLocalDrafts(state.account.id);
+    const local = drafts.find(d => d.id === t.id);
+    if (local) {
+      const compose = await getCompose();
+      await compose.openCompose({
+        mode: (local.mode as 'new' | 'reply' | 'replyAll' | 'forward') ?? 'new',
+        prefillTo: local.to,
+        prefillCc: local.cc,
+        prefillBcc: local.bcc,
+        prefillSubject: local.subject,
+        prefillBody: local.htmlBody || local.body,
+        draftId: local.gmailDraftId ?? undefined,
+        threadId: local.threadId ?? undefined,
+        inReplyTo: local.inReplyTo ?? undefined,
+      });
+      return;
+    }
+  }
+
   try {
     const draft = await fetchDraftByThread(state.account, t.gmailThreadId);
     if (!draft) {
