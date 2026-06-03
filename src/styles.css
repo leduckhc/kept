@@ -570,10 +570,10 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text);
-  font-weight: 400;
+  font-weight: 600;
 }
 .thread-row.unread .thread-sender {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .thread-date {
