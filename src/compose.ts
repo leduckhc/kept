@@ -412,19 +412,38 @@ export async function openCompose(opts: ComposeOptions) {
     closeCompose(panel);
   }
 
-  panel.querySelector('.compose-panel-close')!.addEventListener('click', () => {
-    const hasContent = editorEl.innerText.trim().length > 0 || pendingAttachments.length > 0;
-    if (hasContent) {
-      if (!confirm('Discard this draft?')) return;
+  // Close (X) = save draft and close silently
+  panel.querySelector('.compose-panel-close')!.addEventListener('click', async () => {
+    // Flush any pending draft save
+    if (instance.draftTimer) clearTimeout(instance.draftTimer);
+    if (state.account) {
+      const to = toEl.value.trim();
+      const cc = ccEl?.value.trim() ?? '';
+      const bcc = bccEl?.value.trim() ?? '';
+      const subject = subjectEl.value.trim();
+      const body = editorEl.innerText.trim();
+      const htmlBody = editorEl.innerHTML;
+      if (to || subject || body) {
+        const now = Date.now();
+        const localDraft: LocalDraft = {
+          id: instance.localDraftId,
+          accountId: state.account.id,
+          gmailDraftId: instance.draftId,
+          mode: opts.mode ?? 'new',
+          to, cc, bcc, subject, body, htmlBody,
+          threadId: opts.threadId ?? null,
+          inReplyTo: opts.inReplyTo ?? null,
+          createdAt: now,
+          updatedAt: now,
+        };
+        saveLocalDraft(localDraft).catch(() => {});
+      }
     }
-    discardAndClose();
+    closeCompose(panel);
   });
 
+  // Trash button = discard draft permanently
   panel.querySelector('.compose-discard-btn-new')!.addEventListener('click', () => {
-    const hasContent = editorEl.innerText.trim().length > 0 || pendingAttachments.length > 0;
-    if (hasContent) {
-      if (!confirm('Discard this draft?')) return;
-    }
     discardAndClose();
   });
 
