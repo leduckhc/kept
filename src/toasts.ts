@@ -29,8 +29,8 @@ export function showUndoToast(msg: string, undoFn: () => Promise<void> | void) {
   toast.className = 'undo-toast';
   toast.innerHTML = `
     <span class="undo-toast-msg">${msg}</span>
+    <span class="undo-toast-sep">|</span>
     <button class="undo-toast-btn">Undo</button>
-    <div class="undo-toast-progress"></div>
   `;
   document.body.appendChild(toast);
 

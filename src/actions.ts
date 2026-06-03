@@ -91,7 +91,7 @@ export async function doTrash(t: Thread, row: HTMLElement, deps: ActionDeps) {
     await trashThread(acct, t);
     row.remove();
     state.threads = state.threads.filter(x => x.id !== t.id);
-    showUndoToast('Moved to trash', async () => {
+    showUndoToast('Moved to Trash', async () => {
       await untrashThread(acct, t);
       state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
       deps.renderInbox();

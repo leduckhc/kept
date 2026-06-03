@@ -462,7 +462,7 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => t.category !== cat);
       deps.renderInbox();
-      showUndoToast(`Deleted ${categoryThreads.length} ${cat}`, async () => {
+      showUndoToast('Moved to Trash', async () => {
         await untrashThreads(acct, categoryThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
@@ -503,7 +503,7 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => t.senderEmail !== email);
       deps.renderInbox();
-      showUndoToast(`Deleted ${senderThreads.length} from ${senderThreads[0].senderName || email}`, async () => {
+      showUndoToast('Moved to Trash', async () => {
         await untrashThreads(acct, senderThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
@@ -544,7 +544,7 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
       if (!acct) return;
       state.threads = state.threads.filter(t => !t.senderEmail.endsWith('@' + domain));
       deps.renderInbox();
-      showUndoToast(`Deleted ${domainThreads.length} from ${domain}`, async () => {
+      showUndoToast('Moved to Trash', async () => {
         await untrashThreads(acct, domainThreads).catch(() => {});
         state.threads = state.account ? await loadThreads(state.account.id) : [];
         deps.renderInbox();
