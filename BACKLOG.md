@@ -12,6 +12,17 @@
 - [ ] **Background send daemon** — OS-level sidecar (launchd/systemd/Task Scheduler) to dispatch scheduled sends when app is closed. Ship alongside code-signing/installer work.
 - [ ] **E2E test suite** — Infrastructure ready; actual test files not written.
 
+## Premium-Killer Features (no AI required)
+
+These are the features Spark/Superhuman charge $30/mo for. All are pure logic — no ML.
+
+- [ ] **Follow-up reminders ("Remind if no reply")** — When sending, set a timer: if no reply by X time, email reappears in inbox as actionable. Track sent message ID, watch for reply, re-surface on expiry. Dedicated Reminders view. (Superhuman $30/mo, Spark Premium)
+- [ ] **Set Aside (Shelf/Bubble)** — Move emails to a persistent quick-access shelf for later reference. Not snoozed (no time component), not archived. Keyboard shortcut + sidebar section. Unique to Spark Premium — fills the gap between "needs action but not now" and "archive."
+- [ ] **Priority Senders** — Mark senders as Priority → their emails always surface at top of inbox, highlighted. Per-sender toggle in settings or right-click. Priority threads get dedicated notification treatment. (Spark Premium, Superhuman Split Inbox)
+- [ ] **Smart Folders (saved search as virtual folder)** — Create virtual folders from search queries (e.g. "PDFs from John this year", "has:attachment from:@company.com"). Persisted in sidebar. Client-side filter on SQLite. (Spark Premium)
+- [ ] **Multi-Window (detachable reader & composer)** — Open emails and composer in separate OS windows. Reference one email while writing another. Tauri supports multi-window natively. (Spark Premium/Desktop)
+- [ ] **Email Focus Schedule** — Limit inbox access to scheduled sessions (e.g. 9am, 12pm, 6pm). Between sessions, show a summary screen with unread count. Counts daily inbox checks. Optional notification when session starts. (Spark paid plans)
+
 ## UI / Layout
 
 - [x] **Inbox section labels → Title Case** — ~~ALL-CAPS~~ → Title Capitalization. Done (84fb3fd).
