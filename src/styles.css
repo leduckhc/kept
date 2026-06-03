@@ -811,7 +811,7 @@ body {
   flex-shrink: 0;
 }
 .thread-count-badge { font-weight: 600; color: var(--text); }
-.thread-participants { display: flex; }
+.thread-participants { display: flex; margin-left: 4px; }
 .thread-avatar {
   width: 24px; height: 24px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;

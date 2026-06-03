@@ -140,7 +140,7 @@ export async function openThread(
 
         const summaryEl = document.createElement('div');
         summaryEl.className = 'thread-summary';
-        summaryEl.innerHTML = `<span class="thread-count-badge">${msgs.length} messages</span><div class="thread-participants">${avatarsHtml}</div><span class="thread-status">${statusText}</span>`;
+        summaryEl.innerHTML = `<div class="thread-participants">${avatarsHtml}</div><span class="thread-count-badge">${msgs.length} messages</span><span class="thread-status">${statusText}</span>`;
         bodyEl.appendChild(summaryEl);
       }
 
