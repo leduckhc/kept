@@ -463,17 +463,17 @@ function rowToThread(r: Record<string, unknown>): Thread {
 
 // ── Actions ───────────────────────────────────────────────
 export async function markRead(account: Account, thread: Thread): Promise<void> {
-  const a = await ensureFreshToken(account);
-  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['UNREAD'] });
   const db = await getDb();
   await db.execute('UPDATE threads SET is_unread = 0 WHERE id = ?', [thread.id]);
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['UNREAD'] });
 }
 
 export async function markUnread(account: Account, thread: Thread): Promise<void> {
-  const a = await ensureFreshToken(account);
-  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['UNREAD'] });
   const db = await getDb();
   await db.execute('UPDATE threads SET is_unread = 1 WHERE id = ?', [thread.id]);
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['UNREAD'] });
 }
 
 // Mark thread as unread by threadId (no Thread object needed)
@@ -509,23 +509,23 @@ export async function fetchLabels(account: Account): Promise<Array<{id: string, 
 }
 
 export async function toggleStar(account: Account, thread: Thread): Promise<boolean> {
-  const a = await ensureFreshToken(account);
   const newStarred = !thread.isStarred;
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_starred = ? WHERE id = ?', [newStarred ? 1 : 0, thread.id]);
+  const a = await ensureFreshToken(account);
   if (newStarred) {
     await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['STARRED'] });
   } else {
     await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['STARRED'] });
   }
-  const db = await getDb();
-  await db.execute('UPDATE threads SET is_starred = ? WHERE id = ?', [newStarred ? 1 : 0, thread.id]);
   return newStarred;
 }
 
 export async function archiveThread(account: Account, thread: Thread): Promise<void> {
-  const a = await ensureFreshToken(account);
-  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] });
   const db = await getDb();
   await db.execute('UPDATE threads SET is_archived = 1 WHERE id = ?', [thread.id]);
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] });
 }
 
 /** Batch archive: chunked parallel API calls to avoid Gmail rate limits. */
@@ -541,10 +541,10 @@ export async function archiveThreads(account: Account, threads: Thread[]): Promi
 }
 
 export async function unarchiveThread(account: Account, thread: Thread): Promise<void> {
-  const a = await ensureFreshToken(account);
-  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] });
   const db = await getDb();
   await db.execute('UPDATE threads SET is_archived = 0 WHERE id = ?', [thread.id]);
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] });
 }
 
 /** Batch unarchive: chunked parallel API calls to avoid Gmail rate limits. */
@@ -560,10 +560,10 @@ export async function unarchiveThreads(account: Account, threads: Thread[]): Pro
 }
 
 export async function trashThread(account: Account, thread: Thread): Promise<void> {
-  const a = await ensureFreshToken(account);
-  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/trash`, {});
   const db = await getDb();
   await db.execute('UPDATE threads SET is_archived = 1, label = \'TRASH\' WHERE id = ?', [thread.id]);
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/trash`, {});
 }
 
 /** Batch trash: chunked parallel API calls to avoid Gmail rate limits. */
