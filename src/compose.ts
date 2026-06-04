@@ -435,19 +435,25 @@ export async function openCompose(opts: ComposeOptions) {
         setTimeout(() => {
           if (draftsBtn) {
             draftsBtn.classList.add('draft-glow');
+            draftsBtn.classList.add('draft-shake');
             const badge = document.createElement('span');
             badge.className = 'draft-badge-pulse';
             draftsBtn.style.position = 'relative';
             draftsBtn.appendChild(badge);
           }
-        }, 600);
+        }, 900);
         setTimeout(() => {
           if (draftsBtn) {
             draftsBtn.classList.remove('draft-glow');
             draftsBtn.querySelector('.draft-badge-pulse')?.remove();
           }
           closeCompose(panel);
-        }, 1200);
+        }, 1500);
+        setTimeout(() => {
+          if (draftsBtn) {
+            draftsBtn.classList.remove('draft-shake');
+          }
+        }, 1600);
         return;
       }
     }

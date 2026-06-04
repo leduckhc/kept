@@ -450,7 +450,7 @@ body {
   grid-template-columns: 4px 40px 212px 1fr auto;
   align-items: center;
   gap: 10px;
-  height: 36px;
+  height: 32px;
   padding: 0 clamp(12px, 3vw, 36px);
   cursor: pointer;
   transition: background 0.1s ease, transform 0.15s ease, border-radius 0.1s ease;
@@ -461,7 +461,8 @@ body {
   border-radius: 20px;
   margin: 0 4px;
 }
-.thread-row:hover { background: var(--surface-hover); }
+.thread-row:hover { background: #ede9fa; }
+[data-theme="dark"] .thread-row:hover { background: #2d2640; }
 /* When keyboard nav is active, suppress hover highlight */
 .keyboard-nav .thread-row:hover:not(.is-selected) { background: transparent; }
 .keyboard-nav .thread-row:hover .thread-actions { display: none; }
@@ -470,7 +471,6 @@ body {
 .thread-row.is-selected:hover { background: var(--kbd-selected-bg, #ede9fa); }
 .thread-row.selected {
   background: var(--surface-active);
-  border-left: 2px solid var(--accent);
 }
 
 /* Unread dot — shown in its own grid column (col 1) via .unread-dot */
@@ -1199,11 +1199,9 @@ body {
 .thread-row.is-selected {
   background: #ede9fa;
   outline: none;
-  border-left: 2px solid var(--accent);
 }
 [data-theme="dark"] .thread-row.is-selected {
   background: #2d2640;
-  border-left: 2px solid var(--accent);
 }
 
 /* ── Keyboard cheat sheet overlay ───────────────────────── */
@@ -1754,7 +1752,6 @@ body {
 
 .thread-row.bulk-selected {
   background: var(--surface-active);
-  border-left: 2px solid var(--accent);
 }
 
 .bulk-bar {
@@ -1984,8 +1981,8 @@ body {
     grid-template-columns: 4px 40px auto 1fr auto;
     grid-template-rows: auto auto;
     height: auto;
-    padding-top: 6px;
-    padding-bottom: 6px;
+    padding-top: 4px;
+    padding-bottom: 4px;
     align-items: baseline;
   }
   .thread-row .unread-dot {
@@ -2041,8 +2038,8 @@ body {
     grid-template-rows: auto auto auto;
     height: auto;
     min-height: 40px;
-    padding-top: 6px;
-    padding-bottom: 6px;
+    padding-top: 4px;
+    padding-bottom: 4px;
     align-items: baseline;
   }
   .thread-row .unread-dot {
@@ -2488,6 +2485,13 @@ body {
   align-items: center;
   overflow: hidden;
 }
+.category-row .thread-sender {
+  min-width: fit-content;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 13px;
+  margin-right: 8px;
+}
 
 .category-avatar {
   display: flex;
@@ -2739,7 +2743,7 @@ body {
 }
 /* Draft save animation */
 .compose-panel.compose-panel-animating {
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .compose-panel.compose-panel-shrink-fly {
   width: 40px !important;
@@ -2772,6 +2776,16 @@ body {
 @keyframes badge-pop {
   0% { transform: scale(0); }
   100% { transform: scale(1); }
+}
+@keyframes draft-icon-shake {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-8deg); }
+  40% { transform: rotate(8deg); }
+  60% { transform: rotate(-5deg); }
+  80% { transform: rotate(5deg); }
+}
+.sidebar-btn.draft-shake {
+  animation: draft-icon-shake 0.5s ease;
 }
 .compose-cc-bcc-pill {
   display: inline-flex;
