@@ -123,6 +123,18 @@ export function avatarColor(s: string): string {
   return colors[Math.abs(h) % colors.length];
 }
 
+/** Mark avatar images as loaded to enable fade-in (prevents blink on re-render). */
+function initAvatarFadeIn(): void {
+  // Capture-phase listener catches load events on dynamically inserted <img> inside .avatar
+  document.addEventListener('load', (e) => {
+    const img = e.target as HTMLElement;
+    if (img.tagName === 'IMG' && img.closest('.avatar')) {
+      img.classList.add('loaded');
+    }
+  }, true);
+}
+initAvatarFadeIn();
+
 /** Patch rendered avatars with newly resolved Google photos (call after resolvePhotos). */
 export function patchAvatarsWithPhotos(resolved: Map<string, string>): void {
   if (resolved.size === 0) return;
