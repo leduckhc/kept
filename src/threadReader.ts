@@ -7,6 +7,7 @@ import { showToast, showUndoToast } from './toasts';
 import { esc, formatDate } from './helpers';
 import { openComposeReply, openComposeReplyAll, openComposeForward } from './compose';
 import { icon } from './icons';
+import { saveReminder, reminderPresets } from './followupReminders';
 
 function getAvatarColor(name: string): string {
   const colors = ["#5B4EDB","#E84D8A","#FEB300","#00C49A","#2F80ED","#F97316","#8B5CF6","#06B6D4"];
@@ -45,6 +46,7 @@ export async function openThread(
         <button class="btn-icon" id="btn-spam-reader" title="Report spam">${icon.spam('16px')}</button>
         <button class="btn-icon" id="btn-move-reader" title="Move to label">${icon.folderMove('16px')}</button>
         <button class="btn-icon" id="btn-archive-reader" title="Archive">${icon.archive('16px')}</button>
+        <button class="btn-icon" id="btn-followup-reader" title="Remind if no reply">${icon.bell('16px')}</button>
       </div>
     </div>
     <div class="reader-body"><div class="spinner"></div></div>
@@ -393,6 +395,47 @@ export async function openThread(
     state.threads = state.threads.filter(x => x.id !== t.id);
     renderInbox();
     closeReader();
+  });
+
+  // ── Follow-up Reminder from reader ──
+  document.getElementById('btn-followup-reader')!.addEventListener('click', () => {
+    const existing = document.querySelector('.followup-reader-popover');
+    if (existing) { existing.remove(); return; }
+
+    const presets = reminderPresets();
+    const popover = document.createElement('div');
+    popover.className = 'followup-reader-popover';
+    popover.innerHTML = `
+      <div class="schedule-send-title">Remind if no reply</div>
+      ${presets.map(p => `<button class="schedule-preset followup-preset" data-days="${p.days}">${p.label}</button>`).join('')}
+    `;
+    const btn = document.getElementById('btn-followup-reader')!;
+    btn.parentElement!.appendChild(popover);
+
+    popover.querySelectorAll<HTMLButtonElement>('.followup-preset').forEach(presetBtn => {
+      presetBtn.addEventListener('click', () => {
+        const days = parseInt(presetBtn.dataset.days!);
+        const remindAfter = new Date(Date.now() + days * 86400000).toISOString();
+        saveReminder({
+          threadId: t.gmailThreadId || t.id,
+          subject: t.subject,
+          sentTo: t.senderEmail,
+          remindAfter,
+          messageCountAtSet: t.messageCount ?? undefined,
+        });
+        popover.remove();
+        showToast(`Reminder set for ${days} day${days > 1 ? 's' : ''}`);
+      });
+    });
+    setTimeout(() => {
+      const dismiss = (e: MouseEvent) => {
+        if (!popover.contains(e.target as Node) && e.target !== btn) {
+          popover.remove();
+          document.removeEventListener('click', dismiss);
+        }
+      };
+      document.addEventListener('click', dismiss);
+    }, 0);
   });
   document.getElementById('btn-block-reader')!.addEventListener('click', async () => {
     if (!state.account) return;

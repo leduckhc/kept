@@ -2,6 +2,7 @@ import { type Thread, unmuteThread, addGroupedSender, removeGroupedSender, addGr
 import { setStatus } from './helpers';
 import { doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute, type ActionDeps } from './actions';
 import { openSnoozePicker } from './snooze';
+import { saveReminder } from './followupReminders';
 import { icon } from './icons';
 import { state } from './state';
 
@@ -37,6 +38,19 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
     } else {
       doMute(t, row, deps);
     }
+  }});
+  items.push({ label: `${icon.bell('16px')}  Follow up if no reply`, action: () => {
+    menu.remove();
+    const days = 3; // default 3 days
+    const remindAfter = new Date(Date.now() + days * 86400000).toISOString();
+    saveReminder({
+      threadId: t.gmailThreadId || t.id,
+      subject: t.subject,
+      sentTo: t.senderEmail,
+      remindAfter,
+      messageCountAtSet: t.messageCount ?? undefined,
+    });
+    setStatus('Reminder set for 3 days');
   }});
   items.push('divider');
   const isGrouped = state.groupedSenders.includes(t.senderEmail);

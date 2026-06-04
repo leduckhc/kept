@@ -5,6 +5,7 @@ import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, gr
 import { loadLocalDrafts, type LocalDraft } from './localDrafts';
 
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
+import { getDb } from './db';
 import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
 import { openSettings, initSettings } from './settings';
 import { syncAndRender, refreshAll, loadUnifiedThreads, initSync } from './sync';
@@ -43,6 +44,7 @@ import {
   renderSnoozedView as _renderSnoozedView,
   renderStarredView as _renderStarredView,
   renderScheduledView,
+  renderRemindersView,
   // renderEmptyState is used internally by threadList
   threadRow,
   wireThreadRows,
@@ -60,6 +62,7 @@ const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Drafts',    icon: icon.pencil('18px') },
   { name: 'Starred',   icon: icon.star('18px') },
   { name: 'Scheduled', icon: icon.calendar('18px') },
+  { name: 'Reminders', icon: icon.bell('18px') },
   { name: 'Trash',     icon: icon.trash('18px') },
   { name: 'Archive',   icon: icon.archive('18px') },
 ];
@@ -188,15 +191,29 @@ function showFollowupPrompt(opts: { threadId: string; subject: string; sentTo: s
 
 function checkOverdueReminders() {
   const overdue = getOverdueReminders();
+  if (overdue.length === 0) return;
   overdue.forEach(r => {
     markReminderNotified(r.id);
+    // Mark thread as unread in DB so it resurfaces in inbox
+    if (r.threadId) {
+      getDb().then(db => {
+        db.execute('UPDATE threads SET is_unread = 1, label = ? WHERE id = ? OR gmail_thread_id = ?', ['INBOX', r.threadId, r.threadId]).catch(() => {});
+      }).catch(() => {});
+    }
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = `⏰ No reply from <b>${esc(r.sentTo)}</b> — "${esc(r.subject)}" <a class="toast-dismiss">dismiss</a>`;
+    toast.innerHTML = `🔔 No reply from <b>${esc(r.sentTo)}</b> — "${esc(r.subject)}" <a class="toast-dismiss">dismiss</a>`;
     toast.querySelector('.toast-dismiss')?.addEventListener('click', () => { dismissReminder(r.id); toast.remove(); });
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 8000);
   });
+  // Refresh inbox to show resurfaced threads
+  if (state.currentView === 'Inbox' && state.account) {
+    loadThreads(state.account.id).then(fresh => {
+      state.threads = fresh;
+      renderInbox();
+    }).catch(() => {});
+  }
 }
 
 setInterval(checkOverdueReminders, 60000);
@@ -446,6 +463,8 @@ function switchView(view: ViewName) {
     renderStarredView();
   } else if (view === 'Scheduled') {
     renderScheduledView();
+  } else if (view === 'Reminders') {
+    renderRemindersView();
   } else {
     renderLabelView(view);
   }

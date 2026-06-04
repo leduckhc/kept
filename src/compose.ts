@@ -3,6 +3,7 @@
 
 import { loadSenderEmails, sendEmail, createDraft, updateDraft, deleteDraft } from './gmail';
 import { scheduleEmail } from './scheduledSend';
+import { saveReminder, reminderPresets } from './followupReminders';
 import { state } from './state';
 import { showToast, showUndoToast } from './toasts';
 import { avatarColor } from './avatar';
@@ -158,6 +159,7 @@ export async function openCompose(opts: ComposeOptions) {
     </div>
     <div class="compose-panel-footer">
       <button class="compose-send-btn-new">${icon.send('14px')} Send</button>
+      <button class="compose-followup-btn" title="Remind if no reply">${icon.bell('16px')}</button>
       <button class="compose-schedule-btn" title="Schedule send">${icon.calendar('16px')}</button>
       <button class="compose-discard-btn-new" title="Discard">${icon.trash('16px')}</button>
     </div>`;
@@ -489,6 +491,17 @@ export async function openCompose(opts: ComposeOptions) {
           try { await deleteDraft(account, draftId); } catch { /* non-fatal */ }
         }
         showToast('Message sent');
+        // Save follow-up reminder if user toggled it on
+        if (followupDays !== null) {
+          const remindAfter = new Date(Date.now() + followupDays * 86400000).toISOString();
+          saveReminder({
+            threadId: payload.threadId ?? '',
+            subject: payload.subject,
+            sentTo: payload.to,
+            remindAfter,
+            messageCountAtSet: undefined, // will be set on next sync if threadId exists
+          });
+        }
       } catch (err) {
         // Re-save local draft so the email is recoverable from Drafts view
         const failedDraft: LocalDraft = {
@@ -541,6 +554,50 @@ export async function openCompose(opts: ComposeOptions) {
     }
   }
   panel.addEventListener('keydown', onKeyDown);
+
+  // ── Follow-up Reminder ──
+  let followupDays: number | null = null;
+  const followupBtn = panel.querySelector<HTMLButtonElement>('.compose-followup-btn')!;
+  followupBtn.addEventListener('click', () => {
+    // Remove existing popover if open
+    const existing = panel.querySelector('.followup-popover');
+    if (existing) { existing.remove(); return; }
+
+    const popover = document.createElement('div');
+    popover.className = 'followup-popover';
+    const presets = reminderPresets();
+    popover.innerHTML = `
+      <div class="schedule-send-title">Remind if no reply</div>
+      ${presets.map(p => `<button class="schedule-preset followup-preset${followupDays === p.days ? ' active' : ''}" data-days="${p.days}">${p.label}</button>`).join('')}
+      <button class="schedule-preset followup-clear">No reminder</button>
+    `;
+    followupBtn.parentElement!.insertBefore(popover, followupBtn.nextSibling);
+
+    popover.querySelectorAll<HTMLButtonElement>('.followup-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        followupDays = parseInt(btn.dataset.days!);
+        followupBtn.classList.add('active');
+        followupBtn.title = `Remind if no reply in ${followupDays} day${followupDays > 1 ? 's' : ''}`;
+        popover.remove();
+      });
+    });
+    popover.querySelector<HTMLButtonElement>('.followup-clear')!.addEventListener('click', () => {
+      followupDays = null;
+      followupBtn.classList.remove('active');
+      followupBtn.title = 'Remind if no reply';
+      popover.remove();
+    });
+    // Dismiss on outside click
+    setTimeout(() => {
+      const dismiss = (e: MouseEvent) => {
+        if (!popover.contains(e.target as Node) && e.target !== followupBtn) {
+          popover.remove();
+          document.removeEventListener('click', dismiss);
+        }
+      };
+      document.addEventListener('click', dismiss);
+    }, 0);
+  });
 
   // ── Schedule Send ──
   const scheduleBtn = panel.querySelector<HTMLButtonElement>('.compose-schedule-btn')!;

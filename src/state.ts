@@ -3,7 +3,7 @@ import type { Thread } from './gmail';
 import { setActiveAccountId } from './accountContext';
 
 export type LayoutMode = '3-pane' | '2-pane';
-export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled' | 'Trash' | 'Archive';
+export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled' | 'Reminders' | 'Trash' | 'Archive';
 
 export const state = {
   account: null as Account | null,

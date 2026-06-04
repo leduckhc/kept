@@ -1,4 +1,5 @@
-// followupReminders.ts — Follow-up reminder queue backed by localStorage
+// followupReminders.ts — Follow-up reminder system
+// "Remind if no reply" — local-only (localStorage), auto-cancels on reply
 
 export interface FollowupReminder {
   id: string;
@@ -7,7 +8,8 @@ export interface FollowupReminder {
   sentTo: string;
   remindAfter: string; // ISO timestamp
   createdAt: string;   // ISO timestamp
-  notified?: boolean;  // true once overdue toast has been shown
+  messageCountAtSet?: number; // snapshot — used to detect replies
+  notified?: boolean;  // true once overdue has been processed
 }
 
 const STORAGE_KEY = 'kept-followup-reminders';
@@ -31,7 +33,7 @@ export function saveReminder(r: Omit<FollowupReminder, 'id' | 'createdAt'>): Fol
     createdAt: new Date().toISOString(),
   };
   const all = loadReminders();
-  // Replace any existing reminder for the same thread
+  // Replace any existing reminder for the same thread (one reminder per thread)
   const filtered = r.threadId ? all.filter(x => x.threadId !== r.threadId) : all;
   filtered.push(item);
   saveAll(filtered);
@@ -58,5 +60,39 @@ export function markReminderNotified(id: string): void {
 }
 
 export function getActiveReminderThreadIds(): Set<string> {
-  return new Set(loadReminders().filter(r => r.threadId).map(r => r.threadId));
+  return new Set(loadReminders().filter(r => r.threadId && !r.notified).map(r => r.threadId));
+}
+
+/** Get pending (not yet overdue) reminders for the Reminders view */
+export function getPendingReminders(): FollowupReminder[] {
+  const now = new Date().toISOString();
+  return loadReminders().filter(r => !r.notified && r.remindAfter > now);
+}
+
+/** Get all active reminders (pending + overdue-but-not-dismissed) */
+export function getAllActiveReminders(): FollowupReminder[] {
+  return loadReminders().filter(r => !r.notified);
+}
+
+/** Check if a reply arrived: if current messageCount > messageCountAtSet, auto-cancel */
+export function autoCancelIfReplied(threadId: string, currentMessageCount: number): boolean {
+  if (!threadId) return false;
+  const all = loadReminders();
+  const reminder = all.find(r => r.threadId === threadId && !r.notified);
+  if (!reminder) return false;
+  if (reminder.messageCountAtSet !== undefined && currentMessageCount > reminder.messageCountAtSet) {
+    saveAll(all.filter(r => r.id !== reminder.id));
+    return true;
+  }
+  return false;
+}
+
+/** Reminder presets (reused from snooze pattern) */
+export function reminderPresets(): Array<{ label: string; days: number }> {
+  return [
+    { label: 'Tomorrow', days: 1 },
+    { label: 'In 3 days', days: 3 },
+    { label: 'In 1 week', days: 7 },
+    { label: 'In 2 weeks', days: 14 },
+  ];
 }

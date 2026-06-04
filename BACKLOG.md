@@ -11,6 +11,7 @@
 
 - [ ] **Background send daemon** — OS-level sidecar (launchd/systemd/Task Scheduler) to dispatch scheduled sends when app is closed. Ship alongside code-signing/installer work.
 - [ ] **E2E test suite** — Infrastructure ready; actual test files not written.
+- [ ] **Connect AgentMail** — Integrate AgentMail for programmatic email send/receive.
 
 ## Premium-Killer Features (no AI required)
 

@@ -5,7 +5,7 @@ import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doT
 import { openSnoozePicker } from './snooze';
 import { showContextMenu } from './contextMenu';
 import { avatarHtml, stackedAvatarsHtml, ACCOUNT_BADGE_COLORS } from './avatar';
-import { getActiveReminderThreadIds } from './followupReminders';
+import { getActiveReminderThreadIds, getAllActiveReminders, dismissReminder } from './followupReminders';
 import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
 import { icon } from './icons';
@@ -672,6 +672,52 @@ export async function renderScheduledView() {
       const id = row.dataset.schedId!;
       cancelScheduled(id);
       renderScheduledView();
+    });
+  });
+}
+
+export function renderRemindersView() {
+  const container = document.getElementById('inbox');
+  if (!container) return;
+
+  const reminders = getAllActiveReminders();
+
+  if (reminders.length === 0) {
+    container.innerHTML = renderEmptyState(icon.bell(), 'No follow-up reminders', 'Set a reminder when sending an email to get notified if there\'s no reply.');
+    return;
+  }
+
+  const now = new Date();
+  container.innerHTML = `
+    <div class="section-header">Follow-up Reminders <span class="section-badge">${reminders.length}</span></div>
+    ${reminders.map(r => {
+      const remindDate = new Date(r.remindAfter);
+      const isOverdue = remindDate <= now;
+      const timeLabel = isOverdue ? 'Overdue' : `Fires ${formatDate(remindDate.getTime())}`;
+      return `
+      <div class="thread-row${isOverdue ? ' reminder-overdue' : ''}" data-reminder-id="${esc(r.id)}">
+        <span class="unread-dot"></span>
+        <div class="avatar-wrap"><div class="avatar" style="background:var(--accent)" data-initial="🔔"></div></div>
+        <span class="thread-sender">${esc(r.sentTo)}</span>
+        <div class="thread-mid">
+          <span class="thread-subject-line">${esc(r.subject)}</span>
+          <span class="thread-preview-line">${icon.bell('14px')} ${timeLabel}</span>
+        </div>
+        <span class="thread-date">${formatDate(new Date(r.createdAt).getTime())}</span>
+        <div class="thread-actions">
+          <button class="btn-action danger btn-dismiss-reminder" title="Dismiss reminder">${icon.close('16px')}</button>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+
+  container.querySelectorAll<HTMLButtonElement>('.btn-dismiss-reminder').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const row = btn.closest<HTMLElement>('.thread-row')!;
+      const id = row.dataset.reminderId!;
+      dismissReminder(id);
+      renderRemindersView();
     });
   });
 }

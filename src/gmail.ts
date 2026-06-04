@@ -15,6 +15,7 @@ async function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Resp
 }
 import { type Account, ensureFreshToken } from './auth';
 import { getDb } from './db';
+import { autoCancelIfReplied } from './followupReminders';
 
 const API = 'https://gmail.googleapis.com/gmail/v1';
 
@@ -272,6 +273,11 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   const snoozedUntil = clearSnooze ? null : (row?.snoozed_until ?? null);
   const snoozeLabel = clearSnooze ? null : (row?.snooze_label ?? null);
   const isMuted = row?.is_muted ?? 0;
+
+  // Auto-cancel follow-up reminders if a reply arrived (message count grew)
+  if (row && row.message_count !== null && newMessageCount > row.message_count) {
+    autoCancelIfReplied(gmailThreadId, newMessageCount);
+  }
 
   await db.execute(
     `INSERT INTO threads
