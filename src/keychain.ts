@@ -15,6 +15,12 @@ interface StoredTokens {
   tokenExpiry: number;
 }
 
+/**
+ * In-memory cache: avoids repeated OS keychain prompts.
+ * Keychain is read once per email per session; writes update both cache and keychain.
+ */
+const _tokenCache: Map<string, StoredTokens> = new Map();
+
 let _keyring: typeof import('tauri-plugin-keyring-api') | null = null;
 async function getKeyring() {
   if (!_keyring) {
@@ -26,8 +32,10 @@ async function getKeyring() {
 
 /**
  * Save tokens to OS keychain, keyed by account email.
+ * Also updates the in-memory cache so subsequent reads don't hit keychain.
  */
 export async function saveTokensToKeychain(email: string, tokens: StoredTokens): Promise<void> {
+  _tokenCache.set(email, tokens);
   const kr = await getKeyring();
   if (!kr) return;
   await kr.setPassword(SERVICE, email, JSON.stringify(tokens));
@@ -35,14 +43,21 @@ export async function saveTokensToKeychain(email: string, tokens: StoredTokens):
 
 /**
  * Retrieve tokens from OS keychain. Returns null if not found.
+ * Uses in-memory cache to avoid repeated keychain access prompts.
  */
 export async function getTokensFromKeychain(email: string): Promise<StoredTokens | null> {
+  // Return from cache if available (no OS prompt)
+  const cached = _tokenCache.get(email);
+  if (cached) return cached;
+
   try {
     const kr = await getKeyring();
     if (!kr) return null;
     const raw = await kr.getPassword(SERVICE, email);
     if (!raw) return null;
-    return JSON.parse(raw) as StoredTokens;
+    const tokens = JSON.parse(raw) as StoredTokens;
+    _tokenCache.set(email, tokens);
+    return tokens;
   } catch {
     return null;
   }
@@ -50,8 +65,10 @@ export async function getTokensFromKeychain(email: string): Promise<StoredTokens
 
 /**
  * Delete tokens from OS keychain (used on logout/account removal).
+ * Also clears the in-memory cache.
  */
 export async function deleteTokensFromKeychain(email: string): Promise<void> {
+  _tokenCache.delete(email);
   try {
     const kr = await getKeyring();
     if (!kr) return;
