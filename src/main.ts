@@ -752,22 +752,37 @@ function openSnippetPicker(targetTextarea: HTMLElement | null) {
     bumpUsage(s.id);
 
     const ctx = buildSnippetContext();
-    const { text, unresolved } = resolveVariables(s.body, ctx);
+    const { text: bodyText, unresolved: bodyUnresolved } = resolveVariables(s.body, ctx);
+    const { text: titleText, unresolved: titleUnresolved } = resolveVariables(s.title, ctx);
 
-    if (unresolved.length > 0) {
-      // Show fill-in dialog for unresolved variables
-      showVariableFillDialog(text, unresolved, (finalText) => {
+    // Merge unresolved from both title and body (deduplicated)
+    const allUnresolved = [...new Set([...titleUnresolved, ...bodyUnresolved])];
+
+    if (allUnresolved.length > 0) {
+      showVariableFillDialog(bodyText, titleText, allUnresolved, (finalBody, finalTitle) => {
         close();
-        doInsert(finalText);
+        doInsert(finalBody, finalTitle);
       });
     } else {
       close();
-      doInsert(text);
+      doInsert(bodyText, titleText);
     }
   }
 
-  function doInsert(text: string) {
+  function doInsert(text: string, title: string) {
     if (!targetTextarea) return;
+
+    // Fill subject line if title has content and subject field exists
+    const composePanel = targetTextarea.closest('.compose-panel-new');
+    const subjectEl = composePanel?.querySelector<HTMLInputElement>('.compose-subject');
+    if (subjectEl && title) {
+      // Only fill if subject is empty or user hasn't typed anything
+      if (!subjectEl.value.trim()) {
+        subjectEl.value = title;
+        subjectEl.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
     if (targetTextarea.tagName === 'TEXTAREA') {
       const ta = targetTextarea as HTMLTextAreaElement;
       const start = ta.selectionStart ?? 0;
@@ -787,9 +802,10 @@ function openSnippetPicker(targetTextarea: HTMLElement | null) {
   }
 
   function showVariableFillDialog(
-    partialText: string,
+    partialBody: string,
+    partialTitle: string,
     unresolved: string[],
-    onComplete: (finalText: string) => void
+    onComplete: (finalBody: string, finalTitle: string) => void
   ) {
     // Remove picker UI temporarily
     backdrop.style.display = 'none';
@@ -829,8 +845,9 @@ function openSnippetPicker(targetTextarea: HTMLElement | null) {
       dialog.remove();
       backdrop.remove();
       document.removeEventListener('keydown', onKey);
-      const finalText = fillVariables(partialText, values);
-      onComplete(finalText);
+      const finalBody = fillVariables(partialBody, values);
+      const finalTitle = fillVariables(partialTitle, values);
+      onComplete(finalBody, finalTitle);
     }
 
     function cancel() {
