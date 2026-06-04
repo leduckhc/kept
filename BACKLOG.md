@@ -4,6 +4,11 @@
 
 - [ ] **glib 0.18 → 0.20 (CVE: unsound VariantStrIter)** — Moderate severity (6.9 CVSS v4). Transitive dep via `gtk 0.18 → libappindicator → tray-icon → tauri`. Not directly exploitable from our code (we never iterate GVariant strings). Blocked on Tauri bumping their tray-icon/gtk dep chain. Re-check when Tauri releases a major update.
 
+## Research
+
+- [ ] **Local device discovery (no cloud)** — Deep research how to detect that iPhone and MacBook (and devices in general) are on the same network without any cloud dependency. Protocols: mDNS/Bonjour, SSDP, BLE advertising, Multipeer Connectivity, etc.
+- [ ] **Secure device-to-device auth + data transfer** — Research how to securely authenticate device-to-device and transfer data locally. TLS with TOFU, SRP, QR-code key exchange, Noise protocol, etc.
+
 ## Features
 
 - [ ] **Code signing + distribution** — Apple Developer ($99/yr) for macOS+iOS, Windows cert for SmartScreen, Android self-sign. Not needed until ready to distribute outside dev machine.
