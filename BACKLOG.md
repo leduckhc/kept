@@ -15,6 +15,7 @@
 - [ ] **AI thread summaries + smart reply chips** — Local Ollama integration. Deferred until app is daily-driver stable.
 
 - [ ] **Background send daemon** — OS-level sidecar (launchd/systemd/Task Scheduler) to dispatch scheduled sends when app is closed. Ship alongside code-signing/installer work.
+- [ ] **Fetch all Gmail system labels** — Currently only fetching Inbox. Need to also sync Sent, Drafts, Starred, Deleted (Trash), and Archived (All Mail minus Inbox). May require periodic background fetch for these categories since they change independently of inbox push.
 - [ ] **E2E test suite** — Infrastructure ready; actual test files not written.
 - [ ] **Connect AgentMail** — Integrate AgentMail for programmatic email send/receive.
 
