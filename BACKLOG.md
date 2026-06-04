@@ -32,6 +32,7 @@ These are the features Spark/Superhuman charge $30/mo for. All are pure logic �
 
 ## UI / Layout
 
+- [ ] **Section labels hidden on small viewports** — "Updates" and "Newsletters" labels disappear at narrow widths. Likely a CSS overflow/truncation or responsive breakpoint issue.
 - [x] **Inbox section labels → Title Case** — ~~ALL-CAPS~~ → Title Capitalization. Done (84fb3fd).
 - [x] **Sender cards aligned with avatar on email threads** — Thread-summary participant avatars now render first (left-aligned with msg-avatar below). Done (b619ccd).
 - [x] **Right-align Compose button with Date/Time column** — Toolbar right padding now matches thread-row padding. Done (84fb3fd).
