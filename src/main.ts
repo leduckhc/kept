@@ -345,6 +345,15 @@ function showShell() {
             </div>
           </div>
           <div class="settings-divider"></div>
+          <div class="settings-section">
+            <div class="settings-section-label">Snippets / Templates</div>
+            <div class="settings-row-sub" style="margin-bottom:8px">Reusable text with {{variables}} — use ⌘; in compose to insert</div>
+            <button class="settings-add-account" id="settings-manage-snippets">
+              <span class="settings-add-account-icon"></span>
+              Manage snippets
+            </button>
+          </div>
+          <div class="settings-divider"></div>
           <div class="settings-section" id="settings-signature-section">
             <div class="settings-section-label">Email Signature</div>
             <textarea class="settings-signature-ta" id="settings-signature-ta"
@@ -364,6 +373,10 @@ function showShell() {
 
   document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
 
+  // Settings: Manage Snippets button
+  document.getElementById('settings-manage-snippets')!.addEventListener('click', () => {
+    openSnippetManager(null);
+  });
 
   // Sidebar nav + mobile tab buttons + drawer items
   document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
