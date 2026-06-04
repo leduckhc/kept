@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Draft Animation A — Shrink & Fly</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; height: 100vh; overflow: hidden; }
+
+  .app { display: flex; height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 64px; background: #16162a; display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 8px; border-right: 1px solid #2a2a4a; }
+  .nav-item { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; transition: background 0.2s; }
+  .nav-item:hover { background: #2a2a4a; }
+  .nav-item.active { background: #2a2a4a; }
+  .nav-item svg { width: 20px; height: 20px; fill: #888; }
+  .nav-item.drafts { margin-top: auto; margin-bottom: 120px; }
+  .nav-item.drafts svg { fill: #888; }
+
+  /* Draft badge */
+  .draft-badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: #6366f1; opacity: 0; transform: scale(0); transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .draft-badge.show { opacity: 1; transform: scale(1); }
+
+  /* Glow effect on nav item */
+  .nav-item.glow { background: rgba(99, 102, 241, 0.2); box-shadow: 0 0 12px rgba(99, 102, 241, 0.4); }
+
+  /* Main content area */
+  .main { flex: 1; background: #1a1a2e; display: flex; align-items: center; justify-content: center; position: relative; }
+
+  /* Compose panel */
+  .compose {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    width: 480px;
+    height: 360px;
+    background: #22223a;
+    border-radius: 20px;
+    border: 1px solid #3a3a5a;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform-origin: bottom right;
+    transition: none;
+  }
+  .compose.animating {
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .compose.shrink-fly {
+    width: 40px;
+    height: 40px;
+    bottom: calc(100vh - 340px);
+    right: calc(100vw - 88px);
+    border-radius: 10px;
+    opacity: 0;
+    transform: scale(0.3);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+  }
+
+  .compose-header { padding: 16px 20px; border-bottom: 1px solid #2a2a4a; display: flex; justify-content: space-between; align-items: center; }
+  .compose-header h3 { font-size: 14px; font-weight: 600; color: #fff; }
+  .close-btn { width: 28px; height: 28px; border-radius: 8px; border: none; background: #2a2a4a; color: #888; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .close-btn:hover { background: #3a3a5a; color: #fff; }
+
+  .compose-body { flex: 1; padding: 16px 20px; }
+  .field { margin-bottom: 12px; }
+  .field label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+  .field input, .field textarea { width: 100%; background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 8px 12px; color: #e0e0e0; font-size: 13px; margin-top: 4px; }
+  .field textarea { height: 80px; resize: none; }
+
+  /* Instructions */
+  .instructions { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); text-align: center; }
+  .instructions h1 { font-size: 20px; color: #fff; margin-bottom: 8px; }
+  .instructions p { font-size: 13px; color: #888; max-width: 400px; }
+  .instructions .tag { display: inline-block; margin-top: 12px; padding: 4px 12px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 20px; font-size: 11px; color: #6366f1; }
+
+  .reset-btn { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 10px 24px; background: #6366f1; border: none; border-radius: 12px; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; opacity: 0; transition: opacity 0.3s; }
+  .reset-btn.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="nav-item active">
+      <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+    </div>
+    <div class="nav-item drafts" id="draftsNav">
+      <svg viewBox="0 0 24 24"><path d="M21.99 8c0-.72-.37-1.35-.94-1.7L12 1 2.95 6.3C2.38 6.65 2 7.28 2 8v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2l-.01-10zM12 13L3.74 7.84 12 3l8.26 4.84L12 13z"/></svg>
+      <div class="draft-badge" id="draftBadge"></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="instructions">
+      <h1>A — Shrink & Fly</h1>
+      <p>The compose panel shrinks down and flies across the screen into the Drafts icon. A glow + badge pulse confirms arrival.</p>
+      <span class="tag">Click × to close the draft</span>
+    </div>
+
+    <div class="compose" id="compose">
+      <div class="compose-header">
+        <h3>New Message</h3>
+        <button class="close-btn" id="closeBtn">×</button>
+      </div>
+      <div class="compose-body">
+        <div class="field">
+          <label>To</label>
+          <input type="text" value="team@company.com">
+        </div>
+        <div class="field">
+          <label>Subject</label>
+          <input type="text" value="Q3 roadmap thoughts">
+        </div>
+        <div class="field">
+          <label>Body</label>
+          <textarea>Hey team, I was thinking about our priorities for next quarter and wanted to share some...</textarea>
+        </div>
+      </div>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">↺ Reset Demo</button>
+  </div>
+</div>
+
+<script>
+const compose = document.getElementById('compose');
+const closeBtn = document.getElementById('closeBtn');
+const draftsNav = document.getElementById('draftsNav');
+const draftBadge = document.getElementById('draftBadge');
+const resetBtn = document.getElementById('resetBtn');
+
+closeBtn.addEventListener('click', () => {
+  compose.classList.add('animating');
+  requestAnimationFrame(() => {
+    compose.classList.add('shrink-fly');
+  });
+
+  setTimeout(() => {
+    draftsNav.classList.add('glow');
+    draftBadge.classList.add('show');
+  }, 500);
+
+  setTimeout(() => {
+    draftsNav.classList.remove('glow');
+    resetBtn.classList.add('show');
+  }, 1200);
+});
+
+resetBtn.addEventListener('click', () => {
+  compose.classList.remove('animating', 'shrink-fly');
+  draftBadge.classList.remove('show');
+  resetBtn.classList.remove('show');
+});
+</script>
+</body>
+</html>
