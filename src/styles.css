@@ -424,6 +424,9 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  overflow: visible;
+  min-height: 28px;
 }
 
 .section-badge {
@@ -463,6 +466,8 @@ body {
 .keyboard-nav .thread-row:hover:not(.is-selected) { background: transparent; }
 .keyboard-nav .thread-row:hover .thread-actions { display: none; }
 .keyboard-nav .thread-row:hover .thread-date { display: block; }
+/* Hover + selected simultaneously: selected wins */
+.thread-row.is-selected:hover { background: var(--kbd-selected-bg, #ede9fa); }
 .thread-row.selected {
   background: var(--surface-active);
   border-left: 2px solid var(--accent);
@@ -1193,9 +1198,11 @@ body {
 .thread-row.is-selected {
   background: #ede9fa;
   outline: none;
+  border-left: 2px solid var(--accent);
 }
 [data-theme="dark"] .thread-row.is-selected {
   background: #2d2640;
+  border-left: 2px solid var(--accent);
 }
 
 /* ── Keyboard cheat sheet overlay ───────────────────────── */
@@ -2095,6 +2102,9 @@ body {
 
   /* Date: cap width so subject gets more room */
   .thread-date { max-width: 48px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+
+  /* Section labels: reduce left padding so they stay visible at narrow widths */
+  .section-header { padding-left: 12px; }
 }
 @media (max-width: 1023px) {
   .sidebar { display: none; }

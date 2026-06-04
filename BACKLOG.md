@@ -34,12 +34,13 @@ These are the features Spark/Superhuman charge $30/mo for. All are pure logic �
 
 - [ ] **Draft save animation on Compose close** — Shrink & Fly (direction A chosen). Compose panel shrinks and flies into the Drafts nav icon with a glow + badge pulse on arrival. Reference mockup: `mockups/draft-animation-A-shrink-fly.html`. Implementation: CSS transition with `transform-origin: bottom right`, 0.6s cubic-bezier, glow highlight on Drafts icon at 500ms, badge pulse at completion.
 - [ ] **Remove Compose minimize path entirely** — No minimize state for the Compose panel. The bottom bar will host other actions in the future; minimize adds clutter. Strip all minimize logic, button, and collapsed state.
-- [ ] **Spacebar selects in arrow-key navigation mode** — When keyboard navigation is active (arrow/j/k), pressing spacebar should toggle selection on the focused email row (like Gmail's x-to-select).
+- [x] **Spacebar selects in arrow-key navigation mode** — When keyboard navigation is active (arrow/j/k), pressing spacebar toggles selection on the focused email row. In reader view, spacebar still scrolls. Done.
 - [ ] **Sender pill clicks in Updates/Newsletters should open the category, not the sender group** — Thread rows for Updates and Newsletters show clickable pill buttons per sender. Clicking a pill currently opens that sender's group; it should open the Updates/Newsletters category view instead.
-- [ ] **Thread hover background color matches arrow selection/navigation color** — The background highlight for hovering over a thread row is the same color as the arrow-key selection highlight. They should be visually distinct so the user can tell keyboard-focus from mouse-hover.
+- [x] **Thread hover background color matches arrow selection/navigation color** — Keyboard-selected row now has a purple-tinted background + left accent border; hover remains neutral gray. Visually distinct. Done.
 - [ ] **Status bar: move to right side, half width** — The status bar currently renders on the left. Reposition it to the right side and reduce its width to 50%.
 - [ ] **Bulk/group action buttons on multi-select** — When multiple threads are selected, action buttons switch to bulk/group mode and only show actions that apply to groups (e.g. archive, delete, mark read/unread, move). Single-thread-only actions (reply, forward) are hidden.
-- [ ] **Section labels hidden on small viewports** — "Updates" and "Newsletters" labels disappear at narrow widths. Likely a CSS overflow/truncation or responsive breakpoint issue.
+- [ ] **New-sender-expand button hides left navbar** — Clicking the expand button on new-sender cards causes the left navigation sidebar to disappear. Should preserve navbar visibility.
+- [x] **Section labels hidden on small viewports** — Fixed: added `white-space: nowrap`, `overflow: visible`, `min-height: 28px` to `.section-header`, and reduced left padding at ≤600px breakpoint. Done.
 - [x] **Inbox section labels → Title Case** — ~~ALL-CAPS~~ → Title Capitalization. Done (84fb3fd).
 - [x] **Sender cards aligned with avatar on email threads** — Thread-summary participant avatars now render first (left-aligned with msg-avatar below). Done (b619ccd).
 - [x] **Right-align Compose button with Date/Time column** — Toolbar right padding now matches thread-row padding. Done (84fb3fd).

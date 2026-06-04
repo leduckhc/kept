@@ -103,7 +103,7 @@ export function showCheatSheet() {
             <tr><td><kbd class="kb-key">f</kbd></td><td>Forward</td></tr>
             <tr><td><kbd class="kb-key">x</kbd></td><td>Select / bulk toggle</td></tr>
             <tr><td><kbd class="kb-key">/</kbd></td><td>Focus search</td></tr>
-            <tr><td><kbd class="kb-key">Space</kbd> <kbd class="kb-key">⇧Space</kbd></td><td>Scroll reader</td></tr>
+            <tr><td><kbd class="kb-key">Space</kbd></td><td>Select thread (list) / scroll (reader)</td></tr>
           </table>
         </div>
         <div class="kb-category">
@@ -357,9 +357,17 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
 
       case ' ': {
         const readerBody = document.querySelector<HTMLElement>('.reader-body');
-        if (!readerBody) break;
-        e.preventDefault();
-        readerBody.scrollBy({ top: e.shiftKey ? -300 : 300, behavior: 'smooth' });
+        if (readerBody) {
+          // In reader: scroll
+          e.preventDefault();
+          readerBody.scrollBy({ top: e.shiftKey ? -300 : 300, behavior: 'smooth' });
+        } else if (state.selectedThreadId) {
+          // In list with keyboard selection: toggle bulk select (like Gmail x)
+          e.preventDefault();
+          if (!state.bulkMode) state.bulkMode = true;
+          deps.toggleBulkSelection(state.selectedThreadId);
+          if (state.selectedIds.size === 0) { state.bulkMode = false; deps.removeBulkBar(); deps.renderInbox(); }
+        }
         break;
       }
 
