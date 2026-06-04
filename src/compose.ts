@@ -149,16 +149,15 @@ export async function openCompose(opts: ComposeOptions) {
           <span class="toolbar-sep"></span>
           <button class="toolbar-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
           <button class="toolbar-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
-          <span class="toolbar-sep"></span>
-          <button class="toolbar-btn compose-attach-btn" title="Attach file">${icon.attach('14px')}</button>
-          <input type="file" class="compose-file-input" multiple style="display:none" />
         </div>
         <div class="compose-editor-new" contenteditable="true" data-placeholder="Write your message…"></div>
+        <input type="file" class="compose-file-input" multiple style="display:none" />
       </div>
       <div class="compose-attachments-new"></div>
     </div>
     <div class="compose-panel-footer">
       <button class="compose-send-btn-new">${icon.send('14px')} Send</button>
+      <button class="btn-icon compose-attach-btn" title="Attach file">${icon.attach('16px')}</button>
       <button class="compose-followup-btn" title="Remind if no reply">${icon.bell('16px')}</button>
       <button class="compose-schedule-btn" title="Schedule send">${icon.calendar('16px')}</button>
       <button class="compose-discard-btn-new" title="Discard">${icon.trash('16px')}</button>
@@ -274,6 +273,7 @@ export async function openCompose(opts: ComposeOptions) {
   });
 
   // ── Rich text toolbar ──
+  const toolbarEl = panel.querySelector<HTMLElement>('.compose-toolbar-new')!;
   panel.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
     btn.addEventListener('click', () => {
       const cmd = (btn as HTMLElement).dataset.cmd!;
@@ -286,6 +286,18 @@ export async function openCompose(opts: ComposeOptions) {
       editorEl.focus();
     });
   });
+
+  // Show toolbar only when text is selected in editor
+  function checkSelection() {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed && editorEl.contains(sel.anchorNode)) {
+      toolbarEl.classList.add('visible');
+    } else {
+      toolbarEl.classList.remove('visible');
+    }
+  }
+  document.addEventListener('selectionchange', checkSelection);
+  // Cleanup on panel removal (handled by closeCompose removing the panel from DOM)
 
   // ── Attachments ──
   function getFileIcon(mimeType: string): string {

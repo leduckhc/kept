@@ -32,6 +32,10 @@ These are the features Spark/Superhuman charge $30/mo for. All are pure logic �
 
 ## UI / Layout
 
+- [ ] **Spacebar selects in arrow-key navigation mode** — When keyboard navigation is active (arrow/j/k), pressing spacebar should toggle selection on the focused email row (like Gmail's x-to-select).
+- [ ] **Sender pill clicks in Updates/Newsletters should open the category, not the sender group** — Thread rows for Updates and Newsletters show clickable pill buttons per sender. Clicking a pill currently opens that sender's group; it should open the Updates/Newsletters category view instead.
+- [ ] **Thread hover background color matches arrow selection/navigation color** — The background highlight for hovering over a thread row is the same color as the arrow-key selection highlight. They should be visually distinct so the user can tell keyboard-focus from mouse-hover.
+- [ ] **Bulk/group action buttons on multi-select** — When multiple threads are selected, action buttons switch to bulk/group mode and only show actions that apply to groups (e.g. archive, delete, mark read/unread, move). Single-thread-only actions (reply, forward) are hidden.
 - [ ] **Section labels hidden on small viewports** — "Updates" and "Newsletters" labels disappear at narrow widths. Likely a CSS overflow/truncation or responsive breakpoint issue.
 - [x] **Inbox section labels → Title Case** — ~~ALL-CAPS~~ → Title Capitalization. Done (84fb3fd).
 - [x] **Sender cards aligned with avatar on email threads** — Thread-summary participant avatars now render first (left-aligned with msg-avatar below). Done (b619ccd).

@@ -2687,7 +2687,7 @@ body {
 /* ── Floating compose panel (Gmail-style) ────────────── */
 .compose-panel {
   position: fixed;
-  bottom: 0;
+  bottom: 24px;
   right: 24px;
   width: 480px;
   max-width: calc(100vw - 16px);
@@ -2763,7 +2763,7 @@ body {
   justify-content: space-between;
   padding: 8px 16px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: none;
   cursor: pointer;
   user-select: none;
   border-radius: 16px 16px 0 0;
@@ -2802,7 +2802,7 @@ body {
 .compose-field {
   position: relative;
   padding: 4px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2836,7 +2836,7 @@ body {
   min-height: 200px;
 }
 .compose-toolbar-new {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 2px;
   padding: 4px 8px;
@@ -2844,6 +2844,9 @@ body {
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   background: transparent;
+}
+.compose-toolbar-new.visible {
+  display: flex;
 }
 .compose-toolbar-new .toolbar-btn {
   display: flex;
@@ -2929,7 +2932,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  border-top: 1px solid var(--border);
+  border-top: none;
   background: transparent;
 }
 .compose-send-btn-new {
