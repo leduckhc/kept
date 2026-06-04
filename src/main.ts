@@ -18,6 +18,7 @@ import { initSwipeGestures } from './swipe';
 import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute, doSetAside, doUnsetAside } from './actions';
 import { openInlineReply } from './inlineReply';
 import { icon } from './icons';
+import { loadSmartFolders, showCreateSmartFolderDialog, runSmartFolder, deleteSmartFolder, type SmartFolder } from './smartFolders';
 
 // Lazy-loaded modules (not needed on startup — code splitting)
 let _composeModule: typeof import('./compose') | null = null;
@@ -157,6 +158,7 @@ async function boot() {
       showShell();
       refreshKnownSenders().catch(() => {});
       await refreshAll();
+      renderSmartFoldersSidebar();
       setupSnoozeResurface(renderInbox);
       startScheduledSendDispatch(() => state.account, sendEmail);
 
@@ -281,6 +283,8 @@ function showShell() {
       <div class="app-body">
         <nav class="sidebar" id="sidebar">
           ${VIEWS.map(v => `<button class="sidebar-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}" title="${v.name}">${v.icon}</button>`).join('')}
+          <div class="sidebar-smart-folders" id="sidebar-smart-folders"></div>
+          <button class="sidebar-btn sidebar-add-folder" id="btn-add-smart-folder" title="New Smart Folder">${icon.plus('18px')}</button>
           <div class="sidebar-spacer"></div>
           <button class="sidebar-btn sidebar-avatar" id="btn-account" title="Switch account">${getAccountAvatar()}</button>
         </nav>
@@ -397,6 +401,15 @@ function showShell() {
     openSettings();
   });
 
+  // Smart Folders: add button
+  document.getElementById('btn-add-smart-folder')!.addEventListener('click', async () => {
+    const folder = await showCreateSmartFolderDialog(state.searchQuery || undefined);
+    if (folder) {
+      await renderSmartFoldersSidebar();
+      switchToSmartFolder(folder.id);
+    }
+  });
+
   const searchEl = document.getElementById('search') as HTMLInputElement;
   const searchWrap = document.getElementById('toolbar-search-wrap')!;
   const searchToggle = document.getElementById('btn-search-toggle')!;
@@ -464,6 +477,7 @@ function showShell() {
 // ── View switching ────────────────────────────────────────
 function switchView(view: ViewName) {
   state.currentView = view;
+  _activeSmartFolder = null;
   // Update sidebar + mobile tab buttons + drawer items
   document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
@@ -485,6 +499,72 @@ function switchView(view: ViewName) {
   } else {
     renderLabelView(view);
   }
+}
+
+// ── Smart Folders ─────────────────────────────────────────
+
+let _activeSmartFolder: SmartFolder | null = null;
+
+async function renderSmartFoldersSidebar() {
+  if (!state.account) return;
+  const container = document.getElementById('sidebar-smart-folders');
+  if (!container) return;
+  const folders = await loadSmartFolders(state.account.id);
+  if (!folders.length) { container.innerHTML = ''; return; }
+  container.innerHTML = folders.map(f => `
+    <button class="sidebar-btn sidebar-sf-btn${_activeSmartFolder?.id === f.id ? ' active' : ''}" data-sf-id="${f.id}" title="${esc(f.name)}">
+      <span class="sf-dot" style="background:${f.color}"></span>
+    </button>
+  `).join('');
+  container.querySelectorAll<HTMLButtonElement>('.sidebar-sf-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchToSmartFolder(btn.dataset.sfId!));
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showSmartFolderContextMenu(e, btn.dataset.sfId!);
+    });
+  });
+}
+
+async function switchToSmartFolder(folderId: string) {
+  if (!state.account) return;
+  const folders = await loadSmartFolders(state.account.id);
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+  _activeSmartFolder = folder;
+  // Deactivate normal views
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll<HTMLButtonElement>(`.sidebar-sf-btn[data-sf-id="${folderId}"]`).forEach(btn => btn.classList.add('active'));
+  // Run query
+  state.threads = await runSmartFolder(state.account.id, folder);
+  const container = document.getElementById('inbox');
+  if (!container) return;
+  const header = `<div class="smart-folder-header"><span class="sf-dot" style="background:${folder.color}"></span><span>${esc(folder.name)}</span><span class="sf-count">${state.threads.length}</span></div>`;
+  const rows = state.threads.map(t => threadRow(t, false)).join('');
+  container.innerHTML = header + (rows || `<div class="empty-state"><div class="empty-text">No matching messages</div></div>`);
+  wireThreadRows(container, state.threads, false, getThreadListDeps());
+}
+
+function showSmartFolderContextMenu(e: MouseEvent, folderId: string) {
+  // Remove existing context menu if any
+  document.querySelector('.sf-context-menu')?.remove();
+  const menu = document.createElement('div');
+  menu.className = 'sf-context-menu';
+  menu.innerHTML = `<button class="sf-ctx-item sf-ctx-delete">Delete</button>`;
+  menu.style.top = `${e.clientY}px`;
+  menu.style.left = `${e.clientX}px`;
+  document.body.appendChild(menu);
+  menu.querySelector('.sf-ctx-delete')!.addEventListener('click', async () => {
+    if (!state.account) return;
+    await deleteSmartFolder(state.account.id, folderId);
+    menu.remove();
+    if (_activeSmartFolder?.id === folderId) {
+      _activeSmartFolder = null;
+      switchView('Inbox');
+    }
+    renderSmartFoldersSidebar();
+  });
+  const dismiss = (ev: MouseEvent) => { if (!menu.contains(ev.target as Node)) { menu.remove(); document.removeEventListener('click', dismiss); } };
+  setTimeout(() => document.addEventListener('click', dismiss), 0);
 }
 
 /** Reload inbox threads from the local DB and render immediately. */
