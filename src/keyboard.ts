@@ -34,10 +34,25 @@ export function isInputFocused(): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable;
 }
 
+/** Returns navigation IDs for ALL visible thread-rows (individual threads + group rows). */
 export function getVisibleThreadIds(): string[] {
   return Array.from(document.querySelectorAll<HTMLElement>('.thread-row'))
-    .map(r => r.dataset.id!)
-    .filter(Boolean);
+    .map(r => getNavId(r))
+    .filter(Boolean) as string[];
+}
+
+/** Extract a unique navigation identifier from any .thread-row element. */
+function getNavId(row: HTMLElement): string | null {
+  if (row.dataset.id) return row.dataset.id;
+  if (row.dataset.category) return `category:${row.dataset.category}`;
+  if (row.dataset.senderEmail) return `sender:${row.dataset.senderEmail}`;
+  if (row.dataset.domain) return `domain:${row.dataset.domain}`;
+  return null;
+}
+
+/** Returns true if the nav ID represents a group row (not an individual thread). */
+export function isGroupNavId(id: string): boolean {
+  return id.startsWith('category:') || id.startsWith('sender:') || id.startsWith('domain:');
 }
 
 export function selectThread(id: string | null) {
@@ -50,11 +65,25 @@ export function selectThread(id: string | null) {
   if (inbox && !inbox.classList.contains('keyboard-nav')) {
     inbox.classList.add('keyboard-nav');
   }
-  const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+  const row = findRowByNavId(id);
   if (row) {
     row.classList.add('is-selected');
     row.scrollIntoView({ block: 'nearest' });
   }
+}
+
+/** Find a .thread-row element by its navigation ID (plain id, or composite like category:X). */
+function findRowByNavId(id: string): HTMLElement | null {
+  if (id.startsWith('category:')) {
+    return document.querySelector<HTMLElement>(`.thread-row[data-category="${id.slice(9)}"]`);
+  }
+  if (id.startsWith('sender:')) {
+    return document.querySelector<HTMLElement>(`.thread-row[data-sender-email="${id.slice(7)}"]`);
+  }
+  if (id.startsWith('domain:')) {
+    return document.querySelector<HTMLElement>(`.thread-row[data-domain="${id.slice(7)}"]`);
+  }
+  return document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
 }
 
 export function moveSelection(direction: 1 | -1) {
@@ -237,6 +266,14 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
       case 'Enter':
       case 'o': {
         if (!state.selectedThreadId) break;
+        // Group rows: simulate click to expand/filter
+        if (state.selectedThreadId.startsWith('category:') ||
+            state.selectedThreadId.startsWith('sender:') ||
+            state.selectedThreadId.startsWith('domain:')) {
+          const row = findRowByNavId(state.selectedThreadId);
+          if (row) row.click();
+          break;
+        }
         const t = state.threads.find(x => x.id === state.selectedThreadId);
         if (t) deps.openThread(t);
         break;
@@ -275,6 +312,7 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
 
       case 'x': {
         if (!state.selectedThreadId) break;
+        if (isGroupNavId(state.selectedThreadId)) break; // groups can't be bulk-selected
         if (!state.bulkMode) state.bulkMode = true;
         deps.toggleBulkSelection(state.selectedThreadId);
         if (state.selectedIds.size === 0) { state.bulkMode = false; deps.removeBulkBar(); deps.renderInbox(); }
@@ -361,7 +399,7 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
           // In reader: scroll
           e.preventDefault();
           readerBody.scrollBy({ top: e.shiftKey ? -300 : 300, behavior: 'smooth' });
-        } else if (state.selectedThreadId) {
+        } else if (state.selectedThreadId && !isGroupNavId(state.selectedThreadId)) {
           // In list with keyboard selection: toggle bulk select (like Gmail x)
           e.preventDefault();
           if (!state.bulkMode) state.bulkMode = true;
@@ -407,7 +445,7 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
         if (!(e.ctrlKey || e.metaKey)) break;
         e.preventDefault();
         if (!state.bulkMode) state.bulkMode = true;
-        getVisibleThreadIds().forEach(id => state.selectedIds.add(id));
+        getVisibleThreadIds().filter(id => !isGroupNavId(id)).forEach(id => state.selectedIds.add(id));
         deps.renderInbox();
         deps.updateBulkBar();
         break;

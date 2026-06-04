@@ -35,7 +35,6 @@ export interface ComposeOptions {
 // ── Multi-panel state ──
 interface ComposeInstance {
   panel: HTMLElement;
-  minimized: boolean;
   draftId: string | null;
   localDraftId: string;
   draftTimer: ReturnType<typeof setTimeout> | null;
@@ -108,7 +107,6 @@ export async function openCompose(opts: ComposeOptions) {
     <div class="compose-panel-header">
       <span class="compose-panel-title">${modeTitle}</span>
       <div class="compose-panel-actions">
-        <button class="btn-icon compose-panel-minimize" title="Minimize">—</button>
         <button class="btn-icon compose-panel-expand" title="Expand">${icon.expand('14px')}</button>
         <button class="btn-icon compose-panel-close" title="Close">${icon.close('14px')}</button>
       </div>
@@ -167,7 +165,6 @@ export async function openCompose(opts: ComposeOptions) {
 
   const instance: ComposeInstance = {
     panel,
-    minimized: false,
     draftId: opts.draftId ?? null,
     localDraftId: newDraftId(),
     draftTimer: null,
@@ -184,7 +181,6 @@ export async function openCompose(opts: ComposeOptions) {
   const attachmentsEl = panel.querySelector<HTMLElement>('.compose-attachments-new')!;
   const acList = panel.querySelector<HTMLUListElement>('.compose-ac')!;
   const fileInput = panel.querySelector<HTMLInputElement>('.compose-file-input')!;
-  const bodyWrap = panel.querySelector<HTMLElement>('.compose-panel-body')!;
 
   // ── Cc/Bcc pill button ──
   const ccBccPill = panel.querySelector<HTMLButtonElement>('.compose-cc-bcc-pill');
@@ -390,28 +386,8 @@ export async function openCompose(opts: ComposeOptions) {
   editorEl.addEventListener('input', scheduleDraftSave);
   if (ccEl) ccEl.addEventListener('input', scheduleDraftSave);
 
-  // ── Minimize / Expand / Close ──
-  panel.querySelector('.compose-panel-minimize')!.addEventListener('click', () => {
-    instance.minimized = !instance.minimized;
-    bodyWrap.style.display = instance.minimized ? 'none' : '';
-    panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = instance.minimized ? 'none' : '';
-    panel.classList.toggle('compose-panel-minimized', instance.minimized);
-  });
-
-  panel.querySelector('.compose-panel-header')!.addEventListener('dblclick', () => {
-    instance.minimized = !instance.minimized;
-    bodyWrap.style.display = instance.minimized ? 'none' : '';
-    panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = instance.minimized ? 'none' : '';
-    panel.classList.toggle('compose-panel-minimized', instance.minimized);
-  });
-
+  // ── Expand / Close ──
   panel.querySelector('.compose-panel-expand')!.addEventListener('click', () => {
-    if (instance.minimized) {
-      instance.minimized = false;
-      bodyWrap.style.display = '';
-      panel.querySelector<HTMLElement>('.compose-panel-footer')!.style.display = '';
-      panel.classList.remove('compose-panel-minimized');
-    }
     panel.classList.toggle('compose-panel-expanded');
     repositionPanels();
   });
@@ -426,7 +402,7 @@ export async function openCompose(opts: ComposeOptions) {
     closeCompose(panel);
   }
 
-  // Close (X) = save draft and close silently
+  // Close (X) = save draft and close silently (with animation if content exists)
   panel.querySelector('.compose-panel-close')!.addEventListener('click', async () => {
     // Flush any pending draft save
     if (instance.draftTimer) clearTimeout(instance.draftTimer);
@@ -451,6 +427,28 @@ export async function openCompose(opts: ComposeOptions) {
           updatedAt: now,
         };
         saveLocalDraft(localDraft).catch(() => {});
+
+        // Shrink & fly animation to Drafts icon
+        panel.classList.add('compose-panel-animating');
+        requestAnimationFrame(() => panel.classList.add('compose-panel-shrink-fly'));
+        const draftsBtn = document.querySelector<HTMLElement>('.sidebar-btn[data-view="Drafts"]');
+        setTimeout(() => {
+          if (draftsBtn) {
+            draftsBtn.classList.add('draft-glow');
+            const badge = document.createElement('span');
+            badge.className = 'draft-badge-pulse';
+            draftsBtn.style.position = 'relative';
+            draftsBtn.appendChild(badge);
+          }
+        }, 600);
+        setTimeout(() => {
+          if (draftsBtn) {
+            draftsBtn.classList.remove('draft-glow');
+            draftsBtn.querySelector('.draft-badge-pulse')?.remove();
+          }
+          closeCompose(panel);
+        }, 1200);
+        return;
       }
     }
     closeCompose(panel);

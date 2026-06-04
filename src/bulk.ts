@@ -1,6 +1,6 @@
 import { state } from './state';
 import { snoozePresets, doSnooze } from './snooze';
-import { type ActionDeps, doMarkRead, accountFor } from './actions';
+import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, accountFor } from './actions';
 import { formatDate, toDatetimeLocal } from './helpers';
 import { archiveThread, unarchiveThread, trashThread, untrashThread, loadThreads } from './gmail';
 import { pushUndo } from './undoStack';
@@ -78,6 +78,8 @@ export function updateBulkBar(
     <button class="bulk-action-btn" id="bulk-archive" title="Archive">${icon.archive('16px')}</button>
     <button class="bulk-action-btn" id="bulk-trash" title="Trash">${icon.trash('16px')}</button>
     <button class="bulk-action-btn" id="bulk-read" title="Mark Read">${icon.markRead('16px')}</button>
+    <button class="bulk-action-btn" id="bulk-unread" title="Mark Unread">${icon.email('16px')}</button>
+    <button class="bulk-action-btn" id="bulk-star" title="Star">${icon.star('16px')}</button>
   `;
 
   const toolbar = document.querySelector('.toolbar');
@@ -140,6 +142,28 @@ export function updateBulkBar(
       if (!t) continue;
       const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
       if (row) await doMarkRead(t, row, getActionDeps());
+    }
+    exitBulkModeFn();
+  });
+
+  document.getElementById('bulk-unread')!.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedIds);
+    for (const id of ids) {
+      const t = state.threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doMarkUnread(t, row);
+    }
+    exitBulkModeFn();
+  });
+
+  document.getElementById('bulk-star')!.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedIds);
+    for (const id of ids) {
+      const t = state.threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doToggleStar(t, row);
     }
     exitBulkModeFn();
   });

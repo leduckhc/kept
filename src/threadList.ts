@@ -453,11 +453,8 @@ export function wireCategoryAndGroupRows(container: HTMLElement, deps: ThreadLis
     row.querySelectorAll<HTMLElement>('.sender-badge').forEach(badge => {
       badge.addEventListener('click', (e) => {
         e.stopPropagation();
-        const email = badge.dataset.senderEmail;
-        if (email) {
-          state.senderFilter = email;
-          deps.renderInbox();
-        }
+        state.categoryFilter = cat ?? null;
+        deps.renderInbox();
       });
     });
     // Archive all threads in this category (batched)
