@@ -78,11 +78,13 @@ export async function syncInbox(account: Account, onProgress?: (n: number) => vo
     // Fall through to full sync if incremental failed (historyId too old / 404)
   }
 
-  // Full sync — INBOX + SENT + DRAFT labels in parallel
+  // Full sync — all system labels in parallel
   await Promise.all([
     syncFull(a, account.id, 'INBOX', onProgress),
     syncFull(a, account.id, 'SENT'),
     syncFull(a, account.id, 'DRAFT'),
+    syncFull(a, account.id, 'STARRED'),
+    syncFull(a, account.id, 'TRASH'),
   ]);
 
   // After full sync, fetch and store current historyId
@@ -212,7 +214,7 @@ function hasAttachment(message: { payload?: { parts?: MimePart[] } }): boolean {
   return checkParts(parts);
 }
 
-async function syncThread(account: Account, gmailThreadId: string, accountId: string, label: string = 'INBOX'): Promise<void> {
+async function syncThread(account: Account, gmailThreadId: string, accountId: string, _hintLabel?: string): Promise<void> {
   const db = await getDb();
 
   // Fetch thread metadata; if 404, thread was deleted on server — remove locally
@@ -249,8 +251,26 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   const isStarred = last.labelIds.includes('STARRED') ? 1 : 0;
   const newMessageCount = msgs.length;
 
-  // Extract category from Gmail labels
+  // Derive canonical label from actual Gmail labelIds (priority order)
   const allLabelIds = msgs.flatMap(m => m.labelIds ?? []);
+  let label: string;
+  let isArchived = 0;
+  if (allLabelIds.includes('TRASH')) {
+    label = 'TRASH';
+    isArchived = 1;
+  } else if (allLabelIds.includes('DRAFT')) {
+    label = 'DRAFT';
+  } else if (allLabelIds.includes('INBOX')) {
+    label = 'INBOX';
+  } else if (allLabelIds.includes('SENT')) {
+    label = 'SENT';
+  } else {
+    // Not in INBOX, SENT, DRAFT, or TRASH → it's archived
+    label = 'INBOX';
+    isArchived = 1;
+  }
+
+  // Extract category from Gmail labels
   let category = 'personal';
   if (allLabelIds.includes('CATEGORY_PROMOTIONS') || allLabelIds.includes('CATEGORY_FORUMS')) {
     category = 'newsletters';
@@ -259,10 +279,7 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
   }
 
   // Check existing snooze/mute state and message count so we can auto-unsnooze on new messages
-  const existing = await db.select<Array<{ snoozed_until: number | null; snooze_label: string | null; message_count: number | null; is_muted: number | null }>>(
-    'SELECT snoozed_until, snooze_label, message_count, is_muted FROM threads WHERE id = ?',
-    [gmailThreadId]
-  );
+  const existing = await db.select<Array<{ snoozed_until: number | null; snooze_label: string | null; message_count: number | null; is_muted: number | null }>>('SELECT snoozed_until, snooze_label, message_count, is_muted FROM threads WHERE id = ?', [gmailThreadId]);
   const row = existing[0] ?? null;
 
   // Auto-unsnooze: if snoozed and message count grew, clear snooze
@@ -281,8 +298,8 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 
   await db.execute(
     `INSERT INTO threads
-       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, label, message_count, snoozed_until, snooze_label, is_muted, category)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_starred, gmail_thread_id, has_attachment, label, message_count, snoozed_until, snooze_label, is_muted, category, is_archived)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id    = excluded.account_id,
        subject       = excluded.subject,
@@ -299,8 +316,9 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
        snoozed_until  = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snoozed_until, excluded.snoozed_until) END,
        snooze_label   = CASE WHEN excluded.snoozed_until IS NULL THEN NULL ELSE COALESCE(threads.snooze_label, excluded.snooze_label) END,
        is_muted       = COALESCE(threads.is_muted, excluded.is_muted),
-       category       = excluded.category`,
-    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, label, newMessageCount, snoozedUntil, snoozeLabel, isMuted, category]
+       category       = excluded.category,
+       is_archived    = excluded.is_archived`,
+    [gmailThreadId, accountId, subject, last.snippet, senderName, senderEmail, receivedAt, isUnread, isStarred, gmailThreadId, hasAttachment(last) ? 1 : 0, label, newMessageCount, snoozedUntil, snoozeLabel, isMuted, category, isArchived]
   );
 }
 
