@@ -29,6 +29,15 @@ These are the features Spark/Superhuman charge $30/mo for. All are pure logic �
 - [ ] **Smart Folders (saved search as virtual folder)** — Create virtual folders from search queries (e.g. "PDFs from John this year", "has:attachment from:@company.com"). Persisted in sidebar. Client-side filter on SQLite. (Spark Premium)
 - [ ] **Multi-Window (detachable reader & composer)** — Open emails and composer in separate OS windows. Reference one email while writing another. Tauri supports multi-window natively. (Spark Premium/Desktop)
 - [ ] **Email Focus Schedule** — Limit inbox access to scheduled sessions (e.g. 9am, 12pm, 6pm). Between sessions, show a summary screen with unread count. Counts daily inbox checks. Optional notification when session starts. (Spark paid plans)
+- [ ] **Read Receipts** — Embed tracking pixel on send; log opens with timestamp + device. Toggle per-email. Show read/unread indicator in Sent view. (Superhuman $30/mo, Newton $50/yr)
+- [ ] **Gatekeeper (Sender Screening)** — New/unknown senders land in a screening queue; approve to allow future messages into inbox, reject to auto-trash. One-time decision per sender. (Spark Plus $10/mo, HEY $99/yr "Screener")
+- [ ] **Social Insights** — Show sender context (job title, company, social links) from public data (Gravatar, Clearbit-like lookup). Display in thread header. No API key needed for basic Gravatar. (Superhuman $30/mo, Newton $50/yr "Sender Profile")
+- [ ] **Get Me to Zero** — Guided inbox-zero workflow: triage mode that presents emails one-by-one with quick actions (archive, snooze, reply, set aside). Tracks daily progress. (Superhuman $30/mo)
+- [ ] **Auto Labels (rule-based)** — User-defined rules that auto-apply labels on incoming mail (e.g. "from:@github.com → Dev", "subject:invoice → Finance"). Client-side filter on sync. No AI needed. (Spark Pro $20/mo, Superhuman Business $40/mo)
+- [ ] **Newsletter Feed** — Dedicated reading view for newsletters/marketing, separated from actionable email. Auto-detect via List-Unsubscribe header or sender pattern. Card-style layout. (HEY $99/yr "The Feed")
+- [ ] **Paper Trail** — Auto-sort transactional emails (receipts, confirmations, shipping) into a dedicated section. Detect via subject patterns + known sender domains. (HEY $99/yr)
+- [ ] **Calendar Integration** — Inline calendar view in sidebar. Parse .ics attachments and event invites. Show upcoming events in context of related email threads. (Superhuman $30/mo)
+- [ ] **Multi-Account** — Add and switch between multiple Gmail/IMAP accounts in one window. Unified inbox option. Per-account color coding. (Shortwave Pro $24/mo gates 3+ accounts)
 
 ## UI / Layout
 

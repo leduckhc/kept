@@ -82,6 +82,8 @@ const DEFAULTS: Snippet[] = [
   { id: 'default-3', title: 'Meeting confirm',body: 'Confirmed! Looking forward to our meeting on {{day}}.',                       usageCount: 0 },
   { id: 'default-4', title: 'Out of office',  body: 'I am currently out of office and will respond when I return on {{date}}.',    usageCount: 0 },
   { id: 'default-5', title: 'Intro',          body: 'Hi {{first_name}},\n\nMy name is {{my_name}}. Thanks for connecting!',        usageCount: 0 },
+  { id: 'default-6', title: 'Invoice',        body: 'Hi {{first_name}},\n\nPlease find attached invoice #{{invoice_number}} for {{amount}}.\n\nDue date: {{due_date}}\nPayment methods: bank transfer or card via the link in the PDF.\n\nLet me know if you have any questions.\n\nBest,\n{{my_name}}', usageCount: 0 },
+  { id: 'default-7', title: 'Faktura',        body: 'Dobrý den,\n\nPosílám fakturu za období {{month}} {{year}}.\n\nS pozdravem,\n{{my_name}}', usageCount: 0 },
 ];
 
 export function loadSnippets(): Snippet[] {
