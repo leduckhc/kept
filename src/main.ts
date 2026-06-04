@@ -6,7 +6,7 @@ import { loadLocalDrafts, type LocalDraft } from './localDrafts';
 
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
 import { getDb } from './db';
-import { type Snippet, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage } from './snippets';
+import { type Snippet, type SnippetContext, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage, resolveVariables, fillVariables, BUILTIN_VARIABLES } from './snippets';
 import { openSettings, initSettings } from './settings';
 import { syncAndRender, refreshAll, loadUnifiedThreads, initSync } from './sync';
 import { applyTheme, applyLayoutMode, esc } from './helpers';
@@ -734,9 +734,39 @@ function openSnippetPicker(targetTextarea: HTMLElement | null) {
   const list = picker.querySelector<HTMLElement>('#snippet-picker-list')!;
   let activeIdx = 0;
 
+  /** Build context from current thread + account for variable auto-resolve */
+  function buildSnippetContext(): SnippetContext {
+    const thread = state.selectedThreadId
+      ? state.threads.find(t => t.id === state.selectedThreadId)
+      : null;
+    return {
+      senderName: thread?.senderName || undefined,
+      senderEmail: thread?.senderEmail || undefined,
+      myEmail: state.account?.email || undefined,
+      myName: undefined, // we don't store display name — derived from email
+      subject: thread?.subject || undefined,
+    };
+  }
+
   function insertSnippet(s: Snippet) {
     bumpUsage(s.id);
-    close();
+
+    const ctx = buildSnippetContext();
+    const { text, unresolved } = resolveVariables(s.body, ctx);
+
+    if (unresolved.length > 0) {
+      // Show fill-in dialog for unresolved variables
+      showVariableFillDialog(text, unresolved, (finalText) => {
+        close();
+        doInsert(finalText);
+      });
+    } else {
+      close();
+      doInsert(text);
+    }
+  }
+
+  function doInsert(text: string) {
     if (!targetTextarea) return;
     if (targetTextarea.tagName === 'TEXTAREA') {
       const ta = targetTextarea as HTMLTextAreaElement;
@@ -744,16 +774,78 @@ function openSnippetPicker(targetTextarea: HTMLElement | null) {
       const end = ta.selectionEnd ?? 0;
       const before = ta.value.slice(0, start);
       const after = ta.value.slice(end);
-      ta.value = before + s.body + after;
-      const pos = start + s.body.length;
+      ta.value = before + text + after;
+      const pos = start + text.length;
       ta.setSelectionRange(pos, pos);
       ta.focus();
       ta.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
       targetTextarea.focus();
-      document.execCommand('insertText', false, s.body);
+      document.execCommand('insertText', false, text);
       targetTextarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
+  }
+
+  function showVariableFillDialog(
+    partialText: string,
+    unresolved: string[],
+    onComplete: (finalText: string) => void
+  ) {
+    // Remove picker UI temporarily
+    backdrop.style.display = 'none';
+
+    const dialog = document.createElement('div');
+    dialog.id = 'snippet-var-dialog';
+    dialog.className = 'snippet-var-dialog';
+    dialog.innerHTML = `
+      <div class="snippet-var-panel">
+        <div class="snippet-var-header">Fill in variables</div>
+        <div class="snippet-var-fields" id="snippet-var-fields">
+          ${unresolved.map(v => `
+            <div class="snippet-var-field">
+              <label class="snippet-var-label">{{${esc(v)}}}</label>
+              <input class="snippet-var-input" data-var="${esc(v)}" type="text"
+                placeholder="${esc(v.replace(/_/g, ' '))}" autocomplete="off" />
+            </div>
+          `).join('')}
+        </div>
+        <div class="snippet-var-actions">
+          <button class="btn-primary snippet-var-insert" id="snippet-var-insert">Insert</button>
+          <button class="btn-secondary snippet-var-cancel" id="snippet-var-cancel">Cancel</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(dialog);
+
+    const firstInput = dialog.querySelector<HTMLInputElement>('.snippet-var-input');
+    firstInput?.focus();
+
+    function submit() {
+      const values: Record<string, string> = {};
+      dialog.querySelectorAll<HTMLInputElement>('.snippet-var-input').forEach(inp => {
+        const varName = inp.dataset.var!;
+        values[varName] = inp.value || inp.placeholder;
+      });
+      dialog.remove();
+      backdrop.remove();
+      document.removeEventListener('keydown', onKey);
+      const finalText = fillVariables(partialText, values);
+      onComplete(finalText);
+    }
+
+    function cancel() {
+      dialog.remove();
+      backdrop.style.display = '';
+    }
+
+    dialog.querySelector('#snippet-var-insert')!.addEventListener('click', submit);
+    dialog.querySelector('#snippet-var-cancel')!.addEventListener('click', cancel);
+
+    // Enter to submit, Escape to cancel
+    dialog.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
   }
 
   function renderList(q: string) {
@@ -905,7 +997,11 @@ function openSnippetManager(returnTarget: HTMLElement | null) {
           value="${esc(existing?.title ?? '')}" placeholder="e.g. Thank you" />
         <label class="snippet-edit-label">Body</label>
         <textarea class="snippet-edit-body" id="snippet-edit-body"
-          rows="5" placeholder="Snippet text…">${esc(existing?.body ?? '')}</textarea>
+          rows="5" placeholder="Snippet text… Use {{variable}} for dynamic values">${esc(existing?.body ?? '')}</textarea>
+        <div class="snippet-edit-var-hint" id="snippet-edit-var-hint">
+          <span class="snippet-edit-var-hint-label">Available variables:</span>
+          ${BUILTIN_VARIABLES.map(v => `<code class="snippet-var-chip">{{${v}}}</code>`).join(' ')}
+        </div>
         <div class="snippet-edit-actions">
           <button class="btn-primary snippet-edit-save" id="snippet-edit-save">Save</button>
           <button class="btn-secondary snippet-edit-cancel" id="snippet-edit-cancel">Cancel</button>
