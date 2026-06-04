@@ -1,7 +1,7 @@
-import { type Thread, loadSnoozedThreads, loadStarredThreads, groupBySection, archiveThreads, trashThreads, untrashThreads, loadThreads } from './gmail';
+import { type Thread, loadSnoozedThreads, loadStarredThreads, loadSetAsideThreads, groupBySection, archiveThreads, trashThreads, untrashThreads, loadThreads } from './gmail';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 import { state } from './state';
-import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze, accountFor } from './actions';
+import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze, doSetAside, doUnsetAside, accountFor } from './actions';
 import { openSnoozePicker } from './snooze';
 import { showContextMenu } from './contextMenu';
 import { avatarHtml, stackedAvatarsHtml, ACCOUNT_BADGE_COLORS } from './avatar';
@@ -67,6 +67,7 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
          <button class="btn-action btn-archive" title="Archive">${icon.archive('16px')}</button>
          <button class="btn-action btn-trash" title="Trash">${icon.trash('16px')}</button>
          <button class="btn-action btn-snooze" title="Snooze">${icon.snooze('16px')}</button>
+         <button class="btn-action btn-set-aside" title="${t.isSetAside ? 'Remove from shelf' : 'Set aside'}">${icon.bookmark('16px')}</button>
          <button class="btn-action ${starClass}" title="${t.isStarred ? 'Unstar' : 'Star'}">${t.isStarred ? icon.star('16px') : icon.starOutline('16px')}</button>
        </div>`;
 
@@ -633,6 +634,25 @@ export async function renderStarredView(deps: ThreadListDeps) {
   wireThreadRows(container, starred, false, deps);
 }
 
+export async function renderSetAsideView(deps: ThreadListDeps) {
+  const container = document.getElementById('inbox');
+  if (!container || !state.account) return;
+
+  const threads = await loadSetAsideThreads(state.account.id);
+
+  if (threads.length === 0) {
+    container.innerHTML = renderEmptyState(icon.bookmark(), 'Nothing set aside', 'Press b or use the bookmark button to set threads aside for later.');
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="section-header">Set Aside <span class="section-badge">${threads.length}</span></div>
+    ${threads.map(t => threadRow(t, false)).join('')}
+  `;
+
+  wireThreadRows(container, threads, false, deps);
+}
+
 export async function renderScheduledView() {
   const container = document.getElementById('inbox');
   if (!container) return;
@@ -759,6 +779,11 @@ export function wireThreadRows(container: HTMLElement, list: Thread[], isSnoozed
     } else {
       row.querySelector('.btn-snooze')?.addEventListener('click', e => { e.stopPropagation(); openSnoozePicker(t, row); });
     }
+    row.querySelector('.btn-set-aside')?.addEventListener('click', e => {
+      e.stopPropagation();
+      if (t.isSetAside) { doUnsetAside(t, row, deps.getActionDeps()); }
+      else { doSetAside(t, row, deps.getActionDeps()); }
+    });
 
     const archiveBg = document.createElement('div');
     archiveBg.className = 'swipe-bg swipe-bg-archive';

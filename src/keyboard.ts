@@ -24,6 +24,8 @@ export interface KeyboardDeps {
   doToggleStar: (t: Thread, row: HTMLElement) => Promise<void>;
   doMarkUnread: (t: Thread, row: HTMLElement) => Promise<void>;
   doMute: (t: Thread, row: HTMLElement, deps: ActionDeps) => Promise<void>;
+  doSetAside: (t: Thread, row: HTMLElement, deps: ActionDeps) => Promise<void>;
+  doUnsetAside: (t: Thread, row: HTMLElement, deps: ActionDeps) => Promise<void>;
   syncAndRender: () => void;
 }
 
@@ -119,6 +121,7 @@ export function showCheatSheet() {
             <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">i</kbd></td><td>Go to Inbox</td></tr>
             <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">s</kbd></td><td>Go to Starred</td></tr>
             <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">d</kbd></td><td>Go to Drafts</td></tr>
+            <tr><td><kbd class="kb-key">g</kbd> <kbd class="kb-key">b</kbd></td><td>Go to Set Aside</td></tr>
             <tr><td><kbd class="kb-key">n</kbd> <kbd class="kb-key">p</kbd></td><td>Next/prev message</td></tr>
             <tr><td><kbd class="kb-key">Tab</kbd> <kbd class="kb-key">⇧Tab</kbd></td><td>Cycle views</td></tr>
           </table>
@@ -127,6 +130,7 @@ export function showCheatSheet() {
           <div class="kb-cat-title">Actions</div>
           <table class="kb-table">
             <tr><td><kbd class="kb-key">e</kbd></td><td>Archive</td></tr>
+            <tr><td><kbd class="kb-key">b</kbd></td><td>Set aside / unshelve</td></tr>
             <tr><td><kbd class="kb-key">#</kbd></td><td>Delete / Trash</td></tr>
             <tr><td><kbd class="kb-key">r</kbd></td><td>Reply</td></tr>
             <tr><td><kbd class="kb-key">f</kbd></td><td>Forward</td></tr>
@@ -235,6 +239,7 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
         case 'i': e.preventDefault(); deps.switchView('Inbox'); return;
         case 's': e.preventDefault(); deps.switchView('Starred'); return;
         case 'd': e.preventDefault(); deps.switchView('Drafts'); return;
+        case 'b': e.preventDefault(); deps.switchView('SetAside'); return;
       }
     }
 
@@ -325,6 +330,25 @@ export function registerKeyboardShortcuts(deps: KeyboardDeps) {
         if (!t) break;
         const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
         if (row) await deps.doToggleStar(t, row);
+        break;
+      }
+
+      case 'b': {
+        if (!state.selectedThreadId || !state.account) break;
+        const t = state.threads.find(x => x.id === state.selectedThreadId);
+        if (!t) break;
+        const ids = getVisibleThreadIds();
+        const idx = ids.indexOf(state.selectedThreadId);
+        const nextId = ids[idx + 1] ?? ids[idx - 1] ?? null;
+        const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
+        if (row) {
+          if (t.isSetAside) {
+            await deps.doUnsetAside(t, row, deps.getActionDeps());
+          } else {
+            await deps.doSetAside(t, row, deps.getActionDeps());
+          }
+        }
+        selectThread(nextId);
         break;
       }
 

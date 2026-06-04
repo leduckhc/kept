@@ -9,7 +9,7 @@ import {
   ArrowUp, Calendar, RefreshCw, Plus, Tag, Reply, Send, SunMoon,
   Keyboard, Paperclip, AlarmClock, MailOpen, Eye, ArrowLeft,
   ThumbsUp, ThumbsDown, Globe, Maximize2, ShieldBan, FolderInput,
-  OctagonX,
+  OctagonX, Bookmark,
 } from 'lucide-static';
 
 /**
@@ -90,6 +90,7 @@ export const icon = {
   // Thread actions — move/spam
   folderMove:  (s?: string) => sized(FolderInput, s),
   spam:        (s?: string) => sized(OctagonX, s),
+  bookmark:    (s?: string) => sized(Bookmark, s),
 
   // Custom render for any SVG string at a given size
   custom: sized,

@@ -45,6 +45,7 @@ export interface Thread {
   label: string;      // KPT-023: 'INBOX' | 'SENT' | 'DRAFT' | 'STARRED'
   accountId: string;  // KPT-037: which account this thread belongs to
   isMuted: boolean;   // KPT-040: suppressed from inbox permanently
+  isSetAside: boolean; // KPT-080: shelf — quick-access, no time component
   category: string;   // 'personal' | 'newsletters' | 'updates'
 }
 
@@ -409,7 +410,7 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
   const params: (string | number)[] = [accountId];
   if (activeLabel === 'STARRED') {
     sql = `SELECT * FROM threads WHERE account_id = ? AND is_starred = 1 AND is_archived = 0 AND is_blocked = 0
-           AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
+           AND (is_muted IS NULL OR is_muted = 0) AND (is_set_aside IS NULL OR is_set_aside = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
     params.push(nowMs);
   } else if (activeLabel === 'TRASH') {
     sql = `SELECT * FROM threads WHERE account_id = ? AND label = 'TRASH' ORDER BY received_at DESC LIMIT 500`;
@@ -417,7 +418,7 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
     sql = `SELECT * FROM threads WHERE account_id = ? AND is_archived = 1 AND label != 'TRASH' ORDER BY received_at DESC LIMIT 500`;
   } else {
     sql = `SELECT * FROM threads WHERE account_id = ? AND label = ? AND is_archived = 0 AND is_blocked = 0
-           AND (is_muted IS NULL OR is_muted = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
+           AND (is_muted IS NULL OR is_muted = 0) AND (is_set_aside IS NULL OR is_set_aside = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
     params.push(activeLabel, nowMs);
   }
   const rows = await db.select<Array<Record<string, unknown>>>(sql, params);
@@ -490,6 +491,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     label: (r.label as string) ?? 'INBOX',
     accountId: (r.account_id as string) ?? '',
     isMuted: (r.is_muted as number) === 1,
+    isSetAside: (r.is_set_aside as number) === 1,
     category: (r.category as string) ?? 'personal',
   };
 }
@@ -669,6 +671,26 @@ export async function unsnoozeThread(thread: Thread): Promise<void> {
     'UPDATE threads SET snoozed_until = NULL, snooze_label = NULL WHERE id = ?',
     [thread.id]
   );
+}
+
+// ── Set Aside (shelf) ─────────────────────────────────────
+export async function setAsideThread(thread: Thread): Promise<void> {
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_set_aside = 1 WHERE id = ?', [thread.id]);
+}
+
+export async function unsetAsideThread(thread: Thread): Promise<void> {
+  const db = await getDb();
+  await db.execute('UPDATE threads SET is_set_aside = 0 WHERE id = ?', [thread.id]);
+}
+
+export async function loadSetAsideThreads(accountId: string): Promise<Thread[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<Record<string, unknown>>>(
+    'SELECT * FROM threads WHERE account_id = ? AND is_set_aside = 1 ORDER BY received_at DESC',
+    [accountId]
+  );
+  return rows.map(rowToThread);
 }
 
 export async function muteThread(account: Account, thread: Thread): Promise<void> {

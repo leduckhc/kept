@@ -1,5 +1,5 @@
 import { type Account, getAccountById } from './auth';
-import { type Thread, markRead, markUnread, archiveThread, trashThread, untrashThread, blockSender, unsnoozeThread, toggleStar, muteThread, unmuteThread, loadThreads } from './gmail';
+import { type Thread, markRead, markUnread, archiveThread, trashThread, untrashThread, blockSender, unsnoozeThread, toggleStar, muteThread, unmuteThread, loadThreads, setAsideThread, unsetAsideThread } from './gmail';
 import { setStatus } from './helpers';
 import { showToast, showUndoToast } from './toasts';
 import { state, setAccount } from './state';
@@ -148,5 +148,41 @@ export async function doMute(t: Thread, row: HTMLElement, deps: ActionDeps) {
   } catch (e) {
     console.error('Mute failed:', e);
     setStatus('Mute failed');
+  }
+}
+
+export async function doSetAside(t: Thread, row: HTMLElement, deps: ActionDeps) {
+  const acct = accountFor(t);
+  if (!acct) return;
+  try {
+    await setAsideThread(t);
+    t.isSetAside = true;
+    row.remove();
+    state.threads = state.threads.filter(x => x.id !== t.id);
+    showUndoToast('Set aside', async () => {
+      await unsetAsideThread(t);
+      t.isSetAside = false;
+      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+      deps.renderInbox();
+    });
+  } catch (e) {
+    console.error('Set aside failed:', e);
+    setStatus('Set aside failed');
+  }
+}
+
+export async function doUnsetAside(t: Thread, row: HTMLElement, deps: ActionDeps) {
+  const acct = accountFor(t);
+  if (!acct) return;
+  try {
+    await unsetAsideThread(t);
+    t.isSetAside = false;
+    row.remove();
+    state.threads = state.threads.filter(x => x.id !== t.id);
+    showToast('Back in inbox', 3000);
+    state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+  } catch (e) {
+    console.error('Unset aside failed:', e);
+    setStatus('Unset aside failed');
   }
 }

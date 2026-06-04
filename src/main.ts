@@ -15,7 +15,7 @@ import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { startScheduledSendDispatch } from './scheduledSend';
 import { sendEmail } from './gmail';
 import { initSwipeGestures } from './swipe';
-import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute } from './actions';
+import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute, doSetAside, doUnsetAside } from './actions';
 import { openInlineReply } from './inlineReply';
 import { icon } from './icons';
 
@@ -43,6 +43,7 @@ import {
   renderInbox as _renderInbox,
   renderSnoozedView as _renderSnoozedView,
   renderStarredView as _renderStarredView,
+  renderSetAsideView as _renderSetAsideView,
   renderScheduledView,
   renderRemindersView,
   // renderEmptyState is used internally by threadList
@@ -58,6 +59,7 @@ let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',     icon: icon.email('18px') },
   { name: 'Snoozed',   icon: icon.clock('18px') },
+  { name: 'SetAside',  icon: icon.bookmark('18px') },
   { name: 'Sent',      icon: icon.send('18px') },
   { name: 'Drafts',    icon: icon.pencil('18px') },
   { name: 'Starred',   icon: icon.star('18px') },
@@ -461,6 +463,8 @@ function switchView(view: ViewName) {
     renderSnoozedView();
   } else if (view === 'Starred') {
     renderStarredView();
+  } else if (view === 'SetAside') {
+    renderSetAsideView();
   } else if (view === 'Scheduled') {
     renderScheduledView();
   } else if (view === 'Reminders') {
@@ -501,6 +505,7 @@ function localDraftToThread(d: LocalDraft): Thread {
     label: 'DRAFT',
     accountId: d.accountId,
     isMuted: false,
+    isSetAside: false,
     category: 'personal',
   };
 }
@@ -572,6 +577,8 @@ function registerKeyboardShortcuts() {
     doToggleStar,
     doMarkUnread,
     doMute,
+    doSetAside,
+    doUnsetAside,
     openSearchBar: () => showSearchBar({ renderInbox, openThread }),
     syncAndRender,
   });
@@ -598,6 +605,7 @@ function getThreadListDeps() {
 function renderInbox() { _renderInbox(getThreadListDeps()); }
 function renderSnoozedView() { return _renderSnoozedView(getThreadListDeps()); }
 function renderStarredView() { return _renderStarredView(getThreadListDeps()); }
+function renderSetAsideView() { return _renderSetAsideView(getThreadListDeps()); }
 
 /** Re-render whatever view is currently active (used after sync). */
 function renderCurrentView() {
