@@ -1,6 +1,6 @@
 // sync.ts — Sync orchestration extracted from main.ts
 import { getAllAccounts } from './auth';
-import { type Thread, syncInbox, loadThreads, hasSyncedBefore, invalidateSectionCache, getGroupedSenders, getGroupedDomains } from './gmail';
+import { type Thread, syncInbox, loadThreads, hasSyncedBefore, invalidateSectionCache, getGroupedSenders, getGroupedDomains, getVipSenders } from './gmail';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { setStatus, flashStatus, esc } from './helpers';
 import { state } from './state';
@@ -30,6 +30,7 @@ export async function refreshAll() {
   // Reload grouped senders & domains for current account
   state.groupedSenders = await getGroupedSenders(state.account.id);
   state.groupedDomains = await getGroupedDomains(state.account.id);
+  state.vipSenders = await getVipSenders(state.account.id);
 
   if (state.unifiedMode) {
     state.threads = await loadUnifiedThreads();

@@ -1164,11 +1164,12 @@ export function invalidateSectionCache() {
   _cachedSectionsKey = '';
 }
 
-export function groupBySection(threads: Thread[], groupedSenders?: string[], groupedDomains?: string[]): Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> {
+export function groupBySection(threads: Thread[], groupedSenders?: string[], groupedDomains?: string[], vipSenders?: string[]): Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> {
   // Fast cache key: length + boundary timestamps + boundary unread states
   const gsKey = groupedSenders?.join(',') ?? '';
   const gdKey = groupedDomains?.join(',') ?? '';
-  const key = `${threads.length}:${threads[0]?.receivedAt}:${threads[threads.length-1]?.receivedAt}:${threads[0]?.isUnread}:${threads[threads.length-1]?.isUnread}:${threads[0]?.isStarred}:${threads[threads.length-1]?.isStarred}:${gsKey}:${gdKey}`;
+  const vipKey = vipSenders?.join(',') ?? '';
+  const key = `${threads.length}:${threads[0]?.receivedAt}:${threads[threads.length-1]?.receivedAt}:${threads[0]?.isUnread}:${threads[threads.length-1]?.isUnread}:${threads[0]?.isStarred}:${threads[threads.length-1]?.isStarred}:${gsKey}:${gdKey}:${vipKey}`;
   if (_cachedSectionsKey === key && _cachedSections) return _cachedSections;
 
   const now = new Date();
@@ -1184,6 +1185,18 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[], gro
 
   const groupedSet = new Set(groupedSenders ?? []);
   const domainSet = new Set(groupedDomains ?? []);
+  const vipSet = new Set(vipSenders ?? []);
+
+  // KPT-081: Pull VIP sender threads out into priority section
+  const priorityThreads: Thread[] = [];
+  const nonVipThreads: Thread[] = [];
+  for (const t of threads) {
+    if (vipSet.size > 0 && vipSet.has(t.senderEmail)) {
+      priorityThreads.push(t);
+    } else {
+      nonVipThreads.push(t);
+    }
+  }
 
   const newSenders: Thread[] = [];
   const todayGroup: Thread[] = [];
@@ -1201,9 +1214,9 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[], gro
   // Detect new senders = first time we see this sender (crude: no prior archived threads needed)
   // For now: unread threads from senders with only 1 thread total
   const senderCounts: Record<string, number> = {};
-  for (const t of threads) senderCounts[t.senderEmail] = (senderCounts[t.senderEmail] ?? 0) + 1;
+  for (const t of nonVipThreads) senderCounts[t.senderEmail] = (senderCounts[t.senderEmail] ?? 0) + 1;
 
-  for (const t of threads) {
+  for (const t of nonVipThreads) {
     const d = new Date(t.receivedAt);
 
     // Newsletters/updates go into category rows — never into regular time buckets
@@ -1286,14 +1299,21 @@ export function groupBySection(threads: Thread[], groupedSenders?: string[], gro
     (sectionDomainGroups[section] ??= {})[domain] = groupThreads;
   }
 
-  const sections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> = [
+  const sections: Array<{ label: string; threads: Thread[]; categoryThreads?: { newsletters: Thread[]; updates: Thread[] }; senderGroups?: Record<string, Thread[]>; domainGroups?: Record<string, Thread[]> }> = [];
+
+  // KPT-081: Priority section at the very top
+  if (priorityThreads.length > 0) {
+    sections.push({ label: 'Priority', threads: priorityThreads });
+  }
+
+  sections.push(
     { label: 'Today', threads: removeGrouped(todayGroup), categoryThreads: { newsletters: allNewsletters, updates: allUpdates }, senderGroups: sectionSenderGroups['Today'], domainGroups: sectionDomainGroups['Today'] },
     { label: 'Yesterday', threads: removeGrouped(yesterdayGroup), senderGroups: sectionSenderGroups['Yesterday'], domainGroups: sectionDomainGroups['Yesterday'] },
     { label: 'This week', threads: removeGrouped(thisWeek), senderGroups: sectionSenderGroups['This week'], domainGroups: sectionDomainGroups['This week'] },
     { label: 'Last week', threads: removeGrouped(lastWeek), senderGroups: sectionSenderGroups['Last week'], domainGroups: sectionDomainGroups['Last week'] },
     { label: MONTH_NAMES[now.getMonth()], threads: removeGrouped(thisMonth), senderGroups: sectionSenderGroups[MONTH_NAMES[now.getMonth()]], domainGroups: sectionDomainGroups[MONTH_NAMES[now.getMonth()]] },
     { label: MONTH_NAMES[(now.getMonth() - 1 + 12) % 12], threads: removeGrouped(lastMonth), senderGroups: sectionSenderGroups[MONTH_NAMES[(now.getMonth() - 1 + 12) % 12]], domainGroups: sectionDomainGroups[MONTH_NAMES[(now.getMonth() - 1 + 12) % 12]] },
-  ];
+  );
 
   // Add year groups sorted descending
   for (const y of years) {
@@ -1371,6 +1391,32 @@ export async function removeGroupedDomain(accountId: string, domain: string): Pr
   await db.execute(
     "DELETE FROM grouped_senders WHERE email = ? AND account_id = ? AND group_type = 'domain'",
     [domain, accountId]
+  );
+}
+
+// ── VIP / Priority Senders (KPT-081) ─────────────────────
+export async function getVipSenders(accountId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ email: string }>>(
+    'SELECT email FROM vip_senders WHERE account_id = ?',
+    [accountId]
+  );
+  return rows.map(r => r.email);
+}
+
+export async function addVipSender(accountId: string, email: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    'INSERT OR REPLACE INTO vip_senders (email, account_id) VALUES (?, ?)',
+    [email, accountId]
+  );
+}
+
+export async function removeVipSender(accountId: string, email: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    'DELETE FROM vip_senders WHERE email = ? AND account_id = ?',
+    [email, accountId]
   );
 }
 

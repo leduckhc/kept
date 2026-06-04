@@ -1,4 +1,4 @@
-import { type Thread, unmuteThread, addGroupedSender, removeGroupedSender, addGroupedDomain, removeGroupedDomain } from './gmail';
+import { type Thread, unmuteThread, addGroupedSender, removeGroupedSender, addGroupedDomain, removeGroupedDomain, addVipSender, removeVipSender } from './gmail';
 import { setStatus } from './helpers';
 import { doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute, type ActionDeps } from './actions';
 import { openSnoozePicker } from './snooze';
@@ -24,6 +24,21 @@ export function showContextMenu(x: number, y: number, t: Thread, row: HTMLElemen
     items.push({ label: `${icon.unsnooze('16px')}  Wake up now`, action: () => { menu.remove(); doUnsnooze(t, row, deps); }, cls: 'ctx-menu-item--snooze' });
   }
   items.push({ label: `${t.isStarred ? icon.star('16px') + '  Unstar' : icon.starOutline('16px') + '  Star'}`, action: () => { menu.remove(); doToggleStar(t, row); } });
+  const isVip = state.vipSenders.includes(t.senderEmail);
+  items.push({ label: `${icon.crown('16px')}  ${isVip ? 'Remove from Priority' : 'Mark as Priority sender'}`, action: () => {
+    menu.remove();
+    const accountId = state.account?.id;
+    if (!accountId) return;
+    if (isVip) {
+      state.vipSenders = state.vipSenders.filter(e => e !== t.senderEmail);
+      deps.renderInbox();
+      removeVipSender(accountId, t.senderEmail).catch(() => setStatus('Remove VIP failed'));
+    } else {
+      state.vipSenders = [...state.vipSenders, t.senderEmail];
+      deps.renderInbox();
+      addVipSender(accountId, t.senderEmail).catch(() => setStatus('Add VIP failed'));
+    }
+  }});
   items.push({ label: `${icon.emailOpen('16px')}  Mark as unread`, action: () => { menu.remove(); doMarkUnread(t, row); } });
   items.push('divider');
   items.push({ label: `${icon.archive('16px')}  Archive`, action: () => { menu.remove(); doArchive(t, row, deps); } });

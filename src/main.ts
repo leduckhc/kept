@@ -534,7 +534,7 @@ function renderLabelView(view: ViewName) {
       .map(localDraftToThread);
     const merged = [...localAsThreads, ...ts];
 
-    const sections = groupBySection(merged);
+    const sections = groupBySection(merged, state.groupedSenders, state.groupedDomains, state.vipSenders);
     const html = sections.map(s => {
       return `
       <div class="section-header">${s.label}</div>

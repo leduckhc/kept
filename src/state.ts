@@ -29,6 +29,7 @@ export const state = {
   domainFilter: null as string | null,
   groupedSenders: [] as string[],
   groupedDomains: [] as string[],
+  vipSenders: [] as string[],
 };
 
 export function setAccount(a: Account) {

@@ -49,6 +49,7 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
   const acctBadge = acctIdx >= 0
     ? `<span class="account-badge" style="background:${ACCOUNT_BADGE_COLORS[acctIdx % ACCOUNT_BADGE_COLORS.length]}" title="${esc(state.accounts[acctIdx]?.email ?? '')}">${(state.accounts[acctIdx]?.email[0] ?? '?').toUpperCase()}</span>`
     : '';
+  const vipBadge = state.vipSenders.includes(t.senderEmail) ? `<span class="vip-badge" title="Priority sender">${icon.crown('12px')}</span>` : '';
 
   const clockIndicator = t.snoozedUntil
     ? `<span class="snooze-badge" title="Snoozed until ${formatDate(t.snoozedUntil)}">${icon.clock('14px')} ${formatDate(t.snoozedUntil)}</span>`
@@ -77,6 +78,7 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
       <div class="avatar-wrap">
         ${avatarHtml(t)}
         ${acctBadge}
+        ${vipBadge}
       </div>
       <span class="thread-sender">${searchQ ? highlightText(sender, searchQ) : esc(sender)}</span>
       <div class="thread-mid${attachment ? ' has-attachment' : ''}">
@@ -335,7 +337,7 @@ export function renderInbox(deps: ThreadListDeps) {
     // Flat list — no sections while searching
     html = searchFiltered.map(t => threadRow(t, false)).join('');
   } else {
-    const sections = groupBySection(searchFiltered, state.groupedSenders, state.groupedDomains);
+    const sections = groupBySection(searchFiltered, state.groupedSenders, state.groupedDomains, state.vipSenders);
 
     // Try incremental DOM patching first (skip if searching or focus banner changed)
     const allThreads = sections.flatMap(s => s.threads);

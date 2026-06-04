@@ -174,6 +174,16 @@ async function migrate(db: Database): Promise<void> {
     )
   `).catch(() => {});
 
+  // KPT-081: VIP / Priority Senders
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS vip_senders (
+      email TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      PRIMARY KEY (email, account_id)
+    )
+  `).catch(() => {});
+
   // Attachment metadata
   await db.execute(`
     CREATE TABLE IF NOT EXISTS attachments (
