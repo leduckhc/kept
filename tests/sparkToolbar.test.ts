@@ -13,13 +13,6 @@ function createShellDOM(html: string): Document {
 describe('Spark Top Bar', () => {
   const topbarHTML = `
     <div class="toolbar">
-      <div class="toolbar-actions-left">
-        <button class="toolbar-btn" data-action="archive" title="Archive"></button>
-        <button class="toolbar-btn" data-action="snooze" title="Snooze"></button>
-        <button class="toolbar-btn" data-action="label" title="Label"></button>
-        <button class="toolbar-btn" data-action="move" title="Move to folder"></button>
-        <button class="toolbar-btn" data-action="trash" title="Trash"></button>
-      </div>
       <div class="toolbar-search-wrap" id="toolbar-search-wrap">
         <button class="btn-icon btn-search-toggle" title="Search"></button>
         <div class="search-pill">
@@ -28,22 +21,29 @@ describe('Spark Top Bar', () => {
         </div>
       </div>
       <div class="toolbar-actions-right">
+        <div class="toolbar-context-actions" id="toolbar-context-actions">
+          <button class="toolbar-btn" data-action="archive" title="Archive"></button>
+          <button class="toolbar-btn" data-action="label" title="Label"></button>
+          <button class="toolbar-btn" data-action="move" title="Move to folder"></button>
+          <button class="toolbar-btn" data-action="trash" title="Trash"></button>
+        </div>
         <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]"></button>
-        <button class="sidebar-btn sidebar-avatar" id="btn-account" title="Switch account">M</button>
       </div>
     </div>`;
 
-  it('has action buttons on the left side', () => {
+  it('has context action buttons on the right side (hidden by default)', () => {
     const doc = createShellDOM(topbarHTML);
-    const leftActions = doc.querySelector('.toolbar-actions-left');
-    expect(leftActions).not.toBeNull();
-    const buttons = leftActions!.querySelectorAll('.toolbar-btn[data-action]');
-    expect(buttons.length).toBe(5);
+    const ctxActions = doc.querySelector('.toolbar-context-actions');
+    expect(ctxActions).not.toBeNull();
+    // Hidden by default (no .visible class)
+    expect(ctxActions!.classList.contains('visible')).toBe(false);
+    const buttons = ctxActions!.querySelectorAll('.toolbar-btn[data-action]');
+    expect(buttons.length).toBe(4);
     const actions = Array.from(buttons).map(b => (b as HTMLElement).dataset.action);
-    expect(actions).toEqual(['archive', 'snooze', 'label', 'move', 'trash']);
+    expect(actions).toEqual(['archive', 'label', 'move', 'trash']);
   });
 
-  it('has search in the center', () => {
+  it('has search on the left/center', () => {
     const doc = createShellDOM(topbarHTML);
     const toolbar = doc.querySelector('.toolbar')!;
     const searchWrap = toolbar.querySelector('.toolbar-search-wrap');
@@ -52,20 +52,19 @@ describe('Spark Top Bar', () => {
     expect(input).not.toBeNull();
   });
 
-  it('has compose button and avatar on the right', () => {
+  it('has compose button on the right after context actions', () => {
     const doc = createShellDOM(topbarHTML);
     const rightActions = doc.querySelector('.toolbar-actions-right');
     expect(rightActions).not.toBeNull();
     const compose = rightActions!.querySelector('#btn-compose');
     expect(compose).not.toBeNull();
-    const avatar = rightActions!.querySelector('#btn-account');
-    expect(avatar).not.toBeNull();
   });
 
-  it('does not have a hamburger menu button', () => {
+  it('context actions become visible when .visible class is added', () => {
     const doc = createShellDOM(topbarHTML);
-    const hamburger = doc.querySelector('.btn-hamburger');
-    expect(hamburger).toBeNull();
+    const ctxActions = doc.querySelector('.toolbar-context-actions')!;
+    ctxActions.classList.add('visible');
+    expect(ctxActions.classList.contains('visible')).toBe(true);
   });
 });
 

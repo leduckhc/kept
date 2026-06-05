@@ -373,13 +373,22 @@ body {
 }
 .search-input::placeholder { color: var(--text-muted); }
 
-.toolbar-actions-left {
+.toolbar-actions-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
+  margin-left: auto;
 }
-.toolbar-actions-left .toolbar-btn {
+.toolbar-context-actions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+.toolbar-context-actions.visible {
+  display: flex;
+}
+.toolbar-context-actions .toolbar-btn {
   width: 32px;
   height: 32px;
   border-radius: 8px;
@@ -392,16 +401,9 @@ body {
   justify-content: center;
   transition: background 0.12s, color 0.12s;
 }
-.toolbar-actions-left .toolbar-btn:hover {
+.toolbar-context-actions .toolbar-btn:hover {
   background: var(--hover);
   color: var(--text);
-}
-.toolbar-actions-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  margin-left: auto;
 }
 
 /* ── Pill buttons (toolbar) ─────────────────────────────── */

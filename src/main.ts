@@ -16,7 +16,7 @@ import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { startScheduledSendDispatch } from './scheduledSend';
 import { sendEmail } from './gmail';
 import { initSwipeGestures } from './swipe';
-import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute, doSetAside, doUnsetAside } from './actions';
+import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doTrash, doMute, doSetAside, doUnsetAside } from './actions';
 import { openInlineReply } from './inlineReply';
 import { icon } from './icons';
 import { loadSmartFolders, showCreateSmartFolderDialog, runSmartFolder, deleteSmartFolder, type SmartFolder } from './smartFolders';
@@ -265,13 +265,6 @@ function showShell() {
     <div id="app-shell" class="${state.layoutMode === '2-pane' ? 'layout-2pane' : ''}">
       <div class="toolbar">
         <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">${icon.menu('18px')}</button>
-        <div class="toolbar-actions-left">
-          <button class="toolbar-btn" data-action="archive" title="Archive">${icon.archive('16px')}</button>
-          <button class="toolbar-btn" data-action="snooze" title="Snooze">${icon.snooze('16px')}</button>
-          <button class="toolbar-btn" data-action="label" title="Label">${icon.tag('16px')}</button>
-          <button class="toolbar-btn" data-action="move" title="Move to folder">${icon.folderMove('16px')}</button>
-          <button class="toolbar-btn" data-action="trash" title="Trash">${icon.trash('16px')}</button>
-        </div>
         <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
           <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]">${icon.search('16px')}</button>
           <div class="search-pill">
@@ -280,6 +273,12 @@ function showShell() {
           </div>
         </div>
         <div class="toolbar-actions-right">
+          <div class="toolbar-context-actions" id="toolbar-context-actions">
+            <button class="toolbar-btn" data-action="archive" title="Archive">${icon.archive('16px')}</button>
+            <button class="toolbar-btn" data-action="label" title="Label">${icon.tag('16px')}</button>
+            <button class="toolbar-btn" data-action="move" title="Move to folder">${icon.folderMove('16px')}</button>
+            <button class="toolbar-btn" data-action="trash" title="Trash">${icon.trash('16px')}</button>
+          </div>
           <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
         </div>
       </div>
@@ -394,6 +393,28 @@ function showShell() {
   `;
 
   document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
+
+  // Toolbar context actions: show/hide based on selection or bulk mode
+  const ctxActions = document.getElementById('toolbar-context-actions')!;
+  (window as any).__updateToolbarContextActions = function updateToolbarContextActions() {
+    const show = state.bulkMode || state.selectedThreadId !== null;
+    ctxActions.classList.toggle('visible', show);
+  };
+  // Wire toolbar action buttons (single-thread actions when a thread is open)
+  ctxActions.querySelectorAll('.toolbar-btn[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = (btn as HTMLElement).dataset.action!;
+      // In bulk mode, the bulk bar already handles actions — skip.
+      if (state.bulkMode) return;
+      if (!state.selectedThreadId) return;
+      const t = state.threads.find(x => x.id === state.selectedThreadId);
+      if (!t) return;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
+      const deps = getActionDeps();
+      if (action === 'archive' && row) doArchive(t, row, deps);
+      else if (action === 'trash' && row) doTrash(t, row, deps);
+    });
+  });
 
   // Settings: Manage Snippets button
   document.getElementById('settings-manage-snippets')!.addEventListener('click', () => {
@@ -701,7 +722,7 @@ function registerKeyboardShortcuts() {
 
 function exitBulkMode() { _exitBulkMode(renderInbox); }
 function toggleBulkSelection(id: string, shiftKey?: boolean) { _toggleBulkSelection(id, updateBulkBar, shiftKey); }
-function updateBulkBar() { _updateBulkBar(getActionDeps, exitBulkMode, openBulkSnoozePicker); }
+function updateBulkBar() { _updateBulkBar(getActionDeps, exitBulkMode, openBulkSnoozePicker); (window as any).__updateToolbarContextActions?.(); }
 function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement) { _openBulkSnoozePicker(ids, anchorRow, exitBulkMode); }
 
 function getThreadListDeps() {
@@ -717,7 +738,7 @@ function getThreadListDeps() {
   };
 }
 
-function renderInbox() { _renderInbox(getThreadListDeps()); }
+function renderInbox() { _renderInbox(getThreadListDeps()); (window as any).__updateToolbarContextActions?.(); }
 function renderSnoozedView() { return _renderSnoozedView(getThreadListDeps()); }
 function renderStarredView() { return _renderStarredView(getThreadListDeps()); }
 function renderSetAsideView() { return _renderSetAsideView(getThreadListDeps()); }
@@ -740,7 +761,10 @@ function openThread(t: Thread) {
   if (t.label === 'DRAFT') {
     return openDraftInCompose(t);
   }
-  return getThreadReader().then(m => m.openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt));
+  return getThreadReader().then(m => {
+    m.openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt);
+    (window as any).__updateToolbarContextActions?.();
+  });
 }
 
 async function openDraftInCompose(t: Thread) {
