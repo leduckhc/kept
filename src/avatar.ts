@@ -135,6 +135,20 @@ function initAvatarFadeIn(): void {
 }
 initAvatarFadeIn();
 
+/**
+ * After a full innerHTML rebuild, synchronously mark browser-cached avatar images
+ * as loaded so they skip the opacity transition (prevents blink on re-render).
+ * Call this immediately after setting innerHTML on a container with thread rows.
+ */
+export function markCachedAvatars(container: HTMLElement): void {
+  const imgs = container.querySelectorAll<HTMLImageElement>('.avatar img');
+  for (const img of imgs) {
+    if (img.complete && img.naturalWidth > 0) {
+      img.classList.add('loaded');
+    }
+  }
+}
+
 /** Patch rendered avatars with newly resolved Google photos (call after resolvePhotos). */
 export function patchAvatarsWithPhotos(resolved: Map<string, string>): void {
   if (resolved.size === 0) return;

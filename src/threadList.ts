@@ -4,7 +4,7 @@ import { state } from './state';
 import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze, doSetAside, doUnsetAside, accountFor } from './actions';
 import { openSnoozePicker } from './snooze';
 import { showContextMenu } from './contextMenu';
-import { avatarHtml, stackedAvatarsHtml, ACCOUNT_BADGE_COLORS } from './avatar';
+import { avatarHtml, stackedAvatarsHtml, ACCOUNT_BADGE_COLORS, markCachedAvatars } from './avatar';
 import { getActiveReminderThreadIds, getAllActiveReminders, dismissReminder } from './followupReminders';
 import { esc, formatDate } from './helpers';
 import { isSearchActive, getSearchQuery, getFilteredThreads, highlightText, dismissSearchBar } from './search';
@@ -294,6 +294,7 @@ export function renderInbox(deps: ThreadListDeps) {
       deps.renderInbox();
     });
     wireThreadRows(container, filtered, false, deps);
+    markCachedAvatars(container);
     return;
   }
 
@@ -429,6 +430,7 @@ export function renderInbox(deps: ThreadListDeps) {
   }
   wireThreadRows(container, searchFiltered, false, deps);
   wireCategoryAndGroupRows(container, deps);
+  markCachedAvatars(container);
   if (state.bulkMode) deps.updateBulkBar();
   if (state.selectedThreadId) {
     const row = container.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
@@ -615,6 +617,7 @@ export async function renderSnoozedView(deps: ThreadListDeps) {
   `;
 
   wireThreadRows(container, snoozed, true, deps);
+  markCachedAvatars(container);
 }
 
 export async function renderStarredView(deps: ThreadListDeps) {
@@ -634,6 +637,7 @@ export async function renderStarredView(deps: ThreadListDeps) {
   `;
 
   wireThreadRows(container, starred, false, deps);
+  markCachedAvatars(container);
 }
 
 export async function renderSetAsideView(deps: ThreadListDeps) {
@@ -653,6 +657,7 @@ export async function renderSetAsideView(deps: ThreadListDeps) {
   `;
 
   wireThreadRows(container, threads, false, deps);
+  markCachedAvatars(container);
 }
 
 export async function renderScheduledView() {
