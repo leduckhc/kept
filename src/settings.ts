@@ -185,7 +185,7 @@ function renderSettingsAccounts() {
   if (!list) return;
   list.innerHTML = state.accounts.map((a, i) => {
     const initial = (a.email[0] ?? '?').toUpperCase();
-    const color = ACCOUNT_BADGE_COLORS[(a as any).colorIndex ?? i];
+    const color = ACCOUNT_BADGE_COLORS[a.colorIndex ?? i];
     const isOnly = state.accounts.length === 1;
     return `
       <div class="settings-account-row" data-id="${esc(a.id)}">

@@ -56,6 +56,7 @@ function makeAccount(id: string, email: string, signature = ''): Account {
     refreshToken: 'rtok-' + id,
     tokenExpiry: Date.now() + 3_600_000,
     signature,
+    colorIndex: 0,
   };
 }
 

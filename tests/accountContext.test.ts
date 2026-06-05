@@ -55,6 +55,8 @@ function makeAccount(id: string, email: string): Account {
     accessToken: 'tok',
     refreshToken: 'rtok',
     tokenExpiry: Date.now() + 3_600_000,
+    signature: '',
+    colorIndex: 0,
   };
 }
 

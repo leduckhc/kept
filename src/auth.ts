@@ -33,11 +33,13 @@ export interface Account {
   refreshToken: string;
   tokenExpiry: number;
   signature: string;
+  colorIndex: number;
 }
 
 type AccountRow = {
   id: string; email: string; access_token: string;
   refresh_token: string; token_expiry: number; signature: string | null;
+  color_index: number | null;
 };
 
 async function rowToAccount(r: AccountRow): Promise<Account> {
@@ -51,6 +53,7 @@ async function rowToAccount(r: AccountRow): Promise<Account> {
       refreshToken: keychainTokens.refreshToken,
       tokenExpiry: keychainTokens.tokenExpiry,
       signature: r.signature ?? '',
+      colorIndex: r.color_index ?? 0,
     };
   }
   // Fallback: use SQLite tokens (pre-migration accounts)
@@ -61,6 +64,7 @@ async function rowToAccount(r: AccountRow): Promise<Account> {
     refreshToken: r.refresh_token,
     tokenExpiry: r.token_expiry,
     signature: r.signature ?? '',
+    colorIndex: r.color_index ?? 0,
   };
 }
 
@@ -231,6 +235,7 @@ async function exchangeCode(code: string, verifier: string, redirectUri: string)
     refreshToken: tokens.refresh_token,
     tokenExpiry: Date.now() + tokens.expires_in * 1000,
     signature: '',
+    colorIndex: 0,
   };
   await saveAccount(account);
   return account;

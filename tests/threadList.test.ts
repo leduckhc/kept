@@ -110,7 +110,7 @@ describe('Category row wiring — Archive All actually fires', () => {
     const t2 = makeThread({ id: 'th_nl_2', category: 'newsletters' });
     const t3 = makeThread({ id: 'th_personal', category: 'personal' });
     state.threads = [t1, t2, t3];
-    state.account = { id: 'acc_1', email: 'x@x.com', accessToken: '', refreshToken: '', tokenExpiry: 0, signature: '' } as any;
+    state.account = { id: 'acc_1', email: 'x@x.com', accessToken: '', refreshToken: '', tokenExpiry: 0, signature: '', colorIndex: 0 } as any;
     state.accounts = [state.account];
 
     const container = document.createElement('div');
