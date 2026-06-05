@@ -96,25 +96,7 @@ export function openSettings() {
     if (subEl) subEl.textContent = nowIs2 ? 'Showing list only, click to read' : 'Hide email preview pane';
   }, { once: true });
 
-  // Wire sign out (once: true prevents duplicate confirm dialogs on repeated open/close)
-  const signoutBtn = document.getElementById('settings-signout') as HTMLButtonElement;
-  signoutBtn?.addEventListener('click', async () => {
-    if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
-    signoutBtn.disabled = true;
-    signoutBtn.textContent = 'Signing out…';
-    try {
-      for (const a of state.accounts) {
-        await removeAccount(a).catch(e => console.error('Remove error:', e));
-      }
-    } finally {
-      clearActiveAccountId();
-      state.account = null;
-      state.accounts = [];
-      state.threads = [];
-      state.syncing = false;
-      _deps?.showAuth();
-    }
-  }, { once: true });
+
 
   // Load and wire signature editor
   const sigTa = document.getElementById('settings-signature-ta') as HTMLTextAreaElement;
@@ -186,7 +168,6 @@ function renderSettingsAccounts() {
   list.innerHTML = state.accounts.map((a, i) => {
     const initial = (a.email[0] ?? '?').toUpperCase();
     const color = ACCOUNT_BADGE_COLORS[a.colorIndex ?? i];
-    const isOnly = state.accounts.length === 1;
     return `
       <div class="settings-account-row" data-id="${esc(a.id)}">
         <div class="settings-avatar" style="background:${color}">${initial}</div>
@@ -195,13 +176,12 @@ function renderSettingsAccounts() {
           <div class="settings-account-email">${esc(a.email)}</div>
         </div>
         <button class="settings-account-remove" data-id="${esc(a.id)}" title="Remove account"
-          ${isOnly ? 'disabled' : ''} aria-label="Remove ${esc(a.email)}">×</button>
+          aria-label="Remove ${esc(a.email)}">×</button>
       </div>`;
   }).join('');
 
   // Wire remove buttons
   list.querySelectorAll<HTMLButtonElement>('.settings-account-remove').forEach(btn => {
-    if (btn.disabled) return;
     btn.addEventListener('click', async () => {
       const removeId = btn.dataset.id!;
       const target = state.accounts.find(a => a.id === removeId);

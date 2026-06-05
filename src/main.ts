@@ -390,7 +390,6 @@ function showShell() {
             </div>
           </div>
           <div class="settings-footer">
-            <button class="settings-signout" id="settings-signout">Sign out</button>
           </div>
         </div>
       </div>

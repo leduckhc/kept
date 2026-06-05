@@ -101,7 +101,7 @@ export function renderCommandPalette(deps: CommandPaletteDeps) {
     { id: 'sync',           label: 'Sync',              shortcut: '⌘R', icon: icon.send('16px'), group: 'App', action: () => deps.syncAndRender() },
     { id: 'settings',       label: 'Settings',          icon: icon.email('16px'), group: 'App', action: () => deps.openSettings() },
     { id: 'show-shortcuts',label: 'Show Shortcuts',    shortcut: '?', icon: icon.keyboard('16px'), group: 'App', action: () => deps.showCheatSheet() },
-    { id: 'sign-out',      label: 'Sign Out',          icon: icon.logout('16px'), group: 'App', action: async () => {
+    { id: 'sign-out',      label: 'Sign Out All',      icon: icon.logout('16px'), group: 'App', action: async () => {
       if (!confirm('Sign out of all accounts? This will delete all local data.')) return;
       for (const a of state.accounts) await deps.removeAccount(a).catch(() => {});
       deps.clearActiveAccountId();

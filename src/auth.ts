@@ -131,16 +131,16 @@ export async function saveAccount(account: Account): Promise<void> {
   if (keychainOk) {
     // Keychain has the secrets — SQLite stores only metadata
     await db.execute(
-      `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature)
-       VALUES (?, ?, '', '', 0, ?)`,
-      [account.id, account.email, account.signature ?? '']
+       `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature, color_index)
+        VALUES (?, ?, '', '', 0, ?, ?)`,
+       [account.id, account.email, account.signature ?? '', account.colorIndex ?? 0]
     );
   } else {
     // Fallback: store tokens in SQLite (same as before keychain feature)
     await db.execute(
-      `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [account.id, account.email, account.accessToken, account.refreshToken, account.tokenExpiry, account.signature ?? '']
+       `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature, color_index)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       [account.id, account.email, account.accessToken, account.refreshToken, account.tokenExpiry, account.signature ?? '', account.colorIndex ?? 0]
     );
   }
 }
@@ -225,17 +225,33 @@ async function exchangeCode(code: string, verifier: string, redirectUri: string)
   });
   if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
   const tokens = await res.json() as {
-    access_token: string; refresh_token: string; expires_in: number;
+    access_token: string; refresh_token?: string; expires_in: number;
   };
   const profile = await fetchProfile(tokens.access_token);
+
+  // If Google didn't return a refresh_token (re-auth), try existing keychain
+  let refreshToken = tokens.refresh_token;
+  if (!refreshToken) {
+    const existing = await getTokensFromKeychain(profile.email);
+    if (existing?.refreshToken) {
+      refreshToken = existing.refreshToken;
+    } else {
+      throw new Error('No refresh_token returned by Google and none found in keychain. Please revoke app access in Google Account settings and try again.');
+    }
+  }
+
+  // Auto-assign next available color index
+  const existingAccounts = await getAllAccounts();
+  const colorIndex = existingAccounts.length;
+
   const account: Account = {
     id: profile.id,
     email: profile.email,
     accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
+    refreshToken: refreshToken,
     tokenExpiry: Date.now() + tokens.expires_in * 1000,
     signature: '',
-    colorIndex: 0,
+    colorIndex,
   };
   await saveAccount(account);
   return account;
@@ -268,6 +284,9 @@ export async function ensureFreshToken(account: Account): Promise<Account> {
 }
 
 async function _doRefreshToken(account: Account): Promise<Account> {
+  if (!account.refreshToken) {
+    throw new Error(`Cannot refresh token for ${account.email}: no refresh_token available. Please re-authenticate this account.`);
+  }
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
