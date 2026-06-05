@@ -3672,3 +3672,14 @@ body {
   font-family: monospace;
 }
 
+/* ── Compose From Badge ── */
+.compose-from-row { position: relative; }
+.compose-from-badge { display: flex; align-items: center; gap: 6px; background: var(--hover-bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+.compose-from-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.compose-from-email { color: var(--text-primary); }
+.compose-from-chevron { color: var(--text-muted); font-size: 10px; }
+.compose-from-picker { position: absolute; top: 100%; left: 0; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; min-width: 240px; padding: 4px; }
+.compose-from-picker-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.compose-from-picker-item:hover { background: var(--hover-bg); }
+.compose-from-picker-item.active { background: var(--accent-bg, rgba(124,58,237,0.1)); }
+

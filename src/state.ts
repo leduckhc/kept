@@ -31,6 +31,7 @@ export const state = {
   groupedSenders: [] as string[],
   groupedDomains: [] as string[],
   vipSenders: [] as string[],
+  lastUsedAccountId: null as string | null,
 };
 
 export function setAccount(a: Account) {

@@ -6,7 +6,7 @@ import { scheduleEmail } from './scheduledSend';
 import { saveReminder, reminderPresets } from './followupReminders';
 import { state } from './state';
 import { showToast, showUndoToast } from './toasts';
-import { avatarColor } from './avatar';
+import { avatarColor, ACCOUNT_BADGE_COLORS } from './avatar';
 import { esc } from './helpers';
 import { icon } from './icons';
 import { saveLocalDraft, deleteLocalDraft, linkGmailDraft, newDraftId, type LocalDraft } from './localDrafts';
@@ -30,6 +30,7 @@ export interface ComposeOptions {
   prefillSubject?: string;
   prefillBody?: string;
   draftId?: string; // existing Gmail draft ID (for updates)
+  accountId?: string; // sending account override
 }
 
 // ── Multi-panel state ──
@@ -83,11 +84,15 @@ export async function openCompose(opts: ComposeOptions) {
     return;
   }
 
-  if (!state.account) return;
+  // Determine sending account
+  let sendingAccount = opts.accountId
+    ? state.accounts.find(a => a.id === opts.accountId) ?? state.account
+    : state.account;
+  if (!sendingAccount) return;
 
   let knownEmails: string[] = [];
   try {
-    knownEmails = await loadSenderEmails(state.account.id);
+    knownEmails = await loadSenderEmails(sendingAccount.id);
   } catch { /* non-fatal */ }
 
   const pendingAttachments: Array<{ filename: string; mimeType: string; data: Uint8Array }> = [
@@ -101,6 +106,10 @@ export async function openCompose(opts: ComposeOptions) {
 
   const showCcBcc = opts.mode === 'replyAll' || !!opts.cc || !!opts.bcc;
 
+  const acctIdx = state.accounts.findIndex(a => a.id === sendingAccount!.id);
+  const accountColor = ACCOUNT_BADGE_COLORS[acctIdx >= 0 ? acctIdx % ACCOUNT_BADGE_COLORS.length : 0];
+  const multiAccount = state.accounts.length > 1;
+
   const panel = document.createElement('div');
   panel.className = 'compose-panel';
   panel.innerHTML = `
@@ -113,6 +122,24 @@ export async function openCompose(opts: ComposeOptions) {
       </div>
     </div>
     <div class="compose-panel-body">
+      <div class="compose-field compose-from-row">
+        <label class="compose-label">From</label>
+        <button class="compose-from-badge" type="button">
+          <span class="compose-from-dot" style="background: ${accountColor}"></span>
+          <span class="compose-from-email">${esc(sendingAccount.email)}</span>
+          ${multiAccount ? '<span class="compose-from-chevron">▾</span>' : ''}
+        </button>
+        <div class="compose-from-picker" style="display:none">
+          ${state.accounts.map((acct, i) => {
+            const c = ACCOUNT_BADGE_COLORS[i % ACCOUNT_BADGE_COLORS.length];
+            const active = acct.id === sendingAccount!.id ? ' active' : '';
+            return `<div class="compose-from-picker-item${active}" data-account-id="${acct.id}">
+              <span class="compose-from-dot" style="background: ${c}"></span>
+              <span>${esc(acct.email)}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
       <div class="compose-field compose-to-row">
         <label class="compose-label">To</label>
         <input class="compose-input compose-to" type="text"
@@ -199,6 +226,47 @@ export async function openCompose(opts: ComposeOptions) {
     });
   }
 
+  // ── From badge picker ──
+  const fromBadge = panel.querySelector<HTMLButtonElement>('.compose-from-badge')!;
+  const fromPicker = panel.querySelector<HTMLElement>('.compose-from-picker')!;
+  if (multiAccount) {
+    fromBadge.addEventListener('click', () => {
+      fromPicker.style.display = fromPicker.style.display === 'none' ? 'block' : 'none';
+    });
+    fromPicker.addEventListener('click', (e) => {
+      const item = (e.target as HTMLElement).closest<HTMLElement>('.compose-from-picker-item');
+      if (!item) return;
+      const newAcctId = item.dataset.accountId!;
+      const newAcct = state.accounts.find(a => a.id === newAcctId);
+      if (!newAcct) return;
+      sendingAccount = newAcct;
+      state.lastUsedAccountId = newAcct.id;
+      const newIdx = state.accounts.findIndex(a => a.id === newAcctId);
+      const newColor = ACCOUNT_BADGE_COLORS[newIdx >= 0 ? newIdx % ACCOUNT_BADGE_COLORS.length : 0];
+      fromBadge.querySelector<HTMLElement>('.compose-from-dot')!.style.background = newColor;
+      fromBadge.querySelector<HTMLElement>('.compose-from-email')!.textContent = newAcct.email;
+      // Update active state in picker
+      fromPicker.querySelectorAll('.compose-from-picker-item').forEach(el => {
+        el.classList.toggle('active', (el as HTMLElement).dataset.accountId === newAcctId);
+      });
+      fromPicker.style.display = 'none';
+      // Update signature
+      const sigEl = editorEl.querySelector('.compose-signature');
+      if (sigEl && newAcct.signature) {
+        const sigText = newAcct.signature.replace(/\\n/g, '\n');
+        sigEl.innerHTML = `-- \n${esc(sigText)}`;
+      } else if (sigEl && !newAcct.signature) {
+        sigEl.remove();
+      }
+    });
+    // Dismiss picker on outside click
+    document.addEventListener('click', (e) => {
+      if (!fromBadge.contains(e.target as Node) && !fromPicker.contains(e.target as Node)) {
+        fromPicker.style.display = 'none';
+      }
+    });
+  }
+
   // ── Quoted content for reply/forward ──
   if (opts.quotedHtml) {
     editorEl.innerHTML = `<br><br><div class="compose-quote">${opts.quotedHtml}</div>`;
@@ -207,7 +275,7 @@ export async function openCompose(opts: ComposeOptions) {
   }
 
   // Auto-append signature
-  const sig = state.account?.signature;
+  const sig = sendingAccount?.signature;
   if (sig && !opts.quotedHtml && !opts.quotedText) {
     const sigText = sig.replace(/\\n/g, '\n');
     editorEl.innerHTML = `<br><div class="compose-signature" style="color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px;margin-top:8px;font-size:13px;white-space:pre-wrap">-- \n${esc(sigText)}</div>`;
@@ -335,7 +403,7 @@ export async function openCompose(opts: ComposeOptions) {
   function scheduleDraftSave() {
     if (instance.draftTimer) clearTimeout(instance.draftTimer);
     instance.draftTimer = setTimeout(async () => {
-      if (!state.account) return;
+      if (!sendingAccount) return;
       const to = toEl.value.trim();
       const cc = ccEl?.value.trim() ?? '';
       const bcc = bccEl?.value.trim() ?? '';
@@ -349,7 +417,7 @@ export async function openCompose(opts: ComposeOptions) {
       const now = Date.now();
       const localDraft: LocalDraft = {
         id: instance.localDraftId,
-        accountId: state.account.id,
+        accountId: sendingAccount.id,
         gmailDraftId: instance.draftId,
         mode: opts.mode ?? 'new',
         to, cc, bcc, subject, body, htmlBody,
@@ -363,9 +431,9 @@ export async function openCompose(opts: ComposeOptions) {
       // 2) Sync to Gmail API (non-blocking, best-effort)
       try {
         if (instance.draftId) {
-          await updateDraft(state.account, instance.draftId, { to, cc, subject, body, threadId: opts.threadId });
+          await updateDraft(sendingAccount, instance.draftId, { to, cc, subject, body, threadId: opts.threadId });
         } else {
-          const id = await createDraft(state.account, { to, cc, subject, body, threadId: opts.threadId });
+          const id = await createDraft(sendingAccount, { to, cc, subject, body, threadId: opts.threadId });
           instance.draftId = id;
           linkGmailDraft(instance.localDraftId, id).catch(() => {});
         }
@@ -388,8 +456,8 @@ export async function openCompose(opts: ComposeOptions) {
     // Delete local draft
     deleteLocalDraft(instance.localDraftId).catch(() => {});
     // Delete draft from Gmail if one was saved
-    if (instance.draftId && state.account) {
-      try { await deleteDraft(state.account, instance.draftId); } catch { /* non-fatal */ }
+    if (instance.draftId && sendingAccount) {
+      try { await deleteDraft(sendingAccount, instance.draftId); } catch { /* non-fatal */ }
     }
     closeCompose(panel);
   }
@@ -398,7 +466,7 @@ export async function openCompose(opts: ComposeOptions) {
   panel.querySelector('.compose-panel-close')!.addEventListener('click', async () => {
     // Flush any pending draft save
     if (instance.draftTimer) clearTimeout(instance.draftTimer);
-    if (state.account) {
+    if (sendingAccount) {
       const to = toEl.value.trim();
       const cc = ccEl?.value.trim() ?? '';
       const bcc = bccEl?.value.trim() ?? '';
@@ -409,7 +477,7 @@ export async function openCompose(opts: ComposeOptions) {
         const now = Date.now();
         const localDraft: LocalDraft = {
           id: instance.localDraftId,
-          accountId: state.account.id,
+          accountId: sendingAccount.id,
           gmailDraftId: instance.draftId,
           mode: opts.mode ?? 'new',
           to, cc, bcc, subject, body, htmlBody,
@@ -464,12 +532,12 @@ export async function openCompose(opts: ComposeOptions) {
     const bcc = bccEl?.value.trim() ?? '';
     const subject = subjectEl.value.trim();
     const body = editorEl.innerText.trim();
-    if (!to || (!body && !pendingAttachments.length) || !state.account) {
+    if (!to || (!body && !pendingAttachments.length) || !sendingAccount) {
       showToast('Please fill in recipient and message');
       return;
     }
 
-    const account = state.account;
+    const account = sendingAccount;
     const draftId = instance.draftId;
     const payload = {
       to,
@@ -708,8 +776,9 @@ export async function openComposeNew(
   prefillSubject = '',
   _openSnippetPicker: (ta: HTMLTextAreaElement | null) => void = () => {},
   _showFollowupPrompt: (opts: { threadId: string; subject: string; sentTo: string }) => void = () => {},
+  accountId?: string,
 ) {
-  await openCompose({ mode: 'new', subject: prefillSubject });
+  await openCompose({ mode: 'new', subject: prefillSubject, accountId: accountId ?? state.lastUsedAccountId ?? state.account?.id });
 }
 
 export async function openComposeReply(opts: {
@@ -719,6 +788,7 @@ export async function openComposeReply(opts: {
   inReplyTo?: string;
   quotedText?: string;
   quotedHtml?: string;
+  accountId?: string;
 }) {
   await openCompose({
     mode: 'reply',
@@ -728,6 +798,7 @@ export async function openComposeReply(opts: {
     inReplyTo: opts.inReplyTo,
     quotedText: opts.quotedText,
     quotedHtml: opts.quotedHtml,
+    accountId: opts.accountId,
   });
 }
 
@@ -739,6 +810,7 @@ export async function openComposeReplyAll(opts: {
   inReplyTo?: string;
   quotedText?: string;
   quotedHtml?: string;
+  accountId?: string;
 }) {
   await openCompose({
     mode: 'replyAll',
@@ -749,6 +821,7 @@ export async function openComposeReplyAll(opts: {
     inReplyTo: opts.inReplyTo,
     quotedText: opts.quotedText,
     quotedHtml: opts.quotedHtml,
+    accountId: opts.accountId,
   });
 }
 
@@ -757,6 +830,7 @@ export async function openComposeForward(opts: {
   quotedText?: string;
   quotedHtml?: string;
   attachments?: Array<{ filename: string; mimeType: string; data: Uint8Array }>;
+  accountId?: string;
 }) {
   await openCompose({
     mode: 'forward',
@@ -764,5 +838,6 @@ export async function openComposeForward(opts: {
     quotedText: opts.quotedText,
     quotedHtml: opts.quotedHtml,
     attachments: opts.attachments,
+    accountId: opts.accountId,
   });
 }

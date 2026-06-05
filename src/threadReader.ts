@@ -357,6 +357,7 @@ export async function openThread(
       threadId: t.gmailThreadId,
       inReplyTo: lastMessageId ?? undefined,
       quotedText: lastPlainText,
+      accountId: t.accountId,
     });
   });
 
@@ -377,6 +378,7 @@ export async function openThread(
       threadId: t.gmailThreadId,
       inReplyTo: lastMessageId ?? undefined,
       quotedText: lastPlainText,
+      accountId: t.accountId,
     });
   });
 
@@ -384,6 +386,7 @@ export async function openThread(
     openComposeForward({
       subject: t.subject,
       quotedText: lastPlainText,
+      accountId: t.accountId,
     });
   });
 

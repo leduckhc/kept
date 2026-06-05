@@ -823,7 +823,8 @@ function renderCurrentView() {
 }
 
 function openComposeNew(prefillSubject = '') {
-  return getCompose().then(m => m.openComposeNew(prefillSubject, openSnippetPicker, showFollowupPrompt));
+  const accountId = state.lastUsedAccountId ?? state.account?.id;
+  return getCompose().then(m => m.openComposeNew(prefillSubject, openSnippetPicker, showFollowupPrompt, accountId));
 }
 
 function openComposeForward(subject: string, quotedText?: string) {
