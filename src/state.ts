@@ -8,7 +8,8 @@ export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Sc
 export const state = {
   account: null as Account | null,
   accounts: [] as Account[],
-  unifiedMode: false,
+  unifiedMode: true,
+  accountFilter: null as string | null,
   threads: [] as Thread[],
   searchQuery: '',
   syncing: false,

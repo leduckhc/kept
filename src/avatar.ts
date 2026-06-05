@@ -6,7 +6,11 @@ export const AVATAR_COLORS = [
   '#dc2626', '#db2777', '#2563eb', '#65a30d',
 ];
 
-export const ACCOUNT_BADGE_COLORS = ['#7c6fa8', '#5b8dd9', '#7cb9a8', '#d97c5b', '#c47cad'];
+export const ACCOUNT_BADGE_COLORS = [
+  '#7c3aed', '#ef4444', '#f59e0b', '#10b981', '#3b82f6',
+  '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#8b5cf6',
+  '#14b8a6', '#e11d48',
+];
 
 export function hashStr(s: string): number {
   let h = 0;

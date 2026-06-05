@@ -19,6 +19,7 @@ import { initSwipeGestures } from './swipe';
 import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doTrash, doMute, doSetAside, doUnsetAside } from './actions';
 import { openInlineReply } from './inlineReply';
 import { icon } from './icons';
+import { ACCOUNT_BADGE_COLORS } from './avatar';
 import { loadSmartFolders, showCreateSmartFolderDialog, runSmartFolder, deleteSmartFolder, type SmartFolder } from './smartFolders';
 
 // Lazy-loaded modules (not needed on startup — code splitting)
@@ -160,6 +161,7 @@ async function boot() {
     state.account = await resolveActiveAccount();
     if (state.account) {
       showShell();
+      renderAccountFilter();
       refreshKnownSenders().catch(() => {});
       await refreshAll();
       renderSmartFoldersSidebar();
@@ -253,6 +255,7 @@ function showAuth() {
       state.accounts = await getAllAccounts();
       setAccount(state.account);
       showShell();
+      renderAccountFilter();
       await refreshAll();
     } catch (e) {
       btn.disabled = false;
@@ -281,6 +284,7 @@ function showShell() {
       <div class="main-area">
         <div class="toolbar">
           <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">${icon.menu('18px')}</button>
+          <div class="account-filter-wrap" id="account-filter"></div>
           <div class="toolbar-actions-right">
             <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
               <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]">${icon.search('16px')}</button>
@@ -619,6 +623,75 @@ async function reloadInboxThreads() {
     state.threads = await loadThreads(state.account.id);
   }
   renderInbox();
+}
+
+function renderAccountFilter() {
+  const container = document.getElementById('account-filter');
+  if (!container) return;
+  if (state.accounts.length <= 1) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+  const current = state.accountFilter
+    ? state.accounts.find(a => a.id === state.accountFilter)?.email ?? 'Account'
+    : 'All Accounts';
+  const acctIdx = state.accounts.findIndex(a => a.id === state.accountFilter);
+  const dot = state.accountFilter && acctIdx >= 0
+    ? `<span class="account-filter-dot" style="background:${ACCOUNT_BADGE_COLORS[acctIdx % ACCOUNT_BADGE_COLORS.length]}"></span>`
+    : `<span class="account-filter-dot account-filter-dot-all"></span>`;
+  container.innerHTML = `${dot}<span class="account-filter-label">${esc(current)}</span><span class="account-filter-chevron">▾</span>`;
+  container.onclick = showAccountFilterMenu;
+}
+
+function showAccountFilterMenu(e: Event) {
+  e.stopPropagation();
+  const existing = document.getElementById('account-filter-menu');
+  if (existing) { existing.remove(); return; }
+  const menu = document.createElement('div');
+  menu.id = 'account-filter-menu';
+  menu.className = 'account-filter-menu';
+  let html = `<div class="account-filter-item${!state.accountFilter ? ' active' : ''}" data-filter="" tabindex="0">All Accounts</div>`;
+  state.accounts.forEach((a, i) => {
+    const color = ACCOUNT_BADGE_COLORS[i % ACCOUNT_BADGE_COLORS.length];
+    const active = state.accountFilter === a.id ? ' active' : '';
+    html += `<div class="account-filter-item${active}" data-filter="${a.id}" tabindex="0"><span class="account-filter-dot" style="background:${color}"></span>${esc(a.email)}</div>`;
+  });
+  menu.innerHTML = html;
+  menu.addEventListener('click', async (ev) => {
+    const target = (ev.target as HTMLElement).closest('.account-filter-item') as HTMLElement | null;
+    if (!target) return;
+    const filter = target.dataset.filter || null;
+    state.accountFilter = filter;
+    state.unifiedMode = filter === null;
+    menu.remove();
+    renderAccountFilter();
+    await reloadInboxThreads();
+  });
+  const container = document.getElementById('account-filter')!;
+  container.appendChild(menu);
+  // Keyboard navigation
+  const items = menu.querySelectorAll('.account-filter-item') as NodeListOf<HTMLElement>;
+  let focusIdx = -1;
+  menu.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusIdx = Math.min(focusIdx + 1, items.length - 1);
+      items[focusIdx]?.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusIdx = Math.max(focusIdx - 1, 0);
+      items[focusIdx]?.focus();
+    } else if (e.key === 'Escape') {
+      menu.remove();
+    } else if (e.key === 'Enter' && focusIdx >= 0) {
+      (items[focusIdx] as HTMLElement)?.click();
+    }
+  });
+  menu.setAttribute('tabindex', '-1');
+  menu.focus();
+  const dismiss = () => { menu.remove(); document.removeEventListener('click', dismiss); };
+  setTimeout(() => document.addEventListener('click', dismiss), 0);
 }
 
 /** Convert a LocalDraft into a Thread object for rendering in the Drafts view. */

@@ -245,4 +245,10 @@ async function migrate(db: Database): Promise<void> {
       FOREIGN KEY (account_id) REFERENCES accounts(id)
     )
   `).catch(() => {});
+
+  // KPT-UNIFIED: Account color_index for multi-account visual identification
+  await db.execute(`ALTER TABLE accounts ADD COLUMN color_index INTEGER`).catch(() => {});
+
+  // KPT-UNIFIED: Optimized index for unified inbox query
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_threads_unified ON threads(label, is_archived, received_at DESC)`).catch(() => {});
 }

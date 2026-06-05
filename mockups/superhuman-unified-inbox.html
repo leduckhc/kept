@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kept — Superhuman-style Unified Inbox</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface-hover: #1c2a4a;
+    --surface-selected: #0f3460;
+    --text: #e8e8e8;
+    --text-muted: #8892a4;
+    --text-dim: #5a6577;
+    --border: #2a3a5a;
+    --accent: #7c3aed;
+    --white: #ffffff;
+
+    /* Account colors */
+    --account-1: #7c3aed;
+    --account-2: #3b82f6;
+    --account-3: #10b981;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Top bar — Superhuman-style minimal */
+  .topbar {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    gap: 16px;
+  }
+
+  .topbar-logo {
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.3px;
+    color: var(--white);
+  }
+
+  .topbar-nav {
+    display: flex;
+    gap: 2px;
+    margin-left: 24px;
+  }
+
+  .topbar-tab {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .topbar-tab:hover { color: var(--text); background: var(--surface-hover); }
+  .topbar-tab.active { color: var(--white); background: var(--accent); }
+
+  .topbar-spacer { flex: 1; }
+
+  .account-dropdown {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .account-dropdown:hover { border-color: var(--accent); }
+
+  .account-dropdown .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--account-1), var(--account-2), var(--account-3));
+  }
+
+  .kbd {
+    font-size: 10px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    background: var(--surface-hover);
+    color: var(--text-dim);
+    font-family: 'SF Mono', 'JetBrains Mono', monospace;
+    border: 1px solid var(--border);
+  }
+
+  /* Main layout — split pane */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* Thread list */
+  .thread-list {
+    width: 420px;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--surface);
+  }
+
+  .thread-list-header {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .thread-list-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.2px;
+  }
+
+  .thread-count {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .section-label {
+    padding: 10px 20px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .thread-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px 20px;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-bottom: 1px solid rgba(42, 58, 90, 0.3);
+    position: relative;
+  }
+
+  .thread-row:hover { background: var(--surface-hover); }
+  .thread-row.selected { background: var(--surface-selected); }
+  .thread-row.selected::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* Avatar with color ring — THE KEY FEATURE */
+  .avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--white);
+  }
+
+  /* Color ring indicating receiving account */
+  .avatar-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+  }
+
+  .avatar-ring.account-1 { border-color: var(--account-1); }
+  .avatar-ring.account-2 { border-color: var(--account-2); }
+  .avatar-ring.account-3 { border-color: var(--account-3); }
+
+  .thread-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .thread-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .thread-sender {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .thread-row.unread .thread-sender { color: var(--white); }
+
+  .thread-time {
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .thread-subject {
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .thread-row.unread .thread-subject { color: var(--text); }
+
+  .thread-snippet {
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .unread-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+
+  /* Reading pane */
+  .reading-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    overflow-y: auto;
+  }
+
+  .reading-header {
+    padding: 24px 32px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .reading-subject {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: -0.4px;
+    margin-bottom: 12px;
+  }
+
+  .reading-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .reading-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--white);
+    position: relative;
+  }
+
+  .reading-avatar .avatar-ring {
+    inset: -3px;
+  }
+
+  .reading-from {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .reading-to {
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .account-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid;
+  }
+
+  .account-badge.account-1 { color: var(--account-1); border-color: rgba(124,58,237,0.3); background: rgba(124,58,237,0.08); }
+  .account-badge.account-2 { color: var(--account-2); border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.08); }
+  .account-badge.account-3 { color: var(--account-3); border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.08); }
+
+  .reading-time {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+
+  .reading-body {
+    padding: 24px 32px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+    max-width: 680px;
+  }
+
+  .reading-body p { margin-bottom: 16px; }
+
+  /* Bottom reply bar */
+  .reply-bar {
+    margin-top: auto;
+    padding: 16px 32px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .reply-input {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .reply-from-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .reply-from-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* Command palette hint */
+  .cmd-hint {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.7;
+  }
+
+  /* Legend */
+  .legend {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    z-index: 10;
+  }
+
+  .legend-title {
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    color: var(--text-muted);
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid;
+  }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-logo">Kept</div>
+  <div class="topbar-nav">
+    <div class="topbar-tab active">Inbox</div>
+    <div class="topbar-tab">Important</div>
+    <div class="topbar-tab">Other</div>
+    <div class="topbar-tab">Sent</div>
+  </div>
+  <div class="topbar-spacer"></div>
+  <div class="account-dropdown">
+    <div class="dot"></div>
+    All Accounts
+    <span class="kbd">⌘ A</span>
+  </div>
+</div>
+
+<!-- Account color legend -->
+<div class="legend">
+  <div class="legend-title">Receiving Account</div>
+  <div class="legend-item">
+    <div class="legend-dot" style="border-color: var(--account-1)"></div>
+    milan@kept.app
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="border-color: var(--account-2)"></div>
+    milan@company.io
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="border-color: var(--account-3)"></div>
+    personal@gmail.com
+  </div>
+</div>
+
+<!-- Main split -->
+<div class="main">
+  <!-- Thread list -->
+  <div class="thread-list">
+    <div class="thread-list-header">
+      <div class="thread-list-title">All Inboxes</div>
+      <div class="thread-count">14 conversations</div>
+    </div>
+
+    <div class="section-label">New today</div>
+
+    <!-- Thread 1 — selected, unread -->
+    <div class="thread-row selected unread">
+      <div class="unread-dot"></div>
+      <div class="avatar-wrap">
+        <div class="avatar" style="background: #4a3f6b;">JK</div>
+        <div class="avatar-ring account-2"></div>
+      </div>
+      <div class="thread-content">
+        <div class="thread-top">
+          <div class="thread-sender">James Kim</div>
+          <div class="thread-time">10:42 AM</div>
+        </div>
+        <div class="thread-subject">Q3 revenue projections — updated model</div>
+        <div class="thread-snippet">Hey Milan, attached the revised spreadsheet with the new…</div>
+      </div>
+    </div>
+
+    <!-- Thread 2 — unread -->
+    <div class="thread-row unread">
+      <div class="unread-dot"></div>
+      <div class="avatar-wrap">
+        <div class="avatar" style="background: #2d5a3f;">SR</div>
+        <div class="avatar-ring account-1"></div>
+      </div>
+      <div class="thread-content">
+        <div class="thread-top">
+          <div class="thread-sender">Sarah Rodriguez</div>
+          <div class="thread-time">9:15 AM</div>
+        </div>
+        <div class="thread-subject">Design review for onboarding flow</div>
+        <div class="thread-snippet">I've pushed the latest Figma link. The flow now has three…</div>
+      </div>
+    </div>
+
+    <!-- Thread 3 -->
+    <div class="thread-row">
+      <div style="width:6px"></div>
+      <div class="avatar-wrap">
+        <div class="avatar" style="background: #5a3a2d;">AP</div>
+        <div class="avatar-ring account-3"></div>
+      </div>
+      <div class="thread-content">
+        <div class="thread-top">
+          <div class="thread-sender">Alex Park</div>
+          <div class="thread-time">8:30 AM</div>
+        </div>
+        <div class="thread-subject">Weekend hiking — trail options</div>
+        <div class="thread-snippet">Found a great trail near Lake Tahoe. It's about 6 miles…</div>
+      </div>
+    </div>
+
+    <!-- Thread 4 -->
+    <div class="thread-row">
+      <div style="width:6px"></div>
+      <div class="avatar-wrap">
+        <div class="avatar" style="background: #3a4a5a;">DL</div>
+        <div class="avatar-ring account-2"></div>
+      </div>
+      <div class="thread-content">
+        <div class="thread-top">
+          <div class="thread-sender">David Liu</div>
+          <div class="thread-time">Yesterday</div>
+        </div>
+        <div class="thread-subject">API rate limiting proposal</div>
+        <div class="thread-snippet">After profiling the production cluster, I think we should…</div>
+      </div>
+    </div>
+
+    <div class="section-label">Yesterday</div>
+
+    <!-- Thread 5 -->
+    <div class="thread-row">
+      <div style="width:6px"></div>
+      <div class="avatar-wrap">
+        <div class="avatar" style="background: #4a2d5a;">MC</div>
+        <div class="avatar-ring account-1"></div>
+      </div>
+      <div class="thread-content">
+        <div class="thread-top">
+          <div class="thread-sender">Maria Chen</div>
+          <div class="thread-time">4:22 PM</div>
+        </div>
+        <div class="thread-subject">Investor update draft — June</div>
+        <div class="thread-snippet">Here's the draft for this month. Key metrics look strong…</div>
+      </div>
+    </div>
+
+    <!-- Thread 6 -->
+    <div class="thread-row">
+      <div style="width:6px"></div>
+      <div class="avatar-wrap">
+        <div class="avatar" style="background: #2d4a5a;">TW</div>
+        <div class="avatar-ring account-3"></div>
+      </div>
+      <div class="thread-content">
+        <div class="thread-top">
+          <div class="thread-sender">Tom Wilson</div>
+          <div class="thread-time">2:10 PM</div>
+        </div>
+        <div class="thread-subject">Re: Dinner Friday?</div>
+        <div class="thread-snippet">Yeah that works! I'll book the table at 7:30. See you…</div>
+      </div>
+    </div>
+
+    <!-- Thread 7 -->
+    <div class="thread-row">
+      <div style="width:6px"></div>
+      <div class="avatar-wrap">
+        <div class="avatar" style="background: #5a4a2d;">NB</div>
+        <div class="avatar-ring account-2"></div>
+      </div>
+      <div class="thread-content">
+        <div class="thread-top">
+          <div class="thread-sender">Nina Bhat</div>
+          <div class="thread-time">11:05 AM</div>
+        </div>
+        <div class="thread-subject">Sprint retro notes</div>
+        <div class="thread-snippet">Sharing notes from today's retro. Main action items are…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reading pane -->
+  <div class="reading-pane">
+    <div class="reading-header">
+      <div class="reading-subject">Q3 revenue projections — updated model</div>
+      <div class="reading-meta">
+        <div class="reading-avatar" style="background: #4a3f6b;">
+          JK
+          <div class="avatar-ring account-2"></div>
+        </div>
+        <div>
+          <div class="reading-from">James Kim</div>
+          <div class="reading-to">
+            to
+            <span class="account-badge account-2">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--account-2);"></span>
+              milan@company.io
+            </span>
+          </div>
+        </div>
+        <div class="reading-time">Today at 10:42 AM</div>
+      </div>
+    </div>
+
+    <div class="reading-body">
+      <p>Hey Milan,</p>
+      <p>Attached the revised spreadsheet with the new assumptions we discussed yesterday. Key changes:</p>
+      <p>• Enterprise tier pricing moved from $49 → $59/seat (matches competitive research)<br>
+         • Churn reduced to 3.2% based on last quarter's actuals<br>
+         • Added the expansion revenue line from upsells</p>
+      <p>Net result: we're tracking $420K ARR by end of Q3, up from the $380K in the previous model. The sensitivity analysis shows we hit $400K even in the conservative case.</p>
+      <p>Let me know if you want to walk through the assumptions before the board meeting Thursday.</p>
+      <p style="color: var(--text-dim);">— James</p>
+    </div>
+
+    <!-- Reply bar with auto-detected reply-from -->
+    <div class="reply-bar">
+      <div class="reply-from-badge">
+        <div class="reply-from-dot" style="background: var(--account-2);"></div>
+        Replying as milan@company.io
+      </div>
+      <div class="reply-input">Hit <span class="kbd">R</span> to reply, <span class="kbd">F</span> to forward…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Command palette hint -->
+<div class="cmd-hint">
+  <span class="kbd">⌘ K</span> Command palette
+  <span style="margin-left: 8px;" class="kbd">J</span><span class="kbd">K</span> Navigate
+  <span style="margin-left: 8px;" class="kbd">E</span> Archive
+</div>
+
+</body>
+</html>

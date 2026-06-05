@@ -669,6 +669,33 @@ body {
 
 /* Avatar wrap — clickable for selection */
 .avatar-wrap { cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; }
+.avatar-wrap[style*="--account-ring-color"] .avatar { box-shadow: 0 0 0 3px var(--account-ring-color); }
+.account-badge { display: none; }
+
+/* ── Account filter dropdown ─────────────────────────────── */
+.account-filter-wrap {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 4px 10px; border-radius: 6px; font-size: 13px; position: relative;
+  color: var(--text-primary); user-select: none;
+}
+.account-filter-wrap:hover { background: var(--hover-bg, rgba(128,128,128,0.1)); }
+.account-filter-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.account-filter-dot-all { background: linear-gradient(135deg, #7c3aed, #3b82f6, #10b981); }
+.account-filter-label { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-filter-chevron { font-size: 10px; opacity: 0.6; }
+.account-filter-menu {
+  position: absolute; top: 100%; left: 0; z-index: 999;
+  background: var(--bg-primary, #fff); border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  min-width: 200px; padding: 4px 0; margin-top: 4px;
+}
+.account-filter-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  cursor: pointer; font-size: 13px; color: var(--text-primary);
+}
+.account-filter-item:hover { background: var(--hover-bg, rgba(128,128,128,0.08)); }
+.account-filter-item.active { font-weight: 600; }
+.account-filter-item:focus { background: #f3f0ff; outline: none; }
 
 /* Stacked overlapping avatars for group rows */
 .stacked-avatars {

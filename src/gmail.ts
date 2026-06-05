@@ -426,6 +426,120 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
   return rows.map(rowToThread);
 }
 
+/**
+ * Unified inbox: single SQL query across all accounts (no N+1).
+ * When accountFilter is set, adds WHERE account_id = ? clause.
+ */
+export async function loadThreadsUnified(accountFilter?: string | null, label = 'INBOX'): Promise<Thread[]> {
+  const db = await getDb();
+  const nowMs = Date.now();
+  let sql: string;
+  let params: (string | number)[];
+
+  if (label === 'STARRED') {
+    sql = `SELECT * FROM threads WHERE is_starred = 1 AND is_archived = 0 AND is_blocked = 0
+           AND (is_muted IS NULL OR is_muted = 0)
+           AND (is_set_aside IS NULL OR is_set_aside = 0)
+           AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+    params = [nowMs];
+  } else if (label === 'TRASH') {
+    sql = `SELECT * FROM threads WHERE label = 'TRASH'`;
+    params = [];
+  } else if (label === 'ARCHIVE') {
+    sql = `SELECT * FROM threads WHERE is_archived = 1 AND label != 'TRASH'`;
+    params = [];
+  } else {
+    sql = `SELECT * FROM threads WHERE label = ? AND is_archived = 0 AND is_blocked = 0
+           AND (is_muted IS NULL OR is_muted = 0)
+           AND (is_set_aside IS NULL OR is_set_aside = 0)
+           AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+    params = [label, nowMs];
+  }
+
+  if (accountFilter) {
+    sql += ' AND account_id = ?';
+    params.push(accountFilter);
+  }
+
+  sql += ' ORDER BY received_at DESC LIMIT 500';
+  const rows = await db.select<Array<Record<string, unknown>>>(sql, params);
+  return rows.map(rowToThread);
+}
+
+/** Load VIP senders for ALL accounts (union). */
+export async function getAllVipSenders(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ email: string }>>('SELECT DISTINCT email FROM vip_senders');
+  return rows.map(r => r.email);
+}
+
+/** Load grouped senders for ALL accounts (union). */
+export async function getAllGroupedSenders(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ email: string }>>("SELECT DISTINCT email FROM grouped_senders WHERE group_type IS NULL OR group_type != 'domain'");
+  return rows.map(r => r.email);
+}
+
+/** Load grouped domains for ALL accounts (union). */
+export async function getAllGroupedDomains(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ email: string }>>("SELECT DISTINCT email FROM grouped_senders WHERE group_type = 'domain'");
+  return rows.map(r => r.email);
+}
+
+/** FTS search across all accounts (unified). */
+export async function searchThreadsUnified(query: string, accountFilter?: string | null, label = 'INBOX'): Promise<Thread[]> {
+  const db = await getDb();
+  const nowMs = Date.now();
+  const ftsQuery = `"${query.replace(/"/g, '')}"`;
+  let sql: string;
+  let params: (string | number)[];
+
+  if (label === 'STARRED') {
+    sql = `SELECT t.* FROM threads t
+           JOIN threads_fts fts ON t.rowid = fts.rowid
+           WHERE threads_fts MATCH ?
+             AND t.is_starred = 1 AND t.is_archived = 0 AND t.is_blocked = 0
+             AND (t.is_muted IS NULL OR t.is_muted = 0)
+             AND (t.snoozed_until IS NULL OR t.snoozed_until <= ?)`;
+    params = [ftsQuery, nowMs];
+  } else {
+    sql = `SELECT t.* FROM threads t
+           JOIN threads_fts fts ON t.rowid = fts.rowid
+           WHERE threads_fts MATCH ?
+             AND t.label = ? AND t.is_archived = 0 AND t.is_blocked = 0
+             AND (t.is_muted IS NULL OR t.is_muted = 0)
+             AND (t.snoozed_until IS NULL OR t.snoozed_until <= ?)`;
+    params = [ftsQuery, label, nowMs];
+  }
+
+  if (accountFilter) {
+    sql += ' AND t.account_id = ?';
+    params.push(accountFilter);
+  }
+
+  sql += ' ORDER BY t.received_at DESC LIMIT 500';
+  try {
+    const rows = await db.select<Array<Record<string, unknown>>>(sql, params);
+    return rows.map(rowToThread);
+  } catch {
+    // FTS5 unavailable — fall back to LIKE
+    let likeSql = `SELECT * FROM threads WHERE label = ? AND is_archived = 0 AND is_blocked = 0
+                   AND (is_muted IS NULL OR is_muted = 0)
+                   AND (snoozed_until IS NULL OR snoozed_until <= ?)`;
+    const likeParams: (string | number)[] = [label, nowMs];
+    if (accountFilter) {
+      likeSql += ' AND account_id = ?';
+      likeParams.push(accountFilter);
+    }
+    likeSql += ` AND (subject LIKE ? OR sender_email LIKE ? OR sender_name LIKE ? OR snippet LIKE ?) ORDER BY received_at DESC LIMIT 500`;
+    const q = `%${query}%`;
+    likeParams.push(q, q, q, q);
+    const rows = await db.select<Array<Record<string, unknown>>>(likeSql, likeParams);
+    return rows.map(rowToThread);
+  }
+}
+
 export async function loadSenderEmails(accountId: string): Promise<string[]> {
   const db = await getDb();
   const rows = await db.select<Array<{ sender_email: string }>>(

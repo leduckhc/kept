@@ -45,10 +45,8 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
   const dot = `<span class="unread-dot${t.isUnread ? ' filled' : ''}"></span>`;
   const searchQ = isSearchActive() ? getSearchQuery() : '';
 
-  const acctIdx = state.unifiedMode ? state.accounts.findIndex(a => a.id === t.accountId) : -1;
-  const acctBadge = acctIdx >= 0
-    ? `<span class="account-badge" style="background:${ACCOUNT_BADGE_COLORS[acctIdx % ACCOUNT_BADGE_COLORS.length]}" title="${esc(state.accounts[acctIdx]?.email ?? '')}">${(state.accounts[acctIdx]?.email[0] ?? '?').toUpperCase()}</span>`
-    : '';
+  const acctIdx = state.accounts.findIndex(a => a.id === t.accountId);
+  const acctRingColor = acctIdx >= 0 ? ACCOUNT_BADGE_COLORS[acctIdx % ACCOUNT_BADGE_COLORS.length] : '#9ca3af';
   const vipBadge = state.vipSenders.includes(t.senderEmail) ? `<span class="vip-badge" title="Priority sender">${icon.crown('12px')}</span>` : '';
 
   const clockIndicator = t.snoozedUntil
@@ -75,9 +73,8 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
   return `
     <div class="thread-row${t.isUnread ? ' unread' : ''}${isSnoozed ? ' snoozed-row' : ''}${t.isStarred ? ' is-starred' : ''}${hasReminder ? ' awaiting-reply' : ''}${state.bulkMode && state.selectedIds.has(t.id) ? ' bulk-selected' : ''}${state.bulkMode ? ' bulk-mode' : ''}" data-id="${t.id}">
       ${dot}
-      <div class="avatar-wrap">
+      <div class="avatar-wrap"${acctRingColor ? ` style="--account-ring-color:${acctRingColor}" tabindex="0" title="${esc(state.accounts[acctIdx]?.email ?? 'Unknown account')}"` : ''}>
         ${avatarHtml(t)}
-        ${acctBadge}
         ${vipBadge}
       </div>
       <span class="thread-sender">${searchQ ? highlightText(sender, searchQ) : esc(sender)}</span>
@@ -323,6 +320,13 @@ export function renderInbox(deps: ThreadListDeps) {
     } else if (state.searchQuery) {
       emptyIcon = '🔍'; emptyTitle = 'No results'; emptySubtitle = 'Try a different search term.';
 
+    } else if (state.accountFilter) {
+      const acct = state.accounts.find(a => a.id === state.accountFilter);
+      const acctIdx = state.accounts.findIndex(a => a.id === state.accountFilter);
+      const color = ACCOUNT_BADGE_COLORS[acctIdx % ACCOUNT_BADGE_COLORS.length] || '#9ca3af';
+      emptyIcon = '📭';
+      emptyTitle = `No messages in ${acct?.email ?? 'this account'}`;
+      emptySubtitle = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:4px;vertical-align:middle"></span>Try switching accounts or removing the filter.`;
     } else {
       emptyIcon = '🎉'; emptyTitle = 'All caught up'; emptySubtitle = 'No new messages. Go enjoy your day.';
     }

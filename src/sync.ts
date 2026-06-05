@@ -1,6 +1,6 @@
 // sync.ts — Sync orchestration extracted from main.ts
 import { getAllAccounts } from './auth';
-import { type Thread, syncInbox, loadThreads, hasSyncedBefore, invalidateSectionCache, getGroupedSenders, getGroupedDomains, getVipSenders } from './gmail';
+import { type Thread, syncInbox, loadThreads, hasSyncedBefore, invalidateSectionCache, getGroupedSenders, getGroupedDomains, getVipSenders, loadThreadsUnified, getAllVipSenders, getAllGroupedSenders, getAllGroupedDomains } from './gmail';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { setStatus, flashStatus, esc } from './helpers';
 import { state } from './state';
@@ -29,9 +29,16 @@ export async function refreshAll() {
   await loadPhotoCache();
 
   // Reload grouped senders & domains for current account
-  state.groupedSenders = await getGroupedSenders(state.account.id);
-  state.groupedDomains = await getGroupedDomains(state.account.id);
-  state.vipSenders = await getVipSenders(state.account.id);
+  if (state.accountFilter === null) {
+    // Unified mode: union of all accounts' VIPs and groups
+    state.groupedSenders = await getAllGroupedSenders();
+    state.groupedDomains = await getAllGroupedDomains();
+    state.vipSenders = await getAllVipSenders();
+  } else {
+    state.groupedSenders = await getGroupedSenders(state.accountFilter);
+    state.groupedDomains = await getGroupedDomains(state.accountFilter);
+    state.vipSenders = await getVipSenders(state.accountFilter);
+  }
 
   if (state.unifiedMode) {
     state.threads = await loadUnifiedThreads();
@@ -167,11 +174,7 @@ export async function syncAndRender() {
 
 /** Load and merge inbox threads from all accounts, sorted by receivedAt desc. */
 export async function loadUnifiedThreads(): Promise<Thread[]> {
-  const allAccts = await getAllAccounts();
-  const perAccount = await Promise.all(allAccts.map(a => loadThreads(a.id).catch(() => [] as Thread[])));
-  const merged = perAccount.flat();
-  merged.sort((a, b) => b.receivedAt - a.receivedAt);
-  return merged;
+  return loadThreadsUnified(state.accountFilter);
 }
 
 /** Resolve Google profile photos for sender emails visible in current inbox (non-blocking). */
