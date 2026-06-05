@@ -1028,6 +1028,24 @@ body {
   vertical-align: middle;
 }
 
+/* KPT-085: Auto-label pills in thread rows */
+.thread-user-label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6c5ce7;
+  background: rgba(108, 92, 231, 0.1);
+  border-radius: 8px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.02em;
+}
+[data-theme="dark"] .thread-user-label {
+  color: #a29bfe;
+  background: rgba(162, 155, 254, 0.15);
+}
+
 /* ── Show more button ───────────────────────────────────── */
 .btn-show-more {
   display: block;
@@ -1518,6 +1536,45 @@ body {
 }
 
 [data-theme="dark"] .settings-divider { background: #2a2a2a; }
+
+/* Auto Labels rules */
+.settings-section-sub {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  padding: 0 16px 8px;
+}
+.settings-auto-labels-list { padding: 0 16px; }
+.auto-label-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border, #f0eff5);
+}
+.auto-label-rule-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary, #1a1a2e);
+  min-width: 60px;
+}
+.auto-label-rule-cond {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auto-label-rule-delete {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-muted, #888);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.auto-label-rule-delete:hover { background: #fee; color: #c44; }
 
 /* Account rows */
 .settings-account-row {

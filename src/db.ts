@@ -209,6 +209,22 @@ async function migrate(db: Database): Promise<void> {
     )
   `).catch(() => {});
 
+  // KPT-085: Auto Labels — user_labels column on threads
+  await db.execute(`ALTER TABLE threads ADD COLUMN user_labels TEXT DEFAULT ''`).catch(() => {});
+
+  // KPT-085: Auto Label rules table
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS auto_label_rules (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      conditions TEXT NOT NULL,
+      match_mode TEXT NOT NULL DEFAULT 'all',
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (account_id) REFERENCES accounts(id)
+    )
+  `).catch(() => {});
+
   // Local drafts (offline-first compose persistence)
   await db.execute(`
     CREATE TABLE IF NOT EXISTS local_drafts (

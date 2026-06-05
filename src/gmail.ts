@@ -47,6 +47,7 @@ export interface Thread {
   isMuted: boolean;   // KPT-040: suppressed from inbox permanently
   isSetAside: boolean; // KPT-080: shelf — quick-access, no time component
   category: string;   // 'personal' | 'newsletters' | 'updates'
+  userLabels: string; // KPT-085: comma-separated auto-labels
 }
 
 // ── Settings helpers ──────────────────────────────────────
@@ -493,6 +494,7 @@ function rowToThread(r: Record<string, unknown>): Thread {
     isMuted: (r.is_muted as number) === 1,
     isSetAside: (r.is_set_aside as number) === 1,
     category: (r.category as string) ?? 'personal',
+    userLabels: (r.user_labels as string) ?? '',
   };
 }
 

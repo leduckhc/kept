@@ -82,7 +82,7 @@ export function threadRow(t: Thread, isSnoozed: boolean): string {
       </div>
       <span class="thread-sender">${searchQ ? highlightText(sender, searchQ) : esc(sender)}</span>
       <div class="thread-mid${attachment ? ' has-attachment' : ''}">
-        <span class="thread-subject-line">${searchQ ? highlightText(t.subject, searchQ) : esc(t.subject)}${t.messageCount && t.messageCount > 1 ? `<span class="thread-count">${t.messageCount}</span>` : ''}</span>
+        <span class="thread-subject-line">${searchQ ? highlightText(t.subject, searchQ) : esc(t.subject)}${t.messageCount && t.messageCount > 1 ? `<span class="thread-count">${t.messageCount}</span>` : ''}${t.userLabels ? t.userLabels.split(',').map(l => `<span class="thread-user-label">${esc(l.trim())}</span>`).join('') : ''}</span>
         <span class="thread-preview-line">${clockIndicator || esc(t.snippet)}</span>
       </div>
       <span class="thread-date">${date}</span>

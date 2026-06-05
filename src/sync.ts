@@ -6,6 +6,7 @@ import { setStatus, flashStatus, esc } from './helpers';
 import { state } from './state';
 import { loadPhotoCache, resolvePhotos, hasCachedResult } from './senderPhotos';
 import { patchAvatarsWithPhotos } from './avatar';
+import { runAutoLabelsOnSync } from './autoLabels';
 
 export interface SyncDeps {
   renderCurrentView: () => void;
@@ -133,6 +134,14 @@ export async function syncAndRender() {
     // Update tray badge / dock badge with total unread count
     const unreadCount = state.threads.filter(t => t.isUnread).length;
     updateBadge(unreadCount).catch(() => {});
+
+    // KPT-085: Run auto-label rules after sync
+    if (state.unifiedMode) {
+      const allAccts2 = await getAllAccounts();
+      await Promise.all(allAccts2.map(a => runAutoLabelsOnSync(a.id).catch(() => 0)));
+    } else {
+      await runAutoLabelsOnSync(state.account.id).catch(() => 0);
+    }
 
     // Background: resolve Google profile photos for visible senders
     resolveVisiblePhotos().catch(() => {});

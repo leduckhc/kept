@@ -8,6 +8,7 @@ import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminde
 import { getDb } from './db';
 import { type Snippet, type SnippetContext, loadSnippets, saveSnippet, deleteSnippet, updateSnippet, bumpUsage, resolveVariables, fillVariables, BUILTIN_VARIABLES } from './snippets';
 import { openSettings, initSettings } from './settings';
+import { initAutoLabelsSettings } from './autoLabelsSettings';
 import { syncAndRender, refreshAll, loadUnifiedThreads, initSync } from './sync';
 import { applyTheme, applyLayoutMode, esc } from './helpers';
 import { type ViewName, state, setAccount } from './state';
@@ -358,6 +359,16 @@ function showShell() {
             </button>
           </div>
           <div class="settings-divider"></div>
+          <div class="settings-section" id="settings-auto-labels-section">
+            <div class="settings-section-label">Auto Labels</div>
+            <div class="settings-section-sub">Automatically label emails based on rules (e.g. from:@github.com → Dev)</div>
+            <div id="settings-auto-labels-list" class="settings-auto-labels-list"></div>
+            <button class="settings-add-account" id="settings-add-auto-label">
+              <span class="settings-add-account-icon"></span>
+              Add rule
+            </button>
+          </div>
+          <div class="settings-divider"></div>
           <div class="settings-section" id="settings-signature-section">
             <div class="settings-section-label">Email Signature</div>
             <textarea class="settings-signature-ta" id="settings-signature-ta"
@@ -381,6 +392,9 @@ function showShell() {
   document.getElementById('settings-manage-snippets')!.addEventListener('click', () => {
     openSnippetManager(null);
   });
+
+  // Settings: Auto Labels
+  initAutoLabelsSettings();
 
   // Sidebar nav + mobile tab buttons + drawer items
   document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
@@ -600,6 +614,7 @@ function localDraftToThread(d: LocalDraft): Thread {
     isMuted: false,
     isSetAside: false,
     category: 'personal',
+    userLabels: '',
   };
 }
 
