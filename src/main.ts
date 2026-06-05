@@ -265,14 +265,21 @@ function showShell() {
     <div id="app-shell" class="${state.layoutMode === '2-pane' ? 'layout-2pane' : ''}">
       <div class="toolbar">
         <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">${icon.menu('18px')}</button>
-        <div class="toolbar-actions">
-          <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
-            <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]">${icon.search('16px')}</button>
-            <div class="search-pill">
-              <span class="toolbar-search-icon">${icon.search('14px')}</span>
-              <input class="search-input" id="search" placeholder="Search…" type="search" />
-            </div>
+        <div class="toolbar-actions-left">
+          <button class="toolbar-btn" data-action="archive" title="Archive">${icon.archive('16px')}</button>
+          <button class="toolbar-btn" data-action="snooze" title="Snooze">${icon.snooze('16px')}</button>
+          <button class="toolbar-btn" data-action="label" title="Label">${icon.tag('16px')}</button>
+          <button class="toolbar-btn" data-action="move" title="Move to folder">${icon.folderMove('16px')}</button>
+          <button class="toolbar-btn" data-action="trash" title="Trash">${icon.trash('16px')}</button>
+        </div>
+        <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
+          <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]">${icon.search('16px')}</button>
+          <div class="search-pill">
+            <span class="toolbar-search-icon">${icon.search('14px')}</span>
+            <input class="search-input" id="search" placeholder="Search…" type="search" />
           </div>
+        </div>
+        <div class="toolbar-actions-right">
           <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
         </div>
       </div>

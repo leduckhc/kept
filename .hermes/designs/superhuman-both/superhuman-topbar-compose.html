@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kept — Superhuman Style: Top Bar + Compose Bar</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif; background: #fafafa; color: #1a1a1a; height: 100vh; display: flex; flex-direction: column; }
+
+/* === SUPERHUMAN TOP BAR === */
+.topbar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: #fff;
+  border: none;
+  /* Superhuman: no visible border, ultra-subtle shadow */
+  box-shadow: 0 0.5px 0 rgba(0,0,0,0.06);
+  position: relative;
+  z-index: 10;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.topbar-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #999;
+  letter-spacing: 0.02em;
+}
+.topbar-account {
+  font-size: 12px;
+  color: #bbb;
+  margin-left: 4px;
+}
+.topbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+.topbar-cmd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: #f5f5f5;
+  color: #999;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.topbar-cmd:hover { background: #eee; }
+.topbar-cmd kbd {
+  font-family: inherit;
+  font-size: 10px;
+  color: #bbb;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar-sync {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+}
+.topbar-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+}
+
+/* === MAIN CONTENT === */
+.main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+.sidebar {
+  width: 56px;
+  background: #fff;
+  border-right: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 8px;
+}
+.sidebar-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.sidebar-icon:hover { background: #f5f5f5; }
+.sidebar-icon.active { background: #f0edff; color: #7c3aed; }
+
+.inbox {
+  flex: 1;
+  background: #fff;
+  overflow-y: auto;
+  padding: 0;
+}
+.section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #bbb;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 20px 4px;
+}
+.thread-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 20px;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.thread-row:hover { background: #faf9ff; }
+.thread-row.selected { background: #f5f2ff; }
+.thread-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.thread-content { flex: 1; min-width: 0; }
+.thread-sender {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.thread-subject {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.thread-time {
+  font-size: 11px;
+  color: #bbb;
+  flex-shrink: 0;
+}
+
+/* === COMPOSE PANEL (Superhuman style) === */
+.compose-panel {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 520px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.compose-header {
+  padding: 12px 16px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compose-to-label {
+  font-size: 11px;
+  color: #999;
+  font-weight: 500;
+}
+.compose-to-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: #1a1a1a;
+  background: transparent;
+}
+.compose-subject {
+  padding: 0 16px 8px;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1a1a;
+  background: transparent;
+  width: 100%;
+}
+.compose-separator {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 0 16px;
+}
+.compose-body {
+  padding: 12px 16px;
+  min-height: 120px;
+  font-size: 13px;
+  color: #333;
+  line-height: 1.6;
+  outline: none;
+}
+
+/* === COMPOSE BOTTOM BAR (Superhuman style) === */
+.compose-bottombar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-top: 1px solid #f5f5f5;
+  gap: 2px;
+}
+.compose-action {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #999;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  background: none;
+}
+.compose-action:hover { background: #f5f5f5; color: #666; }
+.compose-separator-v {
+  width: 1px;
+  height: 16px;
+  background: #eee;
+  margin: 0 6px;
+}
+.compose-spacer { flex: 1; }
+.compose-send {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.compose-send:hover { background: #6d28d9; }
+.compose-send kbd {
+  font-family: inherit;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Annotations */
+.annotation {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 600;
+  color: #7c3aed;
+  background: #f5f2ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.ann-topbar {
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.ann-compose {
+  bottom: 72px;
+  right: 32px;
+}
+
+/* State labels */
+.state-label {
+  position: fixed;
+  top: 8px;
+  right: 16px;
+  font-size: 10px;
+  background: #7c3aed;
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  z-index: 100;
+}
+
+/* Toggle for formatting visible */
+.formatting-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: opacity 0.2s, max-width 0.2s;
+}
+.formatting-group.visible {
+  opacity: 1;
+  max-width: 200px;
+}
+</style>
+</head>
+<body>
+
+<div class="state-label">SUPERHUMAN STYLE</div>
+
+<!-- TOP BAR -->
+<div class="topbar" style="position:relative;">
+  <div class="topbar-left">
+    <div class="topbar-label">Inbox</div>
+    <div class="topbar-account">· milan@kept.app</div>
+  </div>
+  <div class="topbar-center">
+    <div class="topbar-cmd">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Search or jump to...
+      <kbd>⌘K</kbd>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-sync"></div>
+    <div class="topbar-avatar"></div>
+  </div>
+  <div class="annotation ann-topbar">↑ Superhuman top bar: 36px, near-invisible, ⌘K command palette center, no action buttons</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-icon active">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
+    </div>
+    <div class="sidebar-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+    </div>
+    <div class="sidebar-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div class="sidebar-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    </div>
+    <div class="sidebar-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+    </div>
+  </div>
+  <div class="inbox">
+    <div class="section-label">Today</div>
+    <div class="thread-row selected">
+      <div class="thread-avatar" style="background: linear-gradient(135deg, #f97316, #ea580c);"></div>
+      <div class="thread-content">
+        <div class="thread-sender">Sarah Chen</div>
+        <div class="thread-subject">Q3 product roadmap review — final deck attached</div>
+      </div>
+      <div class="thread-time">2m</div>
+    </div>
+    <div class="thread-row">
+      <div class="thread-avatar" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);"></div>
+      <div class="thread-content">
+        <div class="thread-sender">GitHub</div>
+        <div class="thread-subject">[kept] PR #47: fix avatar blink on sync</div>
+      </div>
+      <div class="thread-time">15m</div>
+    </div>
+    <div class="thread-row">
+      <div class="thread-avatar" style="background: linear-gradient(135deg, #10b981, #059669);"></div>
+      <div class="thread-content">
+        <div class="thread-sender">Alex Rivera</div>
+        <div class="thread-subject">Re: Design system tokens — here's the Figma link</div>
+      </div>
+      <div class="thread-time">1h</div>
+    </div>
+    <div class="section-label">Yesterday</div>
+    <div class="thread-row">
+      <div class="thread-avatar" style="background: linear-gradient(135deg, #ec4899, #be185d);"></div>
+      <div class="thread-content">
+        <div class="thread-sender">Stripe</div>
+        <div class="thread-subject">Your June invoice is ready</div>
+      </div>
+      <div class="thread-time">Jun 4</div>
+    </div>
+    <div class="thread-row">
+      <div class="thread-avatar" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);"></div>
+      <div class="thread-content">
+        <div class="thread-sender">Tom Nakamura</div>
+        <div class="thread-subject">Quick sync on the onboarding flow — 15 min?</div>
+      </div>
+      <div class="thread-time">Jun 4</div>
+    </div>
+    <div class="thread-row">
+      <div class="thread-avatar" style="background: linear-gradient(135deg, #f59e0b, #d97706);"></div>
+      <div class="thread-content">
+        <div class="thread-sender">Linear</div>
+        <div class="thread-subject">Weekly digest: 12 issues closed, 3 new</div>
+      </div>
+      <div class="thread-time">Jun 4</div>
+    </div>
+  </div>
+</div>
+
+<!-- COMPOSE PANEL -->
+<div class="compose-panel" style="position:relative;">
+  <div class="compose-header">
+    <div class="compose-to-label">To</div>
+    <input class="compose-to-input" value="sarah@company.com" readonly>
+  </div>
+  <input class="compose-subject" value="Re: Q3 product roadmap review" readonly>
+  <div class="compose-separator"></div>
+  <div class="compose-body" contenteditable="false">
+    Hey Sarah,<br><br>
+    Looks great — two quick notes on the timeline section. Can we move the beta launch to Aug 12? That gives us a full sprint buffer.<br><br>
+    Best,<br>Milan
+  </div>
+
+  <!-- COMPOSE BOTTOM BAR -->
+  <div class="compose-bottombar">
+    <!-- Formatting (hidden by default, visible on text select) -->
+    <div class="formatting-group visible" id="fmt">
+      <button class="compose-action" title="Bold"><b>B</b></button>
+      <button class="compose-action" title="Italic"><i>I</i></button>
+      <button class="compose-action" title="Underline"><u>U</u></button>
+      <button class="compose-action" title="List">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </button>
+      <div class="compose-separator-v"></div>
+    </div>
+
+    <!-- Always visible actions -->
+    <button class="compose-action" title="Attach">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.49"/></svg>
+    </button>
+    <button class="compose-action" title="Snippets">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    </button>
+    <button class="compose-action" title="Schedule">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </button>
+
+    <div class="compose-spacer"></div>
+
+    <!-- Send button — prominent, right side -->
+    <button class="compose-send">
+      Send <kbd>⌘↩</kbd>
+    </button>
+  </div>
+
+  <div class="annotation ann-compose" style="bottom:-28px; right:0;">↑ Superhuman compose bar: always-visible, formatting left (auto-hide option), Send pill right with shortcut</div>
+</div>
+
+<!-- Toggle button -->
+<div style="position:fixed; bottom:8px; left:16px; display:flex; gap:8px;">
+  <button onclick="document.getElementById('fmt').classList.toggle('visible')" style="font-size:11px; padding:4px 10px; border-radius:4px; border:1px solid #ddd; background:#fff; cursor:pointer;">Toggle formatting (simulates text select)</button>
+</div>
+
+</body>
+</html>

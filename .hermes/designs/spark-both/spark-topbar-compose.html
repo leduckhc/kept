@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kept — Spark Style: Top Bar + Compose Bar</title>
+<style>
+  :root {
+    --bg: #1a1a1e;
+    --surface: #232328;
+    --surface-raised: #2a2a30;
+    --border: rgba(255,255,255,0.08);
+    --text: #e8e8ec;
+    --text-muted: #8a8a94;
+    --text-dim: #5a5a64;
+    --accent: #7c6fd4;
+    --accent-soft: rgba(124,111,212,0.12);
+    --hover: rgba(255,255,255,0.05);
+    --danger: #e84d4d;
+    --font: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    --radius: 20px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+  .app-shell {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    grid-template-rows: 48px 1fr;
+    height: 100vh;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    grid-row: 1 / -1;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 6px;
+  }
+  .sidebar-btn {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+  }
+  .sidebar-btn:hover { background: var(--hover); color: var(--text); }
+  .sidebar-btn.active { background: var(--accent-soft); color: var(--accent); }
+  .sidebar-spacer { flex: 1; }
+  .sidebar-avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7c6fd4, #9b8ce8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff;
+    cursor: pointer;
+  }
+
+  /* ── Top Bar (Spark style) ── */
+  .topbar {
+    grid-column: 2;
+    display: flex;
+    align-items: center;
+    height: 48px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    gap: 8px;
+  }
+  .topbar-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .topbar-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+    font-size: 15px;
+  }
+  .topbar-btn:hover { background: var(--hover); color: var(--text); }
+  .topbar-btn.active { color: var(--accent); }
+
+  .topbar-search {
+    flex: 1;
+    max-width: 360px;
+    margin: 0 auto;
+    position: relative;
+  }
+  .topbar-search input {
+    width: 100%;
+    padding: 7px 12px 7px 34px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .topbar-search input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(124,111,212,0.15);
+  }
+  .topbar-search input::placeholder { color: var(--text-dim); }
+  .topbar-search-icon {
+    position: absolute;
+    left: 11px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .topbar-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7c6fd4, #9b8ce8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+    cursor: pointer;
+    margin-left: 4px;
+  }
+
+  /* ── Main body ── */
+  .app-body {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* ── Email list panel ── */
+  .email-list {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .email-item {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.12s;
+    position: relative;
+  }
+  .email-item:hover { background: var(--hover); }
+  .email-item.active { background: var(--accent-soft); }
+  .email-item-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: #fff;
+  }
+  .email-item-content { flex: 1; min-width: 0; }
+  .email-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+  }
+  .email-item-sender { font-size: 13px; font-weight: 600; color: var(--text); }
+  .email-item-time { font-size: 11px; color: var(--text-dim); }
+  .email-item-subject { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .email-item-preview { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .unread-dot {
+    position: absolute;
+    left: 4px; top: 50%;
+    transform: translateY(-50%);
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #4da6ff;
+  }
+
+  /* ── Reading pane ── */
+  .reading-pane {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .reading-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .reading-subject { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .reading-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .reading-sender-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: #3d7a5f;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #fff;
+  }
+  .reading-sender-info { flex: 1; }
+  .reading-sender-name { font-size: 14px; font-weight: 600; }
+  .reading-sender-email { font-size: 12px; color: var(--text-muted); }
+  .reading-date { font-size: 12px; color: var(--text-dim); }
+  .reading-body {
+    flex: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+
+  /* ── Compose Bottom Bar (Spark style) ── */
+  .compose-bar {
+    display: flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    gap: 4px;
+  }
+  .compose-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .compose-bar-btn {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: background 0.12s, color 0.12s;
+  }
+  .compose-bar-btn:hover { background: var(--hover); color: var(--text); }
+  .compose-bar-sep {
+    width: 1px; height: 18px;
+    background: var(--border);
+    margin: 0 6px;
+  }
+  .compose-bar-spacer { flex: 1; }
+  .compose-bar-send {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border-radius: var(--radius);
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .compose-bar-send:hover { opacity: 0.9; }
+  .compose-bar-send kbd {
+    font-size: 10px;
+    opacity: 0.7;
+    font-family: var(--font);
+    font-weight: 500;
+  }
+
+  /* ── Label annotations ── */
+  .design-label {
+    position: fixed;
+    background: var(--accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .label-topbar { top: 14px; right: 16px; }
+  .label-compose { bottom: 10px; right: 16px; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <button class="sidebar-btn active">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+    </button>
+    <button class="sidebar-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </button>
+    <button class="sidebar-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    </button>
+    <button class="sidebar-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    </button>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-avatar">M</div>
+  </nav>
+
+  <!-- Top Bar — Spark Style -->
+  <header class="topbar">
+    <div class="topbar-actions-left">
+      <button class="topbar-btn" title="Archive">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+      </button>
+      <button class="topbar-btn" title="Snooze">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+      <button class="topbar-btn" title="Label">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+      </button>
+      <button class="topbar-btn" title="Move to folder">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="topbar-btn" title="Trash">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    </div>
+
+    <div class="topbar-search">
+      <span class="topbar-search-icon">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </span>
+      <input type="search" placeholder="Search mail…" />
+    </div>
+
+    <div class="topbar-right">
+      <button class="topbar-btn" title="Compose">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <div class="topbar-avatar">M</div>
+    </div>
+  </header>
+
+  <!-- Main body -->
+  <div class="app-body">
+    <!-- Email list -->
+    <div class="email-list">
+      <div class="email-item active">
+        <div class="unread-dot"></div>
+        <div class="email-item-avatar" style="background:#3d7a5f">J</div>
+        <div class="email-item-content">
+          <div class="email-item-header">
+            <span class="email-item-sender">Jake Chen</span>
+            <span class="email-item-time">2:14 PM</span>
+          </div>
+          <div class="email-item-subject">Re: Q3 product roadmap review</div>
+          <div class="email-item-preview">Sounds good — I've updated the timeline for the mobile…</div>
+        </div>
+      </div>
+      <div class="email-item">
+        <div class="email-item-avatar" style="background:#6b4fa0">S</div>
+        <div class="email-item-content">
+          <div class="email-item-header">
+            <span class="email-item-sender">Sarah Kim</span>
+            <span class="email-item-time">1:45 PM</span>
+          </div>
+          <div class="email-item-subject">Design system tokens — final review</div>
+          <div class="email-item-preview">Attached the updated Figma link. Let me know if the…</div>
+        </div>
+      </div>
+      <div class="email-item">
+        <div class="email-item-avatar" style="background:#4a6fa5">R</div>
+        <div class="email-item-content">
+          <div class="email-item-header">
+            <span class="email-item-sender">Ravi Patel</span>
+            <span class="email-item-time">12:30 PM</span>
+          </div>
+          <div class="email-item-subject">CI pipeline failures on main</div>
+          <div class="email-item-preview">The Rust build step is timing out again. I think we…</div>
+        </div>
+      </div>
+      <div class="email-item">
+        <div class="email-item-avatar" style="background:#a05a4f">L</div>
+        <div class="email-item-content">
+          <div class="email-item-header">
+            <span class="email-item-sender">Lisa Torres</span>
+            <span class="email-item-time">11:02 AM</span>
+          </div>
+          <div class="email-item-subject">Quarterly board deck — comments</div>
+          <div class="email-item-preview">Page 4 needs the updated revenue numbers from…</div>
+        </div>
+      </div>
+      <div class="email-item">
+        <div class="email-item-avatar" style="background:#5a8a5a">N</div>
+        <div class="email-item-content">
+          <div class="email-item-header">
+            <span class="email-item-sender">Notion</span>
+            <span class="email-item-time">9:15 AM</span>
+          </div>
+          <div class="email-item-subject">Weekly digest: 4 pages updated</div>
+          <div class="email-item-preview">Your teammates made changes to Engineering Wiki…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reading pane -->
+    <div class="reading-pane">
+      <div class="reading-header">
+        <div class="reading-subject">Re: Q3 product roadmap review</div>
+        <div class="reading-meta">
+          <div class="reading-sender-avatar">J</div>
+          <div class="reading-sender-info">
+            <div class="reading-sender-name">Jake Chen</div>
+            <div class="reading-sender-email">jake@company.io</div>
+          </div>
+          <div class="reading-date">Today, 2:14 PM</div>
+        </div>
+      </div>
+      <div class="reading-body">
+        <p>Sounds good — I've updated the timeline for the mobile launch to reflect the two-week buffer we discussed.</p>
+        <p style="margin-top:16px">A few thoughts:</p>
+        <p style="margin-top:12px">1. The push notification system should be ready by mid-July. I've synced with the backend team and they're on track.</p>
+        <p style="margin-top:12px">2. For the offline sync feature, we might want to descope the conflict resolution UI to v2. It adds ~3 weeks and the basic last-write-wins strategy covers 95% of cases.</p>
+        <p style="margin-top:12px">3. I'll schedule a design review for the onboarding flow next Tuesday. Can you loop in Sarah?</p>
+        <p style="margin-top:16px">Let me know if you want to chat about any of this before the all-hands.</p>
+        <p style="margin-top:16px">— Jake</p>
+      </div>
+
+      <!-- Compose Bottom Bar — Spark Style -->
+      <div class="compose-bar">
+        <div class="compose-bar-left">
+          <button class="compose-bar-btn" title="Bold">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+          </button>
+          <button class="compose-bar-btn" title="Italic">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+          </button>
+          <button class="compose-bar-btn" title="Link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
+          <div class="compose-bar-sep"></div>
+          <button class="compose-bar-btn" title="Attach">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.49"/></svg>
+          </button>
+          <button class="compose-bar-btn" title="Snippets">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          </button>
+          <button class="compose-bar-btn" title="Schedule send">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </button>
+        </div>
+        <div class="compose-bar-spacer"></div>
+        <button class="compose-bar-send">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send
+          <kbd>⌘↩</kbd>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Labels -->
+<div class="design-label label-topbar">SPARK TOP BAR</div>
+<div class="design-label label-compose">SPARK COMPOSE BAR</div>
+</body>
+</html>
