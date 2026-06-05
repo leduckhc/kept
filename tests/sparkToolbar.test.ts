@@ -121,3 +121,42 @@ describe('Spark Compose Bar', () => {
     expect(discard).toBeNull();
   });
 });
+
+describe('Sidebar avatar stability', () => {
+  const sidebarHTML = `
+    <style>
+      .sidebar {
+        position: relative;
+        width: 48px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px 0 48px;
+        gap: 4px;
+        height: 400px;
+      }
+      .sidebar-spacer { flex: 1; }
+      .sidebar-avatar { position: absolute; bottom: 8px; }
+    </style>
+    <nav class="sidebar">
+      <button class="sidebar-btn">Inbox</button>
+      <div class="sidebar-spacer"></div>
+      <button class="sidebar-btn sidebar-avatar" id="btn-account">A</button>
+    </nav>`;
+
+  it('sidebar-avatar uses position: absolute to prevent jump on statusbar resize', () => {
+    const doc = createShellDOM(sidebarHTML);
+    const avatar = doc.querySelector('.sidebar-avatar') as HTMLElement;
+    expect(avatar).not.toBeNull();
+    const style = window.getComputedStyle(avatar);
+    expect(style.position).toBe('absolute');
+    expect(style.bottom).toBe('8px');
+  });
+
+  it('sidebar has position: relative to anchor the absolute avatar', () => {
+    const doc = createShellDOM(sidebarHTML);
+    const sidebar = doc.querySelector('.sidebar') as HTMLElement;
+    const style = window.getComputedStyle(sidebar);
+    expect(style.position).toBe('relative');
+  });
+});
