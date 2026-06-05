@@ -59,3 +59,13 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. Test-Driven Development
+
+**Always write tests before implementation.**
+
+- Write a failing test that defines the expected behavior FIRST.
+- Then write the minimum code to make the test pass.
+- Refactor only after tests are green.
+- Every new feature or bug fix must start with a test — no exceptions.
+- If existing tests don't cover the area you're changing, add coverage before modifying code.
