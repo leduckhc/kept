@@ -104,8 +104,17 @@ body {
 /* ── App shell ──────────────────────────────────────────── */
 #app-shell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
+  position: relative;
+}
+
+/* ── Main area (toolbar + content, right of sidebar) ───── */
+.main-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
   position: relative;
 }
 

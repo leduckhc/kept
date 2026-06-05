@@ -266,44 +266,46 @@ function showAuth() {
 function showShell() {
   document.getElementById('app')!.innerHTML = `
     <div id="app-shell" class="${state.layoutMode === '2-pane' ? 'layout-2pane' : ''}">
-      <div class="toolbar">
-        <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">${icon.menu('18px')}</button>
-        <div class="toolbar-actions-right">
-          <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
-            <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]">${icon.search('16px')}</button>
-            <div class="search-pill">
-              <span class="toolbar-search-icon">${icon.search('14px')}</span>
-              <input class="search-input" id="search" placeholder="Search…" type="search" />
-            </div>
-          </div>
-          <div class="toolbar-context-actions" id="toolbar-context-actions">
-          </div>
-          <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
-        </div>
-      </div>
       <div class="nav-drawer-backdrop" id="nav-drawer-backdrop"></div>
       <nav class="nav-drawer" id="nav-drawer">
         <div class="nav-drawer-header">Kept</div>
         ${VIEWS.map(v => `<button class="nav-drawer-item${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}">${v.icon}<span>${v.name}</span></button>`).join('')}
       </nav>
-      <div class="app-body">
-        <nav class="sidebar" id="sidebar">
-          ${VIEWS.map(v => `<button class="sidebar-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}" title="${v.name}">${v.icon}</button>`).join('')}
-          <div class="sidebar-smart-folders" id="sidebar-smart-folders"></div>
-          <button class="sidebar-btn sidebar-add-folder" id="btn-add-smart-folder" title="New Smart Folder">${icon.plus('18px')}</button>
-          <div class="sidebar-spacer"></div>
-          <button class="sidebar-btn sidebar-avatar" id="btn-account" title="Switch account">${getAccountAvatar()}</button>
-        </nav>
-        <div class="inbox" id="inbox"></div>
-        <div class="reader-pane" id="reader-pane">
-          <div class="reader-pane-empty">
-            <div class="reader-pane-empty-icon">${icon.email()}</div>
-            <div class="reader-pane-empty-text">Select a conversation</div>
+      <nav class="sidebar" id="sidebar">
+        ${VIEWS.map(v => `<button class="sidebar-btn${v.name === state.currentView ? ' active' : ''}" data-view="${v.name}" title="${v.name}">${v.icon}</button>`).join('')}
+        <div class="sidebar-smart-folders" id="sidebar-smart-folders"></div>
+        <button class="sidebar-btn sidebar-add-folder" id="btn-add-smart-folder" title="New Smart Folder">${icon.plus('18px')}</button>
+        <div class="sidebar-spacer"></div>
+        <button class="sidebar-btn sidebar-avatar" id="btn-account" title="Switch account">${getAccountAvatar()}</button>
+      </nav>
+      <div class="main-area">
+        <div class="toolbar">
+          <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">${icon.menu('18px')}</button>
+          <div class="toolbar-actions-right">
+            <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
+              <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]">${icon.search('16px')}</button>
+              <div class="search-pill">
+                <span class="toolbar-search-icon">${icon.search('14px')}</span>
+                <input class="search-input" id="search" placeholder="Search…" type="search" />
+              </div>
+            </div>
+            <div class="toolbar-context-actions" id="toolbar-context-actions">
+            </div>
+            <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
           </div>
         </div>
-      </div>
-      <div class="statusbar">
-        <span id="status-right"></span>
+        <div class="app-body">
+          <div class="inbox" id="inbox"></div>
+          <div class="reader-pane" id="reader-pane">
+            <div class="reader-pane-empty">
+              <div class="reader-pane-empty-icon">${icon.email()}</div>
+              <div class="reader-pane-empty-text">Select a conversation</div>
+            </div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span id="status-right"></span>
+        </div>
       </div>
       <div class="settings-panel" id="settings-panel" aria-hidden="true">
         <div class="settings-topbar">
