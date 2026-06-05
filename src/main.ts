@@ -277,7 +277,6 @@ function showShell() {
             </div>
           </div>
           <div class="toolbar-context-actions" id="toolbar-context-actions">
-            <button class="toolbar-btn" data-action="move" title="Move to folder">${icon.folderMove('16px')}</button>
           </div>
           <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
         </div>
