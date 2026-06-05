@@ -4,6 +4,7 @@ import { clearActiveAccountId } from './accountContext';
 import { applyTheme, toggleLayoutMode, setStatus, flashStatus, esc } from './helpers';
 import { state, setAccount } from './state';
 import { type Thread, loadThreads } from './gmail';
+import { ACCOUNT_BADGE_COLORS } from './avatar';
 
 export interface SettingsDeps {
   renderInbox: () => void;
@@ -182,10 +183,9 @@ export function closeSettings() {
 function renderSettingsAccounts() {
   const list = document.getElementById('settings-accounts-list');
   if (!list) return;
-  const avatarColors = ['#7c6fa8', '#5b8dd9', '#7cb9a8', '#d97c5b', '#c47cad'];
   list.innerHTML = state.accounts.map((a, i) => {
     const initial = (a.email[0] ?? '?').toUpperCase();
-    const color = avatarColors[i % avatarColors.length];
+    const color = ACCOUNT_BADGE_COLORS[(a as any).colorIndex ?? i];
     const isOnly = state.accounts.length === 1;
     return `
       <div class="settings-account-row" data-id="${esc(a.id)}">

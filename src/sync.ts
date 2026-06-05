@@ -99,12 +99,14 @@ export async function syncAndRender() {
   if (btn) btn.style.opacity = '0.4';
   try {
     if (state.unifiedMode) {
-      // Sync all accounts in parallel
       const allAccts = await getAllAccounts();
-      await Promise.all(allAccts.map(a =>
-        syncInbox(a, a.id === state.account!.id ? n => setStatus(`Syncing… ${n} threads`) : undefined)
-          .catch(err => console.error(`Sync error for ${a.email}:`, err))
-      ));
+      const interval = Math.floor(60_000 / Math.max(allAccts.length, 1));
+      for (let i = 0; i < allAccts.length; i++) {
+        const a = allAccts[i];
+        if (i > 0) await new Promise(r => setTimeout(r, interval));
+        await syncInbox(a, a.id === state.account!.id ? n => setStatus(`Syncing ${a.email.split('@')[0]}… ${n}`) : undefined)
+          .catch(err => console.error(`Sync error for ${a.email}:`, err));
+      }
       state.threads = await loadUnifiedThreads();
       renderCurrentView();
       flashStatus(`Synced — ${state.threads.length} threads`);
