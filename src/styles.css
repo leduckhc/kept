@@ -120,13 +120,14 @@ body {
 
 /* ── Sidebar ────────────────────────────────────────────── */
 .sidebar {
+  position: relative;
   width: 48px;
   flex-shrink: 0;
   background: var(--bg);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 0;
+  padding: 8px 0 48px;
   gap: 4px;
 }
 
@@ -150,7 +151,7 @@ body {
   color: var(--accent);
 }
 .sidebar-spacer { flex: 1; }
-.sidebar-avatar { margin-top: auto; }
+.sidebar-avatar { position: absolute; bottom: 8px; }
 
 /* ── Smart Folders ─────────────────────────────────── */
 .sidebar-smart-folders { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
