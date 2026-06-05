@@ -62,6 +62,7 @@ These are the features Spark/Superhuman charge $30/mo for. All are pure logic �
 - [x] **Arrow-key navigation overrides hover** — `.keyboard-nav` class added on arrow/j/k; removed on mousemove. Suppresses hover highlight when keyboard is active. Done (a50ebeb).
 - [x] **Email sync must preserve current view** — `syncAndRender` and `refreshAll` now call `renderCurrentView()` which re-renders the active view (Drafts, Sent, etc.) instead of always resetting to Inbox. Done (af73eab).
 - [x] **Bottom spacing on email list** — 40px bottom padding on .inbox. Done (84fb3fd).
+- [ ] **KPT-084: Proper tooltips on all unlabelled icons/buttons** — Audit every icon button without a visible text label and add accessible tooltips. Placement must be UX-correct: sidebar (leftmost) icons → tooltip on right; toolbar (top) icons → tooltip below; bottom-positioned elements → tooltip above. If vanilla CSS/JS `title` attr is insufficient for controlled placement, find and install a minimal tooltip library that passes `pnpm audit` (e.g. tippy.js or floating-ui). Acceptance: every icon button has a tooltip, placement never clips viewport, works on hover + focus.
 
 ## Tech Debt
 
