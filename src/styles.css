@@ -2177,6 +2177,7 @@ body {
     padding-top: 4px;
     padding-bottom: 4px;
     align-items: baseline;
+    row-gap: 2px;
   }
   .thread-row .unread-dot {
     grid-column: 1;
@@ -2234,6 +2235,7 @@ body {
     padding-top: 4px;
     padding-bottom: 4px;
     align-items: baseline;
+    row-gap: 2px;
   }
   .thread-row .unread-dot {
     grid-column: 1;
