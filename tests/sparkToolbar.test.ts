@@ -22,10 +22,7 @@ describe('Spark Top Bar', () => {
       </div>
       <div class="toolbar-actions-right">
         <div class="toolbar-context-actions" id="toolbar-context-actions">
-          <button class="toolbar-btn" data-action="archive" title="Archive"></button>
-          <button class="toolbar-btn" data-action="label" title="Label"></button>
           <button class="toolbar-btn" data-action="move" title="Move to folder"></button>
-          <button class="toolbar-btn" data-action="trash" title="Trash"></button>
         </div>
         <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]"></button>
       </div>
@@ -38,9 +35,9 @@ describe('Spark Top Bar', () => {
     // Hidden by default (no .visible class)
     expect(ctxActions!.classList.contains('visible')).toBe(false);
     const buttons = ctxActions!.querySelectorAll('.toolbar-btn[data-action]');
-    expect(buttons.length).toBe(4);
+    expect(buttons.length).toBe(1);
     const actions = Array.from(buttons).map(b => (b as HTMLElement).dataset.action);
-    expect(actions).toEqual(['archive', 'label', 'move', 'trash']);
+    expect(actions).toEqual(['move']);
   });
 
   it('has search on the left/center', () => {
