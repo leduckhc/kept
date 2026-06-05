@@ -260,11 +260,20 @@ export async function openCompose(opts: ComposeOptions) {
       }
     });
     // Dismiss picker on outside click
-    document.addEventListener('click', (e) => {
+    const dismissFromPicker = (e: MouseEvent) => {
       if (!fromBadge.contains(e.target as Node) && !fromPicker.contains(e.target as Node)) {
         fromPicker.style.display = 'none';
       }
+    };
+    document.addEventListener('click', dismissFromPicker);
+    // Clean up on panel removal
+    const observer = new MutationObserver(() => {
+      if (!panel.isConnected) {
+        document.removeEventListener('click', dismissFromPicker);
+        observer.disconnect();
+      }
     });
+    observer.observe(panel.parentNode!, { childList: true });
   }
 
   // ── Quoted content for reply/forward ──
@@ -603,6 +612,7 @@ export async function openCompose(opts: ComposeOptions) {
       // Re-open compose with the same content
       openCompose({
         ...opts,
+        accountId: account.id,
         prefillTo: to,
         prefillCc: cc,
         prefillBcc: bcc,
@@ -718,7 +728,7 @@ export async function openCompose(opts: ComposeOptions) {
       const cc = ccEl?.value.trim() ?? '';
       const subject = subjectEl.value.trim();
       const body = editorEl.innerText.trim();
-      if (!to || (!body && !pendingAttachments.length) || !state.account) {
+      if (!to || (!body && !pendingAttachments.length) || !sendingAccount) {
         showToast('Please fill in recipient and message');
         return;
       }
@@ -733,7 +743,7 @@ export async function openCompose(opts: ComposeOptions) {
         : undefined;
 
       scheduleEmail({
-        accountId: state.account!.id,
+        accountId: sendingAccount.id,
         to,
         cc: cc || undefined,
         subject: subject || '(no subject)',

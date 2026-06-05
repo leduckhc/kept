@@ -15,6 +15,7 @@ export interface SyncDeps {
 }
 
 let _deps: SyncDeps | null = null;
+let _syncAbort: AbortController | null = null;
 
 export function initSync(deps: SyncDeps) {
   _deps = deps;
@@ -97,13 +98,18 @@ export async function syncAndRender() {
   setStatus('Syncing…');
   const btn = document.getElementById('btn-sync');
   if (btn) btn.style.opacity = '0.4';
+  // Cancel any in-flight stagger loop
+  if (_syncAbort) _syncAbort.abort();
+  const abort = _syncAbort = new AbortController();
   try {
     if (state.unifiedMode) {
       const allAccts = await getAllAccounts();
       const interval = Math.floor(60_000 / Math.max(allAccts.length, 1));
       for (let i = 0; i < allAccts.length; i++) {
+        if (abort.signal.aborted) break;
         const a = allAccts[i];
         if (i > 0) await new Promise(r => setTimeout(r, interval));
+        if (abort.signal.aborted) break;
         await syncInbox(a, a.id === state.account!.id ? n => setStatus(`Syncing ${a.email.split('@')[0]}… ${n}`) : undefined)
           .catch(err => console.error(`Sync error for ${a.email}:`, err));
       }
@@ -186,6 +192,19 @@ async function resolveVisiblePhotos(): Promise<void> {
   const emails = [...new Set(state.threads.map(t => t.senderEmail.toLowerCase()))];
   const uncached = emails.filter(e => !hasCachedResult(e));
   if (uncached.length === 0) return;
-  const resolved = await resolvePhotos(uncached, state.account);
-  patchAvatarsWithPhotos(resolved);
+  // In unified mode, try all accounts (primary first) in case primary token is stale
+  if (state.unifiedMode) {
+    const allAccts = await getAllAccounts();
+    const ordered = [state.account, ...allAccts.filter(a => a.id !== state.account!.id)];
+    for (const acct of ordered) {
+      try {
+        const resolved = await resolvePhotos(uncached, acct);
+        patchAvatarsWithPhotos(resolved);
+        return;
+      } catch { /* try next account */ }
+    }
+  } else {
+    const resolved = await resolvePhotos(uncached, state.account);
+    patchAvatarsWithPhotos(resolved);
+  }
 }

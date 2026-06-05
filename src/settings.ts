@@ -165,9 +165,9 @@ export function closeSettings() {
 function renderSettingsAccounts() {
   const list = document.getElementById('settings-accounts-list');
   if (!list) return;
-  list.innerHTML = state.accounts.map((a, i) => {
+  list.innerHTML = state.accounts.map((a) => {
     const initial = (a.email[0] ?? '?').toUpperCase();
-    const color = ACCOUNT_BADGE_COLORS[a.colorIndex ?? i];
+    const color = ACCOUNT_BADGE_COLORS[(a.colorIndex ?? 0) % ACCOUNT_BADGE_COLORS.length];
     return `
       <div class="settings-account-row" data-id="${esc(a.id)}">
         <div class="settings-avatar" style="background:${color}">${initial}</div>
