@@ -125,38 +125,61 @@ describe('Spark Compose Bar', () => {
 describe('Sidebar avatar stability', () => {
   const sidebarHTML = `
     <style>
-      .sidebar {
+      #app-shell {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
         position: relative;
+      }
+      .app-body {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+      .sidebar {
         width: 48px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 8px 0 48px;
+        padding: 8px 0;
         gap: 4px;
-        height: 400px;
       }
       .sidebar-spacer { flex: 1; }
-      .sidebar-avatar { position: absolute; bottom: 8px; }
+      .sidebar-avatar { margin-top: auto; }
+      .statusbar {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        height: 18px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      .statusbar.visible { opacity: 0.7; }
     </style>
-    <nav class="sidebar">
-      <button class="sidebar-btn">Inbox</button>
-      <div class="sidebar-spacer"></div>
-      <button class="sidebar-btn sidebar-avatar" id="btn-account">A</button>
-    </nav>`;
+    <div id="app-shell">
+      <div class="app-body">
+        <nav class="sidebar">
+          <button class="sidebar-btn">Inbox</button>
+          <div class="sidebar-spacer"></div>
+          <button class="sidebar-btn sidebar-avatar" id="btn-account">A</button>
+        </nav>
+      </div>
+      <div class="statusbar"></div>
+    </div>`;
 
-  it('sidebar-avatar uses position: absolute to prevent jump on statusbar resize', () => {
+  it('statusbar is position: absolute so it does not affect sidebar layout', () => {
+    const doc = createShellDOM(sidebarHTML);
+    const statusbar = doc.querySelector('.statusbar') as HTMLElement;
+    expect(statusbar).not.toBeNull();
+    const style = window.getComputedStyle(statusbar);
+    expect(style.position).toBe('absolute');
+  });
+
+  it('sidebar-avatar uses margin-top: auto to pin to bottom of flex sidebar', () => {
     const doc = createShellDOM(sidebarHTML);
     const avatar = doc.querySelector('.sidebar-avatar') as HTMLElement;
     expect(avatar).not.toBeNull();
     const style = window.getComputedStyle(avatar);
-    expect(style.position).toBe('absolute');
-    expect(style.bottom).toBe('8px');
-  });
-
-  it('sidebar has position: relative to anchor the absolute avatar', () => {
-    const doc = createShellDOM(sidebarHTML);
-    const sidebar = doc.querySelector('.sidebar') as HTMLElement;
-    const style = window.getComputedStyle(sidebar);
-    expect(style.position).toBe('relative');
+    expect(style.marginTop).toBe('auto');
   });
 });
