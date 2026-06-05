@@ -320,6 +320,7 @@ body {
   position: relative;
   min-width: 0;
   flex: 1;
+  justify-content: center;
 }
 .toolbar-search-wrap .btn-search-toggle {
   flex-shrink: 0;
@@ -372,7 +373,30 @@ body {
 }
 .search-input::placeholder { color: var(--text-muted); }
 
-.toolbar-actions {
+.toolbar-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.toolbar-actions-left .toolbar-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+.toolbar-actions-left .toolbar-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.toolbar-actions-right {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3071,43 +3095,6 @@ body {
   flex-direction: column;
   min-height: 200px;
 }
-.compose-toolbar-new {
-  display: none;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 8px;
-  border: none;
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
-  background: transparent;
-}
-.compose-toolbar-new.visible {
-  display: flex;
-}
-.compose-toolbar-new .toolbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.12s, color 0.12s;
-}
-.compose-toolbar-new .toolbar-btn:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.compose-toolbar-new .toolbar-sep {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-  margin: 0 4px;
-}
 .compose-editor-new {
   flex: 1;
   min-height: 160px;
@@ -3166,10 +3153,72 @@ body {
 .compose-panel-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: none;
+  gap: 4px;
+  height: 44px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.compose-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.compose-footer-left .toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
   background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.12s, color 0.12s;
+}
+.compose-footer-left .toolbar-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.compose-footer-left .toolbar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.compose-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+}
+.compose-footer-actions .btn-icon,
+.compose-footer-actions .compose-snippets-btn,
+.compose-footer-actions .compose-followup-btn,
+.compose-footer-actions .compose-schedule-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+.compose-footer-actions .btn-icon:hover,
+.compose-footer-actions .compose-snippets-btn:hover,
+.compose-footer-actions .compose-followup-btn:hover,
+.compose-footer-actions .compose-schedule-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.compose-footer-right {
+  margin-left: auto;
 }
 .compose-send-btn-new {
   display: flex;

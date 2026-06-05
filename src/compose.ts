@@ -107,6 +107,7 @@ export async function openCompose(opts: ComposeOptions) {
     <div class="compose-panel-header">
       <span class="compose-panel-title">${modeTitle}</span>
       <div class="compose-panel-actions">
+        <button class="btn-icon compose-discard-btn-new" title="Discard">${icon.trash('14px')}</button>
         <button class="btn-icon compose-panel-expand" title="Expand">${icon.expand('14px')}</button>
         <button class="btn-icon compose-panel-close" title="Close">${icon.close('14px')}</button>
       </div>
@@ -140,25 +141,29 @@ export async function openCompose(opts: ComposeOptions) {
           placeholder="Subject" />
       </div>
       <div class="compose-editor-wrap">
-        <div class="compose-toolbar-new">
-          <button class="toolbar-btn" data-cmd="bold" title="Bold (⌘B)">${icon.bold('14px')}</button>
-          <button class="toolbar-btn" data-cmd="italic" title="Italic (⌘I)">${icon.italic('14px')}</button>
-          <button class="toolbar-btn" data-cmd="underline" title="Underline (⌘U)">${icon.underline('14px')}</button>
-          <span class="toolbar-sep"></span>
-          <button class="toolbar-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
-          <button class="toolbar-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
-        </div>
         <div class="compose-editor-new" contenteditable="true" data-placeholder="Write your message…"></div>
         <input type="file" class="compose-file-input" multiple style="display:none" />
       </div>
       <div class="compose-attachments-new"></div>
     </div>
     <div class="compose-panel-footer">
-      <button class="compose-send-btn-new">${icon.send('14px')} Send</button>
-      <button class="btn-icon compose-attach-btn" title="Attach file">${icon.attach('16px')}</button>
-      <button class="compose-followup-btn" title="Remind if no reply">${icon.bell('16px')}</button>
-      <button class="compose-schedule-btn" title="Schedule send">${icon.calendar('16px')}</button>
-      <button class="compose-discard-btn-new" title="Discard">${icon.trash('16px')}</button>
+      <div class="compose-footer-left">
+        <button class="toolbar-btn" data-cmd="bold" title="Bold (⌘B)">${icon.bold('14px')}</button>
+        <button class="toolbar-btn" data-cmd="italic" title="Italic (⌘I)">${icon.italic('14px')}</button>
+        <button class="toolbar-btn" data-cmd="underline" title="Underline (⌘U)">${icon.underline('14px')}</button>
+        <span class="toolbar-sep"></span>
+        <button class="toolbar-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
+        <button class="toolbar-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
+      </div>
+      <div class="compose-footer-actions">
+        <button class="btn-icon compose-attach-btn" title="Attach file">${icon.attach('16px')}</button>
+        <button class="compose-snippets-btn" title="Snippets">${icon.clipboard('14px')}</button>
+        <button class="compose-followup-btn" title="Remind if no reply">${icon.bell('16px')}</button>
+        <button class="compose-schedule-btn" title="Schedule send">${icon.calendar('16px')}</button>
+      </div>
+      <div class="compose-footer-right">
+        <button class="compose-send-btn-new">${icon.send('14px')} Send</button>
+      </div>
     </div>`;
 
   document.body.appendChild(panel);
@@ -268,8 +273,7 @@ export async function openCompose(opts: ComposeOptions) {
     if (!related || !related.closest('.compose-ac')) closeAc();
   });
 
-  // ── Rich text toolbar ──
-  const toolbarEl = panel.querySelector<HTMLElement>('.compose-toolbar-new')!;
+  // ── Rich text formatting (always visible in Spark-style footer bar) ──
   panel.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
     btn.addEventListener('click', () => {
       const cmd = (btn as HTMLElement).dataset.cmd!;
@@ -282,18 +286,6 @@ export async function openCompose(opts: ComposeOptions) {
       editorEl.focus();
     });
   });
-
-  // Show toolbar only when text is selected in editor
-  function checkSelection() {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0 && !sel.isCollapsed && editorEl.contains(sel.anchorNode)) {
-      toolbarEl.classList.add('visible');
-    } else {
-      toolbarEl.classList.remove('visible');
-    }
-  }
-  document.addEventListener('selectionchange', checkSelection);
-  // Cleanup on panel removal (handled by closeCompose removing the panel from DOM)
 
   // ── Attachments ──
   function getFileIcon(mimeType: string): string {

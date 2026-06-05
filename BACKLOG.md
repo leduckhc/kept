@@ -64,6 +64,37 @@ These are the features Spark/Superhuman charge $30/mo for. All are pure logic �
 - [x] **Bottom spacing on email list** — 40px bottom padding on .inbox. Done (84fb3fd).
 - [x] **KPT-084: Proper tooltips on all unlabelled icons/buttons** — Audit every icon button without a visible text label and add accessible tooltips. Placement must be UX-correct: sidebar (leftmost) icons → tooltip on right; toolbar (top) icons → tooltip below; bottom-positioned elements → tooltip above. Pure CSS solution with positional variants. Done.
 
+## Competitive Research — Reddit (Jun 2025)
+
+Features users are loudly demanding on Reddit that competitors charge for or lack entirely. Each is a potential Kept differentiator.
+
+### Superhuman — Top 5 Most Upvoted Missing Features
+
+| # | Feature | Why users are angry | Upvotes/Engagement | Kept Opportunity |
+|---|---------|--------------------|--------------------|------------------|
+
+- [ ] **SH-1: Unified Inbox across accounts** — #1 most requested. Users with 5-9 accounts can't see all mail in one stream. Multiple dedicated threads; cited as primary reason people leave for Spark. *Kept already has Multi-Account planned — ensure unified view is first-class, not an afterthought.*
+- [ ] **SH-2: Proper HTML email rendering** — Pinned complaint on r/SuperhumanEmail. Superhuman "often fails to properly display common HTML emails that render perfectly fine in Apple Mail, Gmail, or Outlook." *Kept must nail rendering from day one — use system webview with full HTML/CSS support.*
+- [ ] **SH-3: Multiple windows (detachable reader/composer)** — 46 comments in "Biggest pain points" thread. Can't reference one email while composing another. *Already in Kept backlog (Multi-Window). Validate Tauri multi-window works reliably.*
+- [ ] **SH-4: Fast, reliable search** — Search described as "erratic and slow." App itself increasingly process-intensive. Mac users report spinning fans. *Kept's SQLite FTS5 local search should be instant. Market this hard.*
+- [ ] **SH-5: Native CRM/tool integrations (HubSpot, Clay, PDF viewer)** — Users want email tied into their workflow tools. Superhuman removed/degraded CRM integrations. *Plugin architecture or command-palette actions that connect to external tools without heavy coupling.*
+
+### Spark Email — Top 5 Most Upvoted Missing Features
+
+- [ ] **SP-1: Option to disable conversation threading** — 35+ upvotes, 50+ comments. Called a "deal breaker" by multiple users. Forced threading causes missed messages. *Kept should offer both threaded and flat views as a toggle. Low effort, high differentiation.*
+- [ ] **SP-2: Delete single email within a thread** — Highly upvoted warning post. Spark deletes ALL emails in a thread when you try to remove one. Data loss risk. *Kept must support per-message actions within threads — delete, move, label individually.*
+- [ ] **SP-3: Open emails/compose in separate OS windows** — Removed in Spark V3. Users can't reference + compose simultaneously. *Same as SH-3. Multi-window is a power-user must-have.*
+- [ ] **SP-4: Email rules/filters in-app** — Confirmed missing by Spark support. Users must set up rules on server separately. *Kept already has Auto Labels (rule-based) done ✓. Extend to full filter actions: auto-archive, auto-forward, auto-label, auto-star.*
+- [ ] **SP-5: Date/time-range search** — Dedicated "open letter" post. Can't search "emails from December 2022" or between two dates. *SQLite FTS5 + date column filtering makes this trivial. Add date: and before:/after: search operators.*
+
+### Cross-Competitor Themes (attack vectors for Kept)
+
+1. **Performance** — Both apps are getting slower. Kept's Rust+SQLite local-first architecture is inherently faster. Lead with speed.
+2. **Price resentment** — Superhuman raised to $30/mo, Spark charges €70/yr. Users are actively looking for alternatives. Kept can undercut massively or offer free tier.
+3. **Feature regression** — Both V3 Spark and recent Superhuman updates *removed* features users loved. Kept should never remove; only add.
+4. **Privacy** — Spark routes all email through their servers. Kept is local-first with no cloud dependency. Major selling point for privacy-conscious users.
+5. **Multi-window** — The single most cross-referenced complaint across both products. Ship this early.
+
 ## Tech Debt
 
 - [x] **~300 lines dead CSS** — Removed `.btn-pill`, `.closing` animations, `fadeOut`/`slideDown` keyframes (60 lines net). Remaining classes all confirmed referenced. Done (ce1ca1e).
