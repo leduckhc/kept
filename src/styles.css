@@ -2448,7 +2448,6 @@ body {
 
 .new-senders-section {
   padding: 12px 16px 8px;
-  border-bottom: 1px solid var(--border);
   position: relative;
 }
 
