@@ -53,7 +53,7 @@ export function openSnoozePicker(t: Thread, row: HTMLElement) {
   picker.innerHTML = `
     <div class="snooze-picker-header">
       <span>Snooze until…</span>
-      <button class="btn-icon snooze-picker-close" aria-label="Close">${icon.close('16px')}</button>
+      <button class="btn-icon snooze-picker-close" title="Close" aria-label="Close">${icon.close('16px')}</button>
     </div>
     <div class="snooze-presets">
       ${presets.map((p, i) => `

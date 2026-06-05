@@ -1051,7 +1051,7 @@ function openSnippetManager(returnTarget: HTMLElement | null) {
   panel.innerHTML = `
     <div class="snippet-manager-header">
       <span class="snippet-manager-title">Manage Snippets</span>
-      <button class="btn-icon snippet-manager-close" id="snippet-mgr-close">✕</button>
+      <button class="btn-icon snippet-manager-close" id="snippet-mgr-close" title="Close">✕</button>
     </div>
     <div class="snippet-manager-body" id="snippet-mgr-body"></div>
     <div class="snippet-manager-footer">

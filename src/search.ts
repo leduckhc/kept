@@ -35,7 +35,7 @@ export function showSearchBar(deps: SearchDeps) {
     <input class="search-bar-input" id="search-bar-input" type="text"
            placeholder="Search emails…" autocomplete="off" spellcheck="false" />
     <span class="search-count" id="search-count"></span>
-    <button class="search-close" id="search-close" aria-label="Close search">✕</button>
+    <button class="search-close" id="search-close" title="Close search" aria-label="Close search">✕</button>
   `;
 
   inbox.prepend(bar);
