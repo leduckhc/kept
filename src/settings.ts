@@ -149,21 +149,27 @@ export function openSettings() {
 
   // Wire sign out all button
   document.getElementById('settings-signout-all')!.addEventListener('click', async () => {
-    if (!confirm('Sign out of all accounts?\n\nThis will remove all account data from Kept.')) return;
     try {
       for (const a of [...state.accounts]) {
-        await removeAccount(a).catch(() => {});
+        await removeAccount(a).catch((e) => console.warn('removeAccount failed for', a.email, e));
       }
       state.accounts = [];
       state.account = null;
       state.threads = [];
       state.syncing = false;
       clearActiveAccountId();
+      localStorage.removeItem('kept-followup-reminders');
       closeSettings();
       _deps?.showAuth();
     } catch (err) {
       console.error('Sign out all error:', err);
-      setStatus('Failed to sign out');
+      // Force show auth even if cleanup had errors
+      state.accounts = [];
+      state.account = null;
+      state.threads = [];
+      clearActiveAccountId();
+      closeSettings();
+      _deps?.showAuth();
     }
   }, { once: true });
 
@@ -206,7 +212,6 @@ function renderSettingsAccounts() {
       const removeId = btn.dataset.id!;
       const target = state.accounts.find(a => a.id === removeId);
       if (!target) return;
-      if (!confirm(`Remove ${target.email} from Kept?\n\nThis will delete all local data for this account.`)) return;
       try {
         await removeAccount(target);
         state.accounts = state.accounts.filter(a => a.id !== removeId);
