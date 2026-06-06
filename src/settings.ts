@@ -188,35 +188,46 @@ function renderSettingsAccounts() {
       if (!target) return;
       btn.disabled = true;
       btn.textContent = 'Signing out…';
+
+      const isLastAccount = state.accounts.length === 1;
+      const isActiveAccount = state.account?.id === removeId;
+
       try {
         await removeAccount(target);
-        state.accounts = state.accounts.filter(a => a.id !== removeId);
-        if (state.accounts.length === 0) {
-          // Last account removed — go to auth screen
-          clearActiveAccountId();
-          state.account = null;
-          state.threads = [];
-          state.syncing = false;
-          localStorage.removeItem('kept-followup-reminders');
-          closeSettings();
-          _deps?.showAuth();
-        } else if (state.account?.id === removeId) {
-          // Removed the active account — switch to next available
-          const next = state.accounts[0];
-          setAccount(next);
-          state.threads = await loadThreads(next.id);
-          renderSettingsAccounts();
-          _deps?.renderInbox();
-          await _deps?.refreshAll();
-        } else {
-          // Removed a non-active account — just re-render the list
-          renderSettingsAccounts();
-        }
       } catch (err) {
         console.error('Sign out error:', err);
-        btn.disabled = false;
-        btn.textContent = 'Sign out';
-        setStatus(`Failed to sign out ${target.email}`);
+        if (!isLastAccount) {
+          // Non-last account: show error and let user retry
+          btn.disabled = false;
+          btn.textContent = 'Sign out';
+          setStatus(`Failed to sign out ${target.email}`);
+          return;
+        }
+        // Last account: proceed to auth screen even if cleanup failed
+      }
+
+      state.accounts = state.accounts.filter(a => a.id !== removeId);
+
+      if (isLastAccount) {
+        // Last account removed — go to sign-in screen
+        clearActiveAccountId();
+        state.account = null;
+        state.threads = [];
+        state.syncing = false;
+        localStorage.removeItem('kept-followup-reminders');
+        closeSettings();
+        _deps?.showAuth();
+      } else if (isActiveAccount) {
+        // Removed the active account — switch to next available
+        const next = state.accounts[0];
+        setAccount(next);
+        state.threads = await loadThreads(next.id);
+        renderSettingsAccounts();
+        _deps?.renderInbox();
+        await _deps?.refreshAll();
+      } else {
+        // Removed a non-active account — just re-render the list
+        renderSettingsAccounts();
       }
     });
   });

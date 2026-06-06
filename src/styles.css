@@ -1648,10 +1648,6 @@ body {
   cursor: default;
 }
 
-.settings-account-row:hover .settings-account-signout {
-  opacity: 1;
-}
-
 .settings-avatar {
   width: 36px;
   height: 36px;
@@ -1698,7 +1694,6 @@ body {
   color: #e74c3c;
   padding: 5px 12px;
   border-radius: 6px;
-  opacity: 0;
   transition: opacity 0.15s, background 0.15s, color 0.15s;
 }
 
@@ -1708,7 +1703,7 @@ body {
 }
 
 .settings-account-signout:disabled {
-  opacity: 1;
+  opacity: 0.5;
   color: #9390b0;
   border-color: #9390b0;
   cursor: not-allowed;
