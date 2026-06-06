@@ -160,16 +160,17 @@ export async function openThread(
         const msgContainer = document.createElement('div');
         msgContainer.className = 'thread-message' + (!isLast ? ' thread-message-collapsed' : '');
 
-        const senderName = m.from.replace(/<.*>/, '').trim() || m.from;
+        const senderName = m.from.replace(/<.*>/, '').replace(/"/g, '').trim() || m.from;
         const senderInitial = senderName[0]?.toUpperCase() ?? '?';
         const avatarColor = getAvatarColor(senderName);
         const senderEmail = (m.from.match(/<(.+)>/) ?? [])[1] ?? m.from;
         const preview = (m.body || '').slice(0, 80).replace(/\n/g, ' ');
 
         // Parse recipients for compact/expanded display
-        const toList = m.to ? m.to.split(',').map(s => s.trim()).filter(Boolean) : [];
-        const ccList = m.cc ? m.cc.split(',').map(s => s.trim()).filter(Boolean) : [];
-        const replyTo = m.replyTo || '';
+        const stripQ = (s: string) => s.replace(/"/g, '');
+        const toList = m.to ? m.to.split(',').map(s => stripQ(s.trim())).filter(Boolean) : [];
+        const ccList = m.cc ? m.cc.split(',').map(s => stripQ(s.trim())).filter(Boolean) : [];
+        const replyTo = stripQ(m.replyTo || '');
         const firstRecipient = toList[0] ? (toList[0].replace(/<.*>/, '').trim() || toList[0]) : '';
         const extraCount = toList.length + ccList.length - 1;
         const compactTo = firstRecipient ? `<span class="thread-msg-to-compact">to ${esc(firstRecipient)}${extraCount > 0 ? `, +${extraCount}` : ''}</span>` : '';
