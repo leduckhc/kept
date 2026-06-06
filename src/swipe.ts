@@ -1,4 +1,4 @@
-import { type Thread } from "./gmail";
+import { type Thread } from "./store";
 import { type ActionDeps, doArchive } from "./actions";
 import { doSnooze } from "./snooze";
 import { state } from "./state";

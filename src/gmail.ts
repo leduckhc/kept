@@ -1,42 +1,5 @@
 // gmail.ts — Gmail API sync, send, reply, block, snooze
 
-// Re-export provider-agnostic store functions for backward compat
-export {
-  type Thread,
-  getSetting,
-  setSetting,
-  rowToThread,
-  loadThreads,
-  loadThreadsUnified,
-  getAllVipSenders,
-  getAllGroupedSenders,
-  getAllGroupedDomains,
-  searchThreadsUnified,
-  loadSenderEmails,
-  loadRepliedToSenders,
-  loadAllSenderEmails,
-  loadSnoozedThreads,
-  loadStarredThreads,
-  snoozeThread,
-  unsnoozeThread,
-  setAsideThread,
-  unsetAsideThread,
-  loadSetAsideThreads,
-  unmuteThread,
-  hasSyncedBefore,
-  getGroupedSenders,
-  addGroupedSender,
-  removeGroupedSender,
-  getGroupedDomains,
-  addGroupedDomain,
-  removeGroupedDomain,
-  getVipSenders,
-  addVipSender,
-  removeVipSender,
-  groupBySection,
-  invalidateSectionCache,
-} from './store';
-
 // Tauri HTTP plugin loaded lazily (crashes in browser E2E mode)
 let _fetch: typeof globalThis.fetch | null = null;
 async function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
