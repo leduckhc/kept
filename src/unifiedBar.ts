@@ -1,14 +1,15 @@
-// unifiedBar.ts — Unified context bar: one bar, three modes (inbox/reader/folder)
+// unifiedBar.ts — Unified context bar: one bar, four modes (inbox/reader/folder/bulk)
 // SRP: Each mode has its own render function. The orchestrator picks by state.
 
 import { icon } from './icons';
 
-export type UnifiedBarMode = 'inbox' | 'reader' | 'folder';
+export type UnifiedBarMode = 'inbox' | 'reader' | 'folder' | 'bulk';
 
 export type UnifiedBarState =
   | { mode: 'inbox' }
   | { mode: 'reader'; subject: string }
-  | { mode: 'folder'; folderName: string; folderColor: string; folderCount: number };
+  | { mode: 'folder'; folderName: string; folderColor: string; folderCount: number }
+  | { mode: 'bulk'; count: number };
 
 // ── Mode renderers (SRP: one function per concern) ──────────────
 
@@ -62,6 +63,19 @@ function renderFolderMode(name: string, color: string, count: number): string {
     <span class="unified-bar-folder-count">${count}</span>`;
 }
 
+function renderBulkMode(count: number): string {
+  return `
+    <button class="btn-icon bulk-cancel-btn" id="bulk-cancel" title="Cancel selection">${icon.close('16px')}</button>
+    <span class="bulk-count">${count} selected</span>
+    <div class="unified-bar-actions">
+      <button class="btn-icon bulk-action-btn" id="bulk-archive" title="Archive">${icon.archive('16px')}</button>
+      <button class="btn-icon bulk-action-btn" id="bulk-trash" title="Trash">${icon.trash('16px')}</button>
+      <button class="btn-icon bulk-action-btn" id="bulk-read" title="Mark Read">${icon.markRead('16px')}</button>
+      <button class="btn-icon bulk-action-btn" id="bulk-unread" title="Mark Unread">${icon.email('16px')}</button>
+      <button class="btn-icon bulk-action-btn" id="bulk-star" title="Star">${icon.star('16px')}</button>
+    </div>`;
+}
+
 // ── Orchestrator ────────────────────────────────────────────────
 
 export function renderUnifiedBar(state: UnifiedBarState): string {
@@ -72,6 +86,9 @@ export function renderUnifiedBar(state: UnifiedBarState): string {
       break;
     case 'folder':
       inner = renderFolderMode(state.folderName, state.folderColor, state.folderCount);
+      break;
+    case 'bulk':
+      inner = renderBulkMode(state.count);
       break;
     default:
       inner = renderInboxMode();

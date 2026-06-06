@@ -83,9 +83,9 @@ export function updateBulkBar(
     <button class="bulk-action-btn" id="bulk-star" title="Star">${icon.star('16px')}</button>
   `;
 
-  const toolbar = document.querySelector('.toolbar');
-  if (toolbar) {
-    toolbar.appendChild(bar);
+  const slot = document.querySelector('.unified-bar-slot') || document.querySelector('.toolbar');
+  if (slot) {
+    slot.appendChild(bar);
   } else {
     document.body.appendChild(bar);
   }

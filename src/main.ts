@@ -7,6 +7,9 @@ import { registerAuthProvider } from './authProviderRegistry';
 import { GoogleAuthProvider } from './authProviders/google';
 import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection, rowToThread } from './store';
 import { fetchDraftByThread } from './gmail';
+import { archiveThread, unarchiveThread, trashThread, untrashThread } from './gmail';
+import { pushUndo } from './undoStack';
+import { showToast } from './toasts';
 import { loadLocalDrafts, type LocalDraft } from './localDrafts';
 
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
@@ -21,7 +24,7 @@ import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { startScheduledSendDispatch } from './scheduledSend';
 import { sendEmail } from './gmail';
 import { initSwipeGestures } from './swipe';
-import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute, doSetAside, doUnsetAside } from './actions';
+import { type ActionDeps, doMarkUnread, doMarkRead, doToggleStar, doArchive, doMute, doSetAside, doUnsetAside, accountFor } from './actions';
 import { openInlineReply } from './inlineReply';
 import { icon } from './icons';
 import { renderUnifiedBar } from './unifiedBar';
@@ -85,6 +88,9 @@ function updateUnifiedBar(opts?: { subject?: string }) {
       }).length,
     });
     wireUnifiedBarBack();
+  } else if (state.bulkMode && state.selectedIds.size > 0) {
+    slot.innerHTML = renderUnifiedBar({ mode: 'bulk', count: state.selectedIds.size });
+    wireUnifiedBarBulk();
   } else {
     _currentReaderSubject = null;
     slot.innerHTML = renderUnifiedBar({ mode: 'inbox' });
@@ -123,6 +129,84 @@ function wireUnifiedBarBack() {
   }
 }
 
+function wireUnifiedBarBulk() {
+  document.getElementById('bulk-cancel')?.addEventListener('click', () => exitBulkMode());
+  document.getElementById('bulk-archive')?.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedIds);
+    const threads = ids.map(id => state.threads.find(x => x.id === id)).filter(Boolean) as typeof state.threads;
+    const deps = getActionDeps();
+    for (const t of threads) {
+      const acct = accountFor(t);
+      if (!acct) continue;
+      await archiveThread(acct, t);
+      document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.remove();
+      state.threads = state.threads.filter(x => x.id !== t.id);
+    }
+    pushUndo(`Archived ${threads.length} thread${threads.length !== 1 ? 's' : ''}`, async () => {
+      for (const t of threads) {
+        const acct = accountFor(t);
+        if (acct) await unarchiveThread(acct, t);
+      }
+      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(state.account!.id);
+      deps.renderInbox();
+    });
+    showToast(`Archived ${threads.length} thread${threads.length !== 1 ? 's' : ''}`);
+    exitBulkMode();
+  });
+  document.getElementById('bulk-trash')?.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedIds);
+    const threads = ids.map(id => state.threads.find(x => x.id === id)).filter(Boolean) as typeof state.threads;
+    const deps = getActionDeps();
+    for (const t of threads) {
+      const acct = accountFor(t);
+      if (!acct) continue;
+      await trashThread(acct, t);
+      document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.remove();
+      state.threads = state.threads.filter(x => x.id !== t.id);
+    }
+    pushUndo(`Trashed ${threads.length} thread${threads.length !== 1 ? 's' : ''}`, async () => {
+      for (const t of threads) {
+        const acct = accountFor(t);
+        if (acct) await untrashThread(acct, t);
+      }
+      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(state.account!.id);
+      deps.renderInbox();
+    });
+    showToast(`Moved ${threads.length} thread${threads.length !== 1 ? 's' : ''} to trash`);
+    exitBulkMode();
+  });
+  document.getElementById('bulk-read')?.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedIds);
+    for (const id of ids) {
+      const t = state.threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doMarkRead(t, row, getActionDeps());
+    }
+    exitBulkMode();
+  });
+  document.getElementById('bulk-unread')?.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedIds);
+    for (const id of ids) {
+      const t = state.threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doMarkUnread(t, row);
+    }
+    exitBulkMode();
+  });
+  document.getElementById('bulk-star')?.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedIds);
+    for (const id of ids) {
+      const t = state.threads.find(x => x.id === id);
+      if (!t) continue;
+      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
+      if (row) await doToggleStar(t, row);
+    }
+    exitBulkMode();
+  });
+}
+
 function wireUnifiedBarInbox() {
   // Hamburger
   document.getElementById('btn-hamburger')?.addEventListener('click', () => {
@@ -159,8 +243,6 @@ import {
   exitBulkMode as _exitBulkMode,
   toggleBulkSelection as _toggleBulkSelection,
   removeBulkBar,
-  updateBulkBar as _updateBulkBar,
-  openBulkSnoozePicker as _openBulkSnoozePicker,
 } from './bulk';
 import {
   renderInbox as _renderInbox,
@@ -912,8 +994,7 @@ function registerKeyboardShortcuts() {
 
 function exitBulkMode() { _exitBulkMode(renderInbox); }
 function toggleBulkSelection(id: string, shiftKey?: boolean) { _toggleBulkSelection(id, updateBulkBar, shiftKey); }
-function updateBulkBar() { _updateBulkBar(getActionDeps, exitBulkMode, openBulkSnoozePicker); updateToolbarContextActions(); }
-function openBulkSnoozePicker(ids: string[], anchorRow: HTMLElement) { _openBulkSnoozePicker(ids, anchorRow, exitBulkMode); }
+function updateBulkBar() { updateUnifiedBar(); updateToolbarContextActions(); }
 
 function getThreadListDeps() {
   return {

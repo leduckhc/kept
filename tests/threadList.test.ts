@@ -142,3 +142,30 @@ describe('Category row wiring — Archive All actually fires', () => {
     expect(mockRenderInbox).toHaveBeenCalled();
   });
 });
+
+describe('wireThreadRows click opens thread', () => {
+  it('should call openThread when row is clicked', async () => {
+    const { wireThreadRows, threadRow } = await import('../src/threadList');
+    const t = makeThread({ id: 'th_click_1' });
+    const container = document.createElement('div');
+    container.innerHTML = threadRow(t, false);
+
+    const mockOpen = vi.fn();
+    const deps: ThreadListDeps = {
+      renderInbox: vi.fn(),
+      openThread: mockOpen,
+      openInlineReply: vi.fn(),
+      getActionDeps: () => ({ renderInbox: vi.fn(), loadUnifiedThreads: vi.fn() }) as any,
+      toggleBulkSelection: vi.fn(),
+      removeBulkBar: vi.fn(),
+      updateBulkBar: vi.fn(),
+    } as any;
+
+    wireThreadRows(container, [t], false, deps);
+
+    const row = container.querySelector('.thread-row') as HTMLElement;
+    expect(row).not.toBeNull();
+    row.click();
+    expect(mockOpen).toHaveBeenCalledWith(t);
+  });
+});
