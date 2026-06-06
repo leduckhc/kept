@@ -1,5 +1,6 @@
 import { type Account, getAccountById } from './auth';
-import { type Thread, markRead, markUnread, archiveThread, trashThread, untrashThread, blockSender, unsnoozeThread, toggleStar, muteThread, unmuteThread, loadThreads, setAsideThread, unsetAsideThread } from './gmail';
+import { type Thread, unsnoozeThread, unmuteThread, loadThreads, setAsideThread, unsetAsideThread } from './store';
+import { markRead, markUnread, archiveThread, trashThread, untrashThread, blockSender, toggleStar, muteThread } from './gmail';
 import { setStatus } from './helpers';
 import { showToast, showUndoToast } from './toasts';
 import { state, setAccount } from './state';

@@ -1,4 +1,4 @@
-import { type Thread, unmuteThread, addGroupedSender, removeGroupedSender, addGroupedDomain, removeGroupedDomain, addVipSender, removeVipSender } from './gmail';
+import { type Thread, unmuteThread, addGroupedSender, removeGroupedSender, addGroupedDomain, removeGroupedDomain, addVipSender, removeVipSender } from './store';
 import { setStatus } from './helpers';
 import { doMarkRead, doMarkUnread, doToggleStar, doArchive, doBlock, doUnsnooze, doMute, type ActionDeps } from './actions';
 import { openSnoozePicker } from './snooze';

@@ -1,4 +1,5 @@
-import { type Thread, loadSnoozedThreads, loadStarredThreads, loadSetAsideThreads, groupBySection, archiveThreads, trashThreads, untrashThreads, loadThreads } from './gmail';
+import { type Thread, loadSnoozedThreads, loadStarredThreads, loadSetAsideThreads, groupBySection, loadThreads } from './store';
+import { archiveThreads, trashThreads, untrashThreads } from './gmail';
 import { type ScheduledEmail, loadScheduled, cancelScheduled } from './scheduledSend';
 import { state } from './state';
 import { type ActionDeps, doMarkRead, doMarkUnread, doToggleStar, doArchive, doTrash, doBlock, doUnsnooze, doSetAside, doUnsetAside, accountFor } from './actions';

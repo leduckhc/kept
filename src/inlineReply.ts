@@ -1,4 +1,5 @@
-import { type Thread, sendEmail, markRead } from './gmail';
+import { type Thread } from './store';
+import { sendEmail, markRead } from './gmail';
 import { state } from './state';
 import { showToast } from './toasts';
 

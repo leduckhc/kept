@@ -2,7 +2,7 @@
 // Stored per-account in SQLite settings as JSON array.
 
 import { getDb } from './db';
-import { loadThreads, type Thread } from './gmail';
+import { loadThreads, type Thread } from './store';
 import { state } from './state';
 
 export interface SmartFolder {

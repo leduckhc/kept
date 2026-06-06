@@ -1,6 +1,7 @@
 // sync.ts — Sync orchestration extracted from main.ts
 import { getAllAccounts } from './auth';
-import { type Thread, syncInbox, loadThreads, hasSyncedBefore, invalidateSectionCache, getGroupedSenders, getGroupedDomains, getVipSenders, loadThreadsUnified, getAllVipSenders, getAllGroupedSenders, getAllGroupedDomains } from './gmail';
+import { type Thread, loadThreads, hasSyncedBefore, invalidateSectionCache, getGroupedSenders, getGroupedDomains, getVipSenders, loadThreadsUnified, getAllVipSenders, getAllGroupedSenders, getAllGroupedDomains } from './store';
+import { syncInbox } from './gmail';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { setStatus, flashStatus, esc } from './helpers';
 import { state } from './state';

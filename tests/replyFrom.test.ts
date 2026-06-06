@@ -3,8 +3,11 @@ import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import type { Account } from '../src/auth';
 
 // ── Mocks ──
-vi.mock('../src/gmail', () => ({
+vi.mock('../src/store', () => ({
   loadSenderEmails: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../src/gmail', () => ({
   sendEmail: vi.fn().mockResolvedValue(undefined),
   createDraft: vi.fn().mockResolvedValue('draft-123'),
   updateDraft: vi.fn().mockResolvedValue(undefined),
@@ -42,7 +45,8 @@ vi.mock('../src/icons', () => ({
   }),
 }));
 
-import { loadSenderEmails, sendEmail } from '../src/gmail';
+import { loadSenderEmails } from '../src/store';
+import { sendEmail } from '../src/gmail';
 import { state } from '../src/state';
 import { openCompose, openComposeReply, openComposeReplyAll, openComposeForward, openComposeNew, closeCompose } from '../src/compose';
 import { ACCOUNT_BADGE_COLORS } from '../src/avatar';

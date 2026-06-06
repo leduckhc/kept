@@ -3,7 +3,7 @@ import { removeAccount, saveAccount, startOAuth } from './auth';
 import { clearActiveAccountId } from './accountContext';
 import { applyTheme, toggleLayoutMode, setStatus, flashStatus, esc } from './helpers';
 import { state, setAccount } from './state';
-import { type Thread, loadThreads } from './gmail';
+import { type Thread, loadThreads } from './store';
 import { ACCOUNT_BADGE_COLORS } from './avatar';
 
 export interface SettingsDeps {

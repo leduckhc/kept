@@ -1,7 +1,8 @@
 // compose.ts — Unified Gmail-style floating compose panel
 // Modes: new, reply, replyAll, forward. Supports multiple simultaneous panels.
 
-import { loadSenderEmails, sendEmail, createDraft, updateDraft, deleteDraft } from './gmail';
+import { loadSenderEmails } from './store';
+import { sendEmail, createDraft, updateDraft, deleteDraft } from './gmail';
 import { scheduleEmail } from './scheduledSend';
 import { saveReminder, reminderPresets } from './followupReminders';
 import { state } from './state';

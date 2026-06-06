@@ -1,4 +1,4 @@
-import { type Thread } from './gmail';
+import { type Thread } from './store';
 import { type ViewName, state } from './state';
 import { type ActionDeps } from './actions';
 import { popUndo } from './undoStack';

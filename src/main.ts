@@ -3,7 +3,8 @@ import { getAllAccounts, startOAuth, migrateTokensToKeychain, removeAccount } fr
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
 import { registerProvider } from './providerRegistry';
 import { GmailProvider } from './providers/gmail';
-import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection, fetchDraftByThread } from './gmail';
+import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection } from './store';
+import { fetchDraftByThread } from './gmail';
 import { loadLocalDrafts, type LocalDraft } from './localDrafts';
 
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';

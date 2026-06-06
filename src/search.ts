@@ -1,4 +1,4 @@
-import type { Thread } from './gmail';
+import type { Thread } from './store';
 import { state } from './state';
 import { esc } from './helpers';
 

@@ -1,5 +1,5 @@
 // newSenders.ts — "New Senders" triage cards at top of inbox
-import { type Thread } from './gmail';
+import { type Thread } from './store';
 import { state } from './state';
 import { type ActionDeps, doBlock } from './actions';
 import { icon } from './icons';

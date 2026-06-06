@@ -1,4 +1,4 @@
-import { type Thread, loadThreads, snoozeThread, unsnoozeThread } from './gmail';
+import { type Thread, loadThreads, snoozeThread, unsnoozeThread } from './store';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { formatDate, toDatetimeLocal } from './helpers';
 import { showUndoToast } from './toasts';

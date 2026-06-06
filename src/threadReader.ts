@@ -1,4 +1,5 @@
-import { type Thread, fetchMessageBody, sendEmail, markRead, archiveThread, blockSender, loadAttachments, downloadAttachment, type AttachmentMeta, markThreadUnread, reportSpam, moveToLabel, fetchLabels } from './gmail';
+import { type Thread } from './store';
+import { fetchMessageBody, sendEmail, markRead, archiveThread, blockSender, loadAttachments, downloadAttachment, type AttachmentMeta, markThreadUnread, reportSpam, moveToLabel, fetchLabels } from './gmail';
 import { getAccountById } from './auth';
 import { state, setAccount } from './state';
 import { sanitizeEmailHtml } from './sanitize';

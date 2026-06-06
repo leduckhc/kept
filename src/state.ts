@@ -1,5 +1,5 @@
 import type { Account } from './auth';
-import type { Thread } from './gmail';
+import type { Thread } from './store';
 import { setActiveAccountId } from './accountContext';
 
 export type LayoutMode = '3-pane' | '2-pane';

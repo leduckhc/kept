@@ -1,4 +1,4 @@
-import { type Thread, loadThreads } from './gmail';
+import { type Thread, loadThreads } from './store';
 import { type Account } from './auth';
 import { type ViewName, state } from './state';
 import { esc, toggleLayoutMode } from './helpers';

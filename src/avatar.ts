@@ -1,4 +1,4 @@
-import type { Thread } from './gmail';
+import type { Thread } from './store';
 import { getCachedPhotoUrl } from './senderPhotos';
 
 export const AVATAR_COLORS = [
