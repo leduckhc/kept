@@ -64,11 +64,13 @@ import {
 import './search'; // search module self-registers
 import { showSearchBar } from './search';
 import { initResizeHandle } from './resizeHandle';
+import { startTriage, isTriageActive, renderTriageView, handleTriageKey, type TriageDeps } from './triageMode';
 
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',     icon: icon.email('18px') },
+  { name: 'Triage',    icon: icon.zap('18px') },
   { name: 'Snoozed',   icon: icon.clock('18px') },
   { name: 'SetAside',  icon: icon.bookmark('18px') },
   { name: 'Sent',      icon: icon.send('18px') },
@@ -518,6 +520,8 @@ function showShell() {
     }
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+    // Triage mode intercepts keys when active
+    if (state.currentView === 'Triage' && isTriageActive() && handleTriageKey(e, getTriageDeps())) return;
     if (e.key === 'c' && !e.metaKey && !e.ctrlKey) openComposeNew();
   }
   document.addEventListener('keydown', handleKey);
@@ -542,6 +546,8 @@ function switchView(view: ViewName) {
   if (view === 'Inbox') {
     // Reload inbox threads from DB (may have been overwritten by label views)
     reloadInboxThreads();
+  } else if (view === 'Triage') {
+    renderTriageViewWrapper();
   } else if (view === 'Snoozed') {
     renderSnoozedView();
   } else if (view === 'Starred') {
@@ -825,6 +831,22 @@ function renderInbox() { _renderInbox(getThreadListDeps()); updateToolbarContext
 function renderSnoozedView() { return _renderSnoozedView(getThreadListDeps()); }
 function renderStarredView() { return _renderStarredView(getThreadListDeps()); }
 function renderSetAsideView() { return _renderSetAsideView(getThreadListDeps()); }
+
+// ── Triage Mode ───────────────────────────────────────────
+function getTriageDeps(): TriageDeps {
+  return {
+    getActionDeps: () => ({ renderInbox, loadUnifiedThreads }),
+    openThread,
+    openInlineReply: (t: Thread, row: HTMLElement) => openInlineReply(t, row),
+  };
+}
+
+function renderTriageViewWrapper() {
+  if (!isTriageActive()) {
+    startTriage();
+  }
+  renderTriageView(getTriageDeps());
+}
 
 /** Re-render whatever view is currently active (used after sync). */
 function renderCurrentView() {

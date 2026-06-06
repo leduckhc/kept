@@ -3,7 +3,7 @@ import type { Thread } from './store';
 import { setActiveAccountId } from './accountContext';
 
 export type LayoutMode = '3-pane' | '2-pane';
-export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled' | 'Reminders' | 'Trash' | 'Archive' | 'SetAside';
+export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled' | 'Reminders' | 'Trash' | 'Archive' | 'SetAside' | 'Triage';
 
 export const state = {
   account: null as Account | null,
