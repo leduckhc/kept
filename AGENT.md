@@ -69,3 +69,20 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Refactor only after tests are green.
 - Every new feature or bug fix must start with a test — no exceptions.
 - If existing tests don't cover the area you're changing, add coverage before modifying code.
+
+## 6. SOLID Principles
+
+**Every module, class, and function must follow SOLID. Violations are bugs.**
+
+- **Single Responsibility (SRP):** One reason to change per module. If a file does fetching AND caching AND rendering, split it. Ask: "If I describe what this does, do I use the word 'and'?" If yes, split.
+- **Open/Closed (OCP):** Extend behavior via new implementations (new providers, new strategies), not by editing existing working code. Use interfaces and registries.
+- **Liskov Substitution (LSP):** Any implementation of an interface must be a drop-in replacement. If `GmailProvider` and `OutlookProvider` both implement `MailProvider`, callers must not care which one they got.
+- **Interface Segregation (ISP):** Don't force consumers to depend on methods they don't use. Prefer small, focused interfaces over god-interfaces.
+- **Dependency Inversion (DIP):** Depend on abstractions (interfaces, registries), not concretions. Never import a concrete provider directly in business logic — go through the registry.
+
+**In practice for this codebase:**
+- New functionality → new file. Don't grow existing files beyond ~300 lines.
+- Provider logic lives behind `MailProvider` / `AuthProvider` interfaces.
+- Store (SQLite) is provider-agnostic — no protocol-specific code in `store.ts`.
+- Use the DI registries (`providerRegistry`, `authProviderRegistry`) for all provider access.
+- When refactoring, prove SRP by ensuring each extracted module has exactly one test file testing one concern.
