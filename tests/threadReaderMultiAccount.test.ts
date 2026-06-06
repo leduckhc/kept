@@ -116,6 +116,25 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
 function setupDOM() {
   document.body.innerHTML = `
     <div id="app-shell">
+      <div class="unified-bar" data-mode="reader">
+        <div class="unified-bar-row">
+          <button class="btn-icon unified-bar-back" id="unified-bar-back"></button>
+          <div class="unified-bar-actions">
+            <button class="btn-icon" data-action="archive"></button>
+            <button class="btn-icon" data-action="pin"></button>
+            <button class="btn-icon" data-action="prioritize"></button>
+            <div class="unified-bar-overflow">
+              <button class="btn-icon unified-bar-overflow-btn"></button>
+              <div class="unified-bar-overflow-menu">
+                <button class="overflow-item" data-action="mark-unread">Mark unread</button>
+                <button class="overflow-item" data-action="spam">Report spam</button>
+                <button class="overflow-item" data-action="move">Move to label</button>
+                <button class="overflow-item" data-action="followup">Remind if no reply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div id="reader-pane"></div>
     </div>
   `;
@@ -198,7 +217,7 @@ describe('openThread multi-account resolution', () => {
     await openThread(thread, () => {});
 
     // Simulate clicking the archive button
-    const archiveBtn = document.getElementById('btn-archive-reader')!;
+    const archiveBtn = document.querySelector('.unified-bar [data-action="archive"]') as HTMLElement;
     expect(archiveBtn).toBeTruthy();
 
     // Reset mock to isolate the archive call

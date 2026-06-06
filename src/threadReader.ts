@@ -47,17 +47,6 @@ export async function openThread(
   const reader = document.createElement('div');
   reader.className = 'reader-fullpage';
   reader.innerHTML = `
-    <div class="reader-header">
-      <button class="btn-icon reader-back" id="reader-back" title="Back to inbox [Escape]">${icon.arrowLeft('16px')}</button>
-      <div class="reader-subject">${esc(t.subject)}</div>
-      <div class="reader-actions-header">
-        <button class="btn-icon" id="btn-mark-unread-reader" title="Mark unread">${icon.emailOpen('16px')}</button>
-        <button class="btn-icon" id="btn-spam-reader" title="Report spam">${icon.spam('16px')}</button>
-        <button class="btn-icon" id="btn-move-reader" title="Move to label">${icon.folderMove('16px')}</button>
-        <button class="btn-icon" id="btn-archive-reader" title="Archive">${icon.archive('16px')}</button>
-        <button class="btn-icon" id="btn-followup-reader" title="Remind if no reply">${icon.bell('16px')}</button>
-      </div>
-    </div>
     <div class="reader-body"><div class="spinner"></div></div>
     <div class="reader-footer">
       <div class="reply-chips" id="reply-chips">
@@ -84,7 +73,7 @@ export async function openThread(
     shell.appendChild(reader);
   }
 
-  function closeReader() {
+    function closeReader() {
     if (pane) {
       pane.innerHTML = `
         <div class="reader-pane-empty">
@@ -96,9 +85,12 @@ export async function openThread(
       reader.remove();
       shell.classList.remove('reader-open');
     }
+    document.dispatchEvent(new CustomEvent('unified-bar:reader-closed'));
   }
 
-  document.getElementById('reader-back')!.addEventListener('click', closeReader);
+  document.getElementById('reader-back')?.addEventListener('click', closeReader);
+  // Listen for unified bar back button
+  document.addEventListener('unified-bar:close-reader', closeReader, { once: true });
 
   function handleEsc(e: KeyboardEvent) {
     if (e.key === 'Escape') { closeReader(); document.removeEventListener('keydown', handleEsc); }
@@ -414,7 +406,7 @@ export async function openThread(
     });
   });
 
-  document.getElementById('btn-archive-reader')!.addEventListener('click', async () => {
+  document.querySelector('.unified-bar [data-action="archive"]')?.addEventListener('click', async () => {
     if (!state.account) return;
     await archiveThread(threadAccount, t);
     const fresh = state.account ? await getAccountById(state.account.id) : null;
@@ -425,7 +417,7 @@ export async function openThread(
   });
 
   // ── Follow-up Reminder from reader ──
-  document.getElementById('btn-followup-reader')!.addEventListener('click', () => {
+  document.querySelector('.unified-bar [data-action="followup"]')?.addEventListener('click', () => {
     const existing = document.querySelector('.followup-reader-popover');
     if (existing) { existing.remove(); return; }
 
@@ -436,8 +428,8 @@ export async function openThread(
       <div class="schedule-send-title">Remind if no reply</div>
       ${presets.map(p => `<button class="schedule-preset followup-preset" data-days="${p.days}">${p.label}</button>`).join('')}
     `;
-    const btn = document.getElementById('btn-followup-reader')!;
-    btn.parentElement!.appendChild(popover);
+    const btn = document.querySelector('.unified-bar [data-action="followup"]') as HTMLElement;
+    btn?.parentElement!.appendChild(popover);
 
     popover.querySelectorAll<HTMLButtonElement>('.followup-preset').forEach(presetBtn => {
       presetBtn.addEventListener('click', () => {
@@ -476,7 +468,7 @@ export async function openThread(
   });
 
   // ── Thread actions: Mark unread, Spam, Move to label ──
-  document.getElementById('btn-mark-unread-reader')!.addEventListener('click', async () => {
+  document.querySelector('.unified-bar [data-action="mark-unread"]')?.addEventListener('click', async () => {
     if (!state.account) return;
     try {
       await markThreadUnread(threadAccount, t.gmailThreadId);
@@ -491,7 +483,7 @@ export async function openThread(
     }
   });
 
-  document.getElementById('btn-spam-reader')!.addEventListener('click', async () => {
+  document.querySelector('.unified-bar [data-action="spam"]')?.addEventListener('click', async () => {
     if (!state.account) return;
     if (!confirm('Report this thread as spam?')) return;
     try {
@@ -505,10 +497,10 @@ export async function openThread(
     }
   });
 
-  document.getElementById('btn-move-reader')!.addEventListener('click', async () => {
+  document.querySelector('.unified-bar [data-action="move"]')?.addEventListener('click', async () => {
     if (!state.account) return;
     // Show label picker dropdown
-    const btn = document.getElementById('btn-move-reader')!;
+    const btn = document.querySelector('.unified-bar [data-action="move"]') as HTMLElement;
     const existing = document.querySelector('.label-picker-dropdown');
     if (existing) { existing.remove(); return; }
 

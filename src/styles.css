@@ -311,7 +311,132 @@ body {
 
 /* Mobile tab buttons hidden on desktop */
 
-/* ── Toolbar ────────────────────────────────────────────── */
+/* ── Unified Bar ────────────────────────────────────────── */
+.unified-bar-slot {
+  flex-shrink: 0;
+}
+.unified-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 0 calc(clamp(12px, 3vw, 36px) + 4px) 0 12px;
+  min-height: 48px;
+  position: relative;
+  transition: min-height 0.15s ease;
+}
+.unified-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 48px;
+}
+.unified-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.unified-bar-subject-inline {
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.unified-bar-subject-row {
+  display: none; /* shown only on phone */
+  width: 100%;
+  padding: 0 12px 6px;
+}
+.unified-bar-subject-phone {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.unified-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.unified-bar-back {
+  flex-shrink: 0;
+}
+
+/* Folder mode */
+.unified-bar-folder-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.unified-bar-folder-name {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.unified-bar-folder-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+
+/* Overflow menu */
+.unified-bar-overflow {
+  position: relative;
+}
+.unified-bar-overflow-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 4px 0;
+  min-width: 180px;
+}
+.unified-bar-overflow.open .unified-bar-overflow-menu {
+  display: block;
+}
+.overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.overflow-item:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Toolbar (legacy, retained for search-wrap internals) ── */
 .toolbar {
   display: flex;
   align-items: center;
@@ -1528,6 +1653,7 @@ body {
 }
 
 /* Inbox slides left when settings opens */
+#app-shell.settings-open .unified-bar-slot,
 #app-shell.settings-open .toolbar,
 #app-shell.settings-open .inbox,
 #app-shell.settings-open .statusbar {
@@ -2421,6 +2547,21 @@ body {
 
 /* ── Responsive thread rows: SMALL (≤600px) ─────────────── */
 @media (max-width: 600px) {
+  /* Unified bar: phone layout */
+  .unified-bar[data-mode="reader"] .unified-bar-subject-inline {
+    display: none;
+  }
+  .unified-bar[data-mode="reader"] .unified-bar-subject-row {
+    display: block;
+  }
+  .unified-bar[data-mode="reader"] {
+    padding-bottom: 0;
+  }
+  .unified-bar {
+    gap: 4px;
+    padding: 0 8px;
+  }
+
   .thread-row {
     grid-template-columns: 4px 40px 1fr auto;
     grid-template-rows: auto auto auto;
