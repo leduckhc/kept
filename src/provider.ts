@@ -45,6 +45,7 @@ export interface MessageBody {
     from: string;
     to: string;
     cc: string;
+    replyTo: string;
     body: string;
     htmlBody: string | null;
     sanitizedHtml: string | null;

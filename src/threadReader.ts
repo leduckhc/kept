@@ -163,15 +163,34 @@ export async function openThread(
         const senderName = m.from.replace(/<.*>/, '').trim() || m.from;
         const senderInitial = senderName[0]?.toUpperCase() ?? '?';
         const avatarColor = getAvatarColor(senderName);
-        const senderEmail = (m.from.match(/<(.+)>/) ?? [])[1] ?? '';
+        const senderEmail = (m.from.match(/<(.+)>/) ?? [])[1] ?? m.from;
         const preview = (m.body || '').slice(0, 80).replace(/\n/g, ' ');
+
+        // Parse recipients for compact/expanded display
+        const toList = m.to ? m.to.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const ccList = m.cc ? m.cc.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const replyTo = m.replyTo || '';
+        const firstRecipient = toList[0] ? (toList[0].replace(/<.*>/, '').trim() || toList[0]) : '';
+        const extraCount = toList.length + ccList.length - 1;
+        const compactTo = firstRecipient ? `<span class="thread-msg-to-compact">to ${esc(firstRecipient)}${extraCount > 0 ? `, +${extraCount}` : ''}</span>` : '';
 
         const headerBar = document.createElement('div');
         headerBar.className = 'thread-message-header';
         headerBar.innerHTML = `
           <span class="msg-avatar" style="background:${avatarColor}">${esc(senderInitial)}</span>
-          <span class="thread-msg-sender">${esc(senderName)}</span>${senderEmail ? `<span class="thread-msg-email">${esc(senderEmail)}</span>` : ''}
-          ${isLast ? '' : `<span class="thread-msg-preview">${esc(preview)}</span>`}
+          <div class="thread-msg-header-main">
+            <div class="thread-msg-header-row">
+              <span class="thread-msg-sender">${esc(senderName)}</span>
+              ${!isLast ? compactTo : ''}
+              ${isLast ? '' : `<span class="thread-msg-preview">${esc(preview)}</span>`}
+            </div>
+            <div class="thread-msg-details">
+              <div class="thread-msg-detail-line"><span class="thread-msg-detail-label">from</span> <span class="thread-msg-addr">${esc(senderName)} &lt;${esc(senderEmail)}&gt;</span></div>
+              ${toList.length ? `<div class="thread-msg-detail-line"><span class="thread-msg-detail-label">to</span> ${toList.map(r => `<span class="thread-msg-addr">${esc(r)}</span>`).join(', ')}</div>` : ''}
+              ${ccList.length ? `<div class="thread-msg-detail-line"><span class="thread-msg-detail-label">cc</span> ${ccList.map(r => `<span class="thread-msg-addr">${esc(r)}</span>`).join(', ')}</div>` : ''}
+              ${replyTo && replyTo !== senderEmail ? `<div class="thread-msg-detail-line"><span class="thread-msg-detail-label">reply-to</span> <span class="thread-msg-addr">${esc(replyTo)}</span></div>` : ''}
+            </div>
+          </div>
           <span class="thread-msg-date">${formatDate(m.receivedAt)}</span>
           <span class="thread-msg-chevron">›</span>`;
         headerBar.addEventListener('click', () => {
@@ -181,11 +200,6 @@ export async function openThread(
 
         const contentWrap = document.createElement('div');
         contentWrap.className = 'thread-message-content';
-
-        const metaDiv = document.createElement('div');
-        metaDiv.className = 'thread-msg-meta';
-        metaDiv.textContent = `${m.from} · ${formatDate(m.receivedAt)}`;
-        contentWrap.appendChild(metaDiv);
 
         const rawHtml: string | null = m.htmlBody ?? null;
         const cachedSanitized: string | null = m.sanitizedHtml ?? null;

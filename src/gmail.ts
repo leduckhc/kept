@@ -708,7 +708,7 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 
 // ── Fetch full message body ───────────────────────────────
 export async function fetchMessageBody(account: Account, gmailThreadId: string): Promise<{
-  messages: Array<{ from: string; to: string; cc: string; body: string; htmlBody: string | null; sanitizedHtml: string | null; receivedAt: number; gmailMessageId: string }>;
+  messages: Array<{ from: string; to: string; cc: string; replyTo: string; body: string; htmlBody: string | null; sanitizedHtml: string | null; receivedAt: number; gmailMessageId: string }>;
   lastMessageId: string | null;
 }> {
   const a = await ensureFreshToken(account);
@@ -744,7 +744,7 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
       const body = extractTextBody(msg.payload);
       const htmlBody = extractHtmlBody(msg.payload);
       const sanitizedHtml = sanitizedCache.get(msg.id) ?? null;
-      return { from: getH('from'), to: getH('to'), cc: getH('cc'), body, htmlBody, sanitizedHtml, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
+      return { from: getH('from'), to: getH('to'), cc: getH('cc'), replyTo: getH('reply-to'), body, htmlBody, sanitizedHtml, receivedAt: parseInt(msg.internalDate, 10), gmailMessageId: msg.id };
     }),
     lastMessageId,
   };

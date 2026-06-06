@@ -116,6 +116,7 @@ export class GmailProvider implements MailProvider {
         from: m.from,
         to: m.to,
         cc: m.cc,
+        replyTo: m.replyTo,
         body: m.body,
         htmlBody: m.htmlBody,
         sanitizedHtml: m.sanitizedHtml,
