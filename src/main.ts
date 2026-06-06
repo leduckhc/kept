@@ -352,8 +352,7 @@ function showShell() {
           <div class="settings-section">
             <div class="settings-section-label">Accounts</div>
             <div id="settings-accounts-list"></div>
-            <button class="settings-add-account" id="settings-add-account">
-              <span class="settings-add-account-icon"></span>
+            <button class="settings-action-btn" id="settings-add-account">
               + Add account
             </button>
           </div>
@@ -387,10 +386,9 @@ function showShell() {
 
           <div class="settings-section">
             <div class="settings-section-label">Snippets / Templates</div>
-            <div class="settings-row-sub" style="margin-bottom:8px">Reusable text with {{variables}} — use ⌘; in compose to insert</div>
-            <button class="settings-add-account" id="settings-manage-snippets">
-              <span class="settings-add-account-icon"></span>
-              Manage snippets
+            <div class="settings-row-sub" style="padding:0 16px 8px">Reusable text with {{variables}} — use ⌘; in compose to insert</div>
+            <button class="settings-action-btn" id="settings-manage-snippets">
+              ✏️ Manage snippets
             </button>
           </div>
 
@@ -398,9 +396,8 @@ function showShell() {
             <div class="settings-section-label">Auto Labels</div>
             <div class="settings-section-sub">Automatically label emails based on rules (e.g. from:@github.com → Dev)</div>
             <div id="settings-auto-labels-list" class="settings-auto-labels-list"></div>
-            <button class="settings-add-account" id="settings-add-auto-label">
-              <span class="settings-add-account-icon"></span>
-              Add rule
+            <button class="settings-action-btn" id="settings-add-auto-label">
+              + Add rule
             </button>
           </div>
 
@@ -410,7 +407,7 @@ function showShell() {
               placeholder="Your signature…" rows="4"></textarea>
             <div class="signature-preview" id="settings-signature-preview" style="display:none"></div>
             <div class="settings-signature-actions">
-              <button class="btn-primary settings-signature-save" id="settings-signature-save">Save</button>
+              <button class="settings-signature-save" id="settings-signature-save">Save</button>
             </div>
           </div>
           <div class="settings-footer">
