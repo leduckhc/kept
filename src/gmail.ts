@@ -711,8 +711,34 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
   messages: Array<{ from: string; to: string; cc: string; replyTo: string; body: string; htmlBody: string | null; sanitizedHtml: string | null; receivedAt: number; gmailMessageId: string }>;
   lastMessageId: string | null;
 }> {
-  const a = await ensureFreshToken(account);
   const db = await getDb();
+
+  // E2E mode: read directly from local DB, no Gmail API
+  if (import.meta.env.VITE_E2E === '1') {
+    const rows = await db.select<Array<{
+      id: string; from_name: string | null; from_email: string; to_addresses: string | null;
+      subject: string | null; body_text: string | null; body_html: string | null; received_at: number;
+    }>>(
+      `SELECT m.id, m.from_name, m.from_email, m.to_addresses, m.subject, m.body_text, m.body_html, m.received_at
+       FROM messages m JOIN threads t ON m.thread_id = t.id
+       WHERE t.gmail_thread_id = ? ORDER BY m.received_at ASC`,
+      [gmailThreadId]
+    );
+    const messages = rows.map(r => ({
+      from: r.from_name ? `${r.from_name} <${r.from_email}>` : r.from_email,
+      to: r.to_addresses ?? '',
+      cc: '',
+      replyTo: '',
+      body: r.body_text ?? '',
+      htmlBody: r.body_html ?? null,
+      sanitizedHtml: r.body_html ?? null,
+      receivedAt: r.received_at,
+      gmailMessageId: r.id,
+    }));
+    return { messages, lastMessageId: messages.length > 0 ? messages[messages.length - 1].gmailMessageId : null };
+  }
+
+  const a = await ensureFreshToken(account);
 
   // Check for cached sanitized HTML for messages in this thread
   const cachedRows = await db.select<Array<{ gmail_message_id: string; sanitized_html: string | null }>>(
