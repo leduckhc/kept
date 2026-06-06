@@ -171,6 +171,8 @@ export async function startOAuth(): Promise<Account> {
   url.searchParams.set('code_challenge_method', 'S256');
   url.searchParams.set('access_type', 'offline');
   url.searchParams.set('prompt', 'consent');
+  // Request non-granular consent — user must grant all scopes or cancel
+  url.searchParams.set('include_granted_scopes', 'true');
 
   // Open system browser
   const shell = await getTauriShell();
