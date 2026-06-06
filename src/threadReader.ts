@@ -181,7 +181,7 @@ export async function openThread(
           <div class="thread-msg-header-main">
             <div class="thread-msg-header-row">
               <span class="thread-msg-sender">${esc(senderName)}</span>
-              ${!isLast ? compactTo : ''}
+              ${compactTo}
               ${isLast ? '' : `<span class="thread-msg-preview">${esc(preview)}</span>`}
             </div>
             <div class="thread-msg-details">
