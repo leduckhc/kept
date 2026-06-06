@@ -116,34 +116,45 @@ async function migrate(db: Database): Promise<void> {
     USING fts5(subject, sender_name, snippet, content='threads', content_rowid='rowid')
   `).catch(() => {}); // no-op if fts5 module unavailable (older SQLite)
 
-  // Keep FTS in sync on INSERT
-  await db.execute(`
-    CREATE TRIGGER IF NOT EXISTS threads_ai AFTER INSERT ON threads BEGIN
-      INSERT INTO threads_fts(rowid, subject, sender_name, snippet)
-        VALUES (new.rowid, new.subject, new.sender_name, new.snippet);
-    END
-  `).catch(() => {});
+  // Only create FTS triggers if the virtual table actually exists (sql.js WASM lacks FTS5)
+  const ftsExists = await db.select<{cnt: number}[]>(
+    `SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='threads_fts'`
+  );
+  if (ftsExists[0]?.cnt > 0) {
+    // Keep FTS in sync on INSERT
+    await db.execute(`
+      CREATE TRIGGER IF NOT EXISTS threads_ai AFTER INSERT ON threads BEGIN
+        INSERT INTO threads_fts(rowid, subject, sender_name, snippet)
+          VALUES (new.rowid, new.subject, new.sender_name, new.snippet);
+      END
+    `).catch(() => {});
 
-  // Keep FTS in sync on UPDATE
-  await db.execute(`
-    CREATE TRIGGER IF NOT EXISTS threads_au AFTER UPDATE ON threads BEGIN
-      INSERT INTO threads_fts(threads_fts, rowid, subject, sender_name, snippet)
-        VALUES ('delete', old.rowid, old.subject, old.sender_name, old.snippet);
-      INSERT INTO threads_fts(rowid, subject, sender_name, snippet)
-        VALUES (new.rowid, new.subject, new.sender_name, new.snippet);
-    END
-  `).catch(() => {});
+    // Keep FTS in sync on UPDATE
+    await db.execute(`
+      CREATE TRIGGER IF NOT EXISTS threads_au AFTER UPDATE ON threads BEGIN
+        INSERT INTO threads_fts(threads_fts, rowid, subject, sender_name, snippet)
+          VALUES ('delete', old.rowid, old.subject, old.sender_name, old.snippet);
+        INSERT INTO threads_fts(rowid, subject, sender_name, snippet)
+          VALUES (new.rowid, new.subject, new.sender_name, new.snippet);
+      END
+    `).catch(() => {});
 
-  // Keep FTS in sync on DELETE
-  await db.execute(`
-    CREATE TRIGGER IF NOT EXISTS threads_ad AFTER DELETE ON threads BEGIN
-      INSERT INTO threads_fts(threads_fts, rowid, subject, sender_name, snippet)
-        VALUES ('delete', old.rowid, old.subject, old.sender_name, old.snippet);
-    END
-  `).catch(() => {});
+    // Keep FTS in sync on DELETE
+    await db.execute(`
+      CREATE TRIGGER IF NOT EXISTS threads_ad AFTER DELETE ON threads BEGIN
+        INSERT INTO threads_fts(threads_fts, rowid, subject, sender_name, snippet)
+          VALUES ('delete', old.rowid, old.subject, old.sender_name, old.snippet);
+      END
+    `).catch(() => {});
 
-  // Backfill existing rows — idempotent for content= tables; fast on small datasets
-  await db.execute(`INSERT INTO threads_fts(threads_fts) VALUES('rebuild')`).catch(() => {});
+    // Backfill existing rows — idempotent for content= tables; fast on small datasets
+    await db.execute(`INSERT INTO threads_fts(threads_fts) VALUES('rebuild')`).catch(() => {});
+  } else {
+    // Drop stale triggers that reference non-existent threads_fts (e.g. from prior seed DB)
+    await db.execute(`DROP TRIGGER IF EXISTS threads_ai`).catch(() => {});
+    await db.execute(`DROP TRIGGER IF EXISTS threads_au`).catch(() => {});
+    await db.execute(`DROP TRIGGER IF EXISTS threads_ad`).catch(() => {});
+  }
 
   // KPT-029: star toggle
   await db.execute(`ALTER TABLE threads ADD COLUMN is_starred INTEGER DEFAULT 0`).catch(() => {});
