@@ -1,6 +1,8 @@
 // main.ts — Kept inbox UI
 import { getAllAccounts, startOAuth, migrateTokensToKeychain, removeAccount } from './auth';
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
+import { registerProvider } from './providerRegistry';
+import { GmailProvider } from './providers/gmail';
 import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection, fetchDraftByThread } from './gmail';
 import { loadLocalDrafts, type LocalDraft } from './localDrafts';
 
@@ -133,6 +135,9 @@ function getAccountAvatar(): string {
 
 // ── Boot ──────────────────────────────────────────────────
 async function boot() {
+  // Register email providers
+  registerProvider('gmail', new GmailProvider());
+
   applyTheme(localStorage.getItem('theme') ?? 'light');
   applyLayoutMode(state.layoutMode);
 
