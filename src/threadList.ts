@@ -182,13 +182,6 @@ export function domainGroupRow(domain: string, threads: Thread[]): string {
   </div>`;
 }
 
-function filterBackHeader(label: string): string {
-  return `<div class="filter-back-header">
-    <button class="btn-filter-back">${icon.arrowLeft('18px')}</button>
-    <span class="filter-label">${esc(label)}</span>
-  </div>`;
-}
-
 /** Attempt in-place DOM patching for minor changes. Returns true if patched, false to fall back to full rebuild. */
 function patchThreadList(container: HTMLElement, newThreads: Thread[]): boolean {
   const existingRows = new Map<string, HTMLElement>();
@@ -274,24 +267,13 @@ export function renderInbox(deps: ThreadListDeps) {
 
   // Filtered view mode (category, sender, or domain filter)
   if (state.categoryFilter || state.senderFilter || state.domainFilter) {
-    const filterLabel = state.categoryFilter
-      ? (state.categoryFilter === 'newsletters' ? 'Newsletters' : 'Updates')
-      : state.domainFilter
-        ? state.domainFilter
-        : state.senderFilter!;
     const filtered = state.threads.filter(t => {
       if (state.categoryFilter) return t.category === state.categoryFilter;
       if (state.senderFilter) return t.senderEmail === state.senderFilter;
       if (state.domainFilter) return t.senderEmail.endsWith('@' + state.domainFilter);
       return true;
     });
-    container.innerHTML = filterBackHeader(filterLabel) + filtered.map(t => threadRow(t, false)).join('');
-    container.querySelector('.btn-filter-back')?.addEventListener('click', () => {
-      state.categoryFilter = null;
-      state.senderFilter = null;
-      state.domainFilter = null;
-      deps.renderInbox();
-    });
+    container.innerHTML = filtered.map(t => threadRow(t, false)).join('');
     wireThreadRows(container, filtered, false, deps);
     markCachedAvatars(container);
     return;

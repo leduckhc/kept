@@ -65,6 +65,26 @@ function updateUnifiedBar(opts?: { subject?: string }) {
       folderCount: state.threads.length,
     });
     wireUnifiedBarBack();
+  } else if (state.categoryFilter || state.senderFilter || state.domainFilter) {
+    const filterLabel = state.categoryFilter
+      ? (state.categoryFilter === 'newsletters' ? 'Newsletters'
+         : state.categoryFilter === 'updates' ? 'Updates'
+         : state.categoryFilter)
+      : state.domainFilter
+        ? state.domainFilter
+        : state.senderFilter!;
+    slot.innerHTML = renderUnifiedBar({
+      mode: 'folder',
+      folderName: filterLabel,
+      folderColor: '#888',
+      folderCount: state.threads.filter(t => {
+        if (state.categoryFilter) return t.category === state.categoryFilter;
+        if (state.senderFilter) return t.senderEmail === state.senderFilter;
+        if (state.domainFilter) return t.senderEmail.endsWith('@' + state.domainFilter);
+        return true;
+      }).length,
+    });
+    wireUnifiedBarBack();
   } else {
     _currentReaderSubject = null;
     slot.innerHTML = renderUnifiedBar({ mode: 'inbox' });
@@ -81,6 +101,12 @@ function wireUnifiedBarBack() {
       document.dispatchEvent(closeEvt);
     } else if (_activeSmartFolder) {
       _activeSmartFolder = null;
+      renderInbox();
+      updateUnifiedBar();
+    } else if (state.categoryFilter || state.senderFilter || state.domainFilter) {
+      state.categoryFilter = null;
+      state.senderFilter = null;
+      state.domainFilter = null;
       renderInbox();
       updateUnifiedBar();
     }
@@ -902,7 +928,7 @@ function getThreadListDeps() {
   };
 }
 
-function renderInbox() { _renderInbox(getThreadListDeps()); updateToolbarContextActions(); }
+function renderInbox() { _renderInbox(getThreadListDeps()); updateToolbarContextActions(); updateUnifiedBar(); }
 function renderSnoozedView() { return _renderSnoozedView(getThreadListDeps()); }
 function renderStarredView() { return _renderStarredView(getThreadListDeps()); }
 function renderSetAsideView() { return _renderSetAsideView(getThreadListDeps()); }
