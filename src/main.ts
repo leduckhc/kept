@@ -348,6 +348,7 @@ function showShell() {
           <span class="settings-title">Settings</span>
         </div>
         <div class="settings-body">
+          <input type="text" class="settings-search" id="settings-search" placeholder="Search settings…" autocomplete="off" />
           <div class="settings-section">
             <div class="settings-section-label">Accounts</div>
             <div id="settings-accounts-list"></div>
@@ -356,7 +357,7 @@ function showShell() {
               + Add account
             </button>
           </div>
-          <div class="settings-divider"></div>
+
           <div class="settings-section">
             <div class="settings-section-label">Appearance</div>
             <div class="settings-row" id="settings-darkmode-row">
@@ -368,17 +369,9 @@ function showShell() {
                 <span class="settings-toggle-thumb"></span>
               </button>
             </div>
-            <div class="settings-row" id="settings-layout-row">
-              <div class="settings-row-text">
-                <div class="settings-row-label">2-pane layout</div>
-                <div class="settings-row-sub" id="settings-layout-sub">Hide email preview pane</div>
-              </div>
-              <button class="settings-toggle" id="settings-layout-toggle" role="switch" aria-checked="false">
-                <span class="settings-toggle-thumb"></span>
-              </button>
-            </div>
+
           </div>
-          <div class="settings-divider"></div>
+
           <div class="settings-section">
             <div class="settings-section-label">Notifications</div>
             <div class="settings-row" id="settings-smartnotif-row">
@@ -391,7 +384,7 @@ function showShell() {
               </button>
             </div>
           </div>
-          <div class="settings-divider"></div>
+
           <div class="settings-section">
             <div class="settings-section-label">Snippets / Templates</div>
             <div class="settings-row-sub" style="margin-bottom:8px">Reusable text with {{variables}} — use ⌘; in compose to insert</div>
@@ -400,7 +393,7 @@ function showShell() {
               Manage snippets
             </button>
           </div>
-          <div class="settings-divider"></div>
+
           <div class="settings-section" id="settings-auto-labels-section">
             <div class="settings-section-label">Auto Labels</div>
             <div class="settings-section-sub">Automatically label emails based on rules (e.g. from:@github.com → Dev)</div>
@@ -410,7 +403,7 @@ function showShell() {
               Add rule
             </button>
           </div>
-          <div class="settings-divider"></div>
+
           <div class="settings-section" id="settings-signature-section">
             <div class="settings-section-label">Email Signature</div>
             <textarea class="settings-signature-ta" id="settings-signature-ta"

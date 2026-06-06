@@ -23,7 +23,7 @@ export const state = {
   lastBulkSelectedId: null as string | null,
   gPending: false,
   gTimeout: null as ReturnType<typeof setTimeout> | null,
-  layoutMode: (localStorage.getItem('kept.layoutMode') || '3-pane') as LayoutMode,
+  layoutMode: '2-pane' as LayoutMode,
   // Newsletters & Updates + Group by Sender
   categoryFilter: null as string | null,
   senderFilter: null as string | null,

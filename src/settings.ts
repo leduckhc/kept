@@ -1,7 +1,7 @@
 // settings.ts — Settings panel logic extracted from main.ts
 import { removeAccount, saveAccount, startOAuth } from './auth';
 import { clearActiveAccountId } from './accountContext';
-import { applyTheme, toggleLayoutMode, setStatus, flashStatus, esc } from './helpers';
+import { applyTheme, setStatus, flashStatus, esc } from './helpers';
 import { state, setAccount } from './state';
 import { type Thread, loadThreads } from './store';
 import { ACCOUNT_BADGE_COLORS } from './avatar';
@@ -76,25 +76,26 @@ export function openSettings() {
     if (subEl) subEl.textContent = label;
   }, { once: true });
 
-  // Sync layout toggle state
-  const layoutToggle = document.getElementById('settings-layout-toggle') as HTMLButtonElement;
-  const layoutSub = document.getElementById('settings-layout-sub');
-  const is2Pane = state.layoutMode === '2-pane';
-  if (layoutToggle) {
-    layoutToggle.setAttribute('aria-checked', String(is2Pane));
-    layoutToggle.classList.toggle('on', is2Pane);
+  // Wire settings search/filter
+  const searchInput = document.getElementById('settings-search') as HTMLInputElement;
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.addEventListener('input', () => {
+      const term = searchInput.value.toLowerCase().trim();
+      const sections = document.querySelectorAll('.settings-body .settings-section');
+      sections.forEach(sec => {
+        if (!term) {
+          (sec as HTMLElement).style.display = '';
+        } else {
+          const text = (sec as HTMLElement).textContent?.toLowerCase() || '';
+          (sec as HTMLElement).style.display = text.includes(term) ? '' : 'none';
+        }
+      });
+    });
   }
-  if (layoutSub) layoutSub.textContent = is2Pane ? 'Showing list only, click to read' : 'Hide email preview pane';
 
-  // Wire layout toggle
-  layoutToggle?.addEventListener('click', () => {
-    toggleLayoutMode();
-    const nowIs2 = state.layoutMode === '2-pane';
-    layoutToggle.setAttribute('aria-checked', String(nowIs2));
-    layoutToggle.classList.toggle('on', nowIs2);
-    const subEl = document.getElementById('settings-layout-sub');
-    if (subEl) subEl.textContent = nowIs2 ? 'Showing list only, click to read' : 'Hide email preview pane';
-  }, { once: true });
+
+
 
 
 

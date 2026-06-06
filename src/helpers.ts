@@ -28,9 +28,8 @@ export function applyLayoutMode(mode: LayoutMode) {
 }
 
 export function toggleLayoutMode() {
-  const next: LayoutMode = state.layoutMode === '3-pane' ? '2-pane' : '3-pane';
-  applyLayoutMode(next);
-  // If switching to 2-pane while reader is open, keep it; if to 3-pane, keep it too
+  // Layout is always 2-pane; this is kept for API compatibility
+  applyLayoutMode('2-pane');
 }
 
 export function setStatus(msg: string) {

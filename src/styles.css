@@ -1574,17 +1574,46 @@ body {
 
 [data-theme="dark"] .settings-body { background: #0f0f0f; }
 
-.settings-section {
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 12px 0;
-  margin-bottom: 0;
+/* Settings search input */
+.settings-search {
+  display: block;
+  width: 100%;
+  padding: 10px 18px;
+  font-size: 14px;
+  border: 1px solid #e0dfe6;
+  border-radius: 24px;
+  background: #f4f3f8;
+  outline: none;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.settings-search:focus {
+  border-color: #7c6fa8;
+  box-shadow: 0 0 0 3px rgba(124,111,168,0.1);
+}
+[data-theme="dark"] .settings-search {
+  background: #1a1a1a;
+  border-color: #333;
+  color: #f0f0f0;
+}
+[data-theme="dark"] .settings-search:focus {
+  border-color: #7c6fa8;
+  box-shadow: 0 0 0 3px rgba(124,111,168,0.2);
 }
 
-[data-theme="dark"] .settings-section { background: #1a1a1a; }
+.settings-section {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px 0;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+[data-theme="dark"] .settings-section { background: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
 
 .settings-section-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -1593,9 +1622,7 @@ body {
 }
 
 .settings-divider {
-  height: 1px;
-  background: #f0eff5;
-  margin: 12px 0;
+  display: none;
 }
 
 [data-theme="dark"] .settings-divider { background: #2a2a2a; }
@@ -1694,9 +1721,9 @@ body {
   color: #e74c3c;
   padding: 5px 12px;
   border-radius: 6px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  opacity: 1;
+  pointer-events: auto;
+  transition: background 0.15s, color 0.15s;
 }
 
 .settings-account-row:hover .settings-account-signout {
