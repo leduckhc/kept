@@ -24,7 +24,7 @@ export async function loadSmartFolders(accountId: string): Promise<SmartFolder[]
     [SETTINGS_KEY, accountId]
   );
   if (!rows[0]?.value) return [];
-  try { return JSON.parse(rows[0].value); } catch { return []; }
+  try { return JSON.parse(rows[0].value) || []; } catch { return []; }
 }
 
 export async function saveSmartFolders(accountId: string, folders: SmartFolder[]): Promise<void> {
