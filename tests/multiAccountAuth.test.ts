@@ -65,6 +65,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     tokenExpiry: Date.now() + 3_600_000,
     signature: '',
     colorIndex: 0,
+    provider: 'gmail',
     ...overrides,
   };
 }
@@ -109,7 +110,8 @@ describe('saveAccount — preserves color_index', () => {
     await saveAccount(account);
 
     const [, params] = mockExecute.mock.calls[0];
-    expect(params[params.length - 1]).toBe(0);
+    // color_index is second-to-last param (last is provider)
+    expect(params[params.length - 2]).toBe(0);
   });
 });
 
@@ -328,5 +330,59 @@ describe('getAllAccounts — ordered with correct colorIndex', () => {
     expect(mockSelect).toHaveBeenCalledWith(
       expect.stringContaining('ORDER BY created_at ASC')
     );
+  });
+});
+
+describe('Account provider field', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('Account interface includes provider field', () => {
+    const account = makeAccount({ provider: 'outlook' });
+    expect(account.provider).toBe('outlook');
+  });
+
+  it('defaults provider to gmail when DB row has null provider', async () => {
+    mockSelect.mockResolvedValue([
+      { id: 'a1', email: 'user@test.com', access_token: '', refresh_token: '', token_expiry: 0, signature: '', color_index: 0, provider: null },
+    ]);
+    mockGetTokensFromKeychain.mockResolvedValue(null);
+
+    const accounts = await getAllAccounts();
+    expect(accounts[0].provider).toBe('gmail');
+  });
+
+  it('preserves provider through save/load cycle', async () => {
+    mockSaveTokensToKeychain.mockResolvedValue(undefined);
+    const account = makeAccount({ provider: 'm365' });
+
+    await saveAccount(account);
+
+    const [sql, params] = mockExecute.mock.calls[0];
+    expect(sql).toContain('provider');
+    expect(params).toContain('m365');
+  });
+
+  it('maps provider from DB row correctly', async () => {
+    mockSelect.mockResolvedValue([
+      { id: 'a1', email: 'user@test.com', access_token: '', refresh_token: '', token_expiry: 0, signature: '', color_index: 0, provider: 'outlook' },
+    ]);
+    mockGetTokensFromKeychain.mockResolvedValue(null);
+
+    const accounts = await getAllAccounts();
+    expect(accounts[0].provider).toBe('outlook');
+  });
+
+  it('defaults provider to gmail in saveAccount when not specified', async () => {
+    mockSaveTokensToKeychain.mockResolvedValue(undefined);
+    const account = makeAccount();
+    // @ts-expect-error -- testing undefined case
+    delete account.provider;
+
+    await saveAccount(account);
+
+    const [, params] = mockExecute.mock.calls[0];
+    expect(params[params.length - 1]).toBe('gmail');
   });
 });

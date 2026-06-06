@@ -57,6 +57,7 @@ function makeAccount(id: string, email: string): Account {
     tokenExpiry: Date.now() + 3_600_000,
     signature: '',
     colorIndex: 0,
+    provider: 'gmail',
   };
 }
 

@@ -34,12 +34,13 @@ export interface Account {
   tokenExpiry: number;
   signature: string;
   colorIndex: number;
+  provider: 'gmail' | 'outlook' | 'm365';
 }
 
 type AccountRow = {
   id: string; email: string; access_token: string;
   refresh_token: string; token_expiry: number; signature: string | null;
-  color_index: number | null;
+  color_index: number | null; provider: string | null;
 };
 
 async function rowToAccount(r: AccountRow): Promise<Account> {
@@ -54,6 +55,7 @@ async function rowToAccount(r: AccountRow): Promise<Account> {
       tokenExpiry: keychainTokens.tokenExpiry,
       signature: r.signature ?? '',
       colorIndex: r.color_index ?? 0,
+      provider: (r.provider as Account['provider']) ?? 'gmail',
     };
   }
   // Fallback: use SQLite tokens (pre-migration accounts)
@@ -65,6 +67,7 @@ async function rowToAccount(r: AccountRow): Promise<Account> {
     tokenExpiry: r.token_expiry,
     signature: r.signature ?? '',
     colorIndex: r.color_index ?? 0,
+    provider: (r.provider as Account['provider']) ?? 'gmail',
   };
 }
 
@@ -131,16 +134,16 @@ export async function saveAccount(account: Account): Promise<void> {
   if (keychainOk) {
     // Keychain has the secrets — SQLite stores only metadata
     await db.execute(
-       `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature, color_index)
-        VALUES (?, ?, '', '', 0, ?, ?)`,
-       [account.id, account.email, account.signature ?? '', account.colorIndex ?? 0]
+       `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature, color_index, provider)
+        VALUES (?, ?, '', '', 0, ?, ?, ?)`,
+       [account.id, account.email, account.signature ?? '', account.colorIndex ?? 0, account.provider ?? 'gmail']
     );
   } else {
     // Fallback: store tokens in SQLite (same as before keychain feature)
     await db.execute(
-       `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature, color_index)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-       [account.id, account.email, account.accessToken, account.refreshToken, account.tokenExpiry, account.signature ?? '', account.colorIndex ?? 0]
+       `INSERT OR REPLACE INTO accounts (id, email, access_token, refresh_token, token_expiry, signature, color_index, provider)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       [account.id, account.email, account.accessToken, account.refreshToken, account.tokenExpiry, account.signature ?? '', account.colorIndex ?? 0, account.provider ?? 'gmail']
     );
   }
 }
@@ -252,6 +255,7 @@ async function exchangeCode(code: string, verifier: string, redirectUri: string)
     tokenExpiry: Date.now() + tokens.expires_in * 1000,
     signature: '',
     colorIndex,
+    provider: 'gmail',
   };
   await saveAccount(account);
   return account;

@@ -251,4 +251,7 @@ async function migrate(db: Database): Promise<void> {
 
   // KPT-UNIFIED: Optimized index for unified inbox query
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_threads_unified ON threads(label, is_archived, received_at DESC)`).catch(() => {});
+
+  // Account provider field (gmail, outlook, m365)
+  await db.execute(`ALTER TABLE accounts ADD COLUMN provider TEXT DEFAULT 'gmail'`).catch(() => {});
 }
