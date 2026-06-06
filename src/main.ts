@@ -720,6 +720,10 @@ function showShell() {
 function switchView(view: ViewName) {
   state.currentView = view;
   _activeSmartFolder = null;
+  // Clear any active filters from the previous view
+  state.categoryFilter = null;
+  state.senderFilter = null;
+  state.domainFilter = null;
   // Update sidebar + mobile tab buttons + drawer items
   document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);

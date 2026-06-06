@@ -97,6 +97,20 @@ test.describe('Category filter → folder mode', () => {
     await page.locator('#unified-bar-back').click();
     await expect(page.locator('.unified-bar[data-mode="inbox"]')).toBeVisible();
   });
+
+  test('switching view clears filter and resets unified bar to inbox', async ({ page }) => {
+    const categoryRow = page.locator('.thread-row.category-row').first();
+    if (await categoryRow.count() === 0) {
+      test.skip();
+      return;
+    }
+    await categoryRow.click();
+    await expect(page.locator('.unified-bar[data-mode="folder"]')).toBeVisible();
+
+    // Click a different view (Triage) in the sidebar
+    await page.locator('.sidebar-btn[data-view="Triage"]').click();
+    await expect(page.locator('.unified-bar[data-mode="inbox"]')).toBeVisible();
+  });
 });
 
 test.describe('Keyboard navigation', () => {
