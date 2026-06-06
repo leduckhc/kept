@@ -1730,6 +1730,22 @@ body {
 
 .settings-add-account:hover { opacity: 0.8; }
 
+.settings-signout-all {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  margin-top: 8px;
+  background: none;
+  border: 1px solid #e74c3c;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e74c3c;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.settings-signout-all:hover { background: #e74c3c; color: #fff; }
+
 .settings-add-account-icon {
   width: 36px;
   height: 36px;

@@ -147,6 +147,26 @@ export function openSettings() {
     }
   });
 
+  // Wire sign out all button
+  document.getElementById('settings-signout-all')!.addEventListener('click', async () => {
+    if (!confirm('Sign out of all accounts?\n\nThis will remove all account data from Kept.')) return;
+    try {
+      for (const a of [...state.accounts]) {
+        await removeAccount(a).catch(() => {});
+      }
+      state.accounts = [];
+      state.account = null;
+      state.threads = [];
+      state.syncing = false;
+      clearActiveAccountId();
+      closeSettings();
+      _deps?.showAuth();
+    } catch (err) {
+      console.error('Sign out all error:', err);
+      setStatus('Failed to sign out');
+    }
+  }, { once: true });
+
   // Animate in
   panel.classList.add('open');
   panel.setAttribute('aria-hidden', 'false');

@@ -355,6 +355,9 @@ function showShell() {
               <span class="settings-add-account-icon"></span>
               + Add account
             </button>
+            <button class="settings-signout-all" id="settings-signout-all">
+              Sign out of all accounts
+            </button>
           </div>
           <div class="settings-divider"></div>
           <div class="settings-section">
