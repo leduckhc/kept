@@ -2557,6 +2557,10 @@ body {
   .unified-bar[data-mode="reader"] {
     padding-bottom: 0;
   }
+  /* Phone reader: 2-line bar needs more top padding on reader */
+  #app-shell.reader-open .reader-pane {
+    padding-top: 76px;
+  }
   .unified-bar {
     gap: 4px;
     padding: 0 8px;
@@ -2638,6 +2642,21 @@ body {
   .sidebar { display: none; }
   .resize-handle { display: none; }
   .statusbar { display: none; }
+
+  /* Unified bar must sit above the fullpage reader overlay */
+  #app-shell.reader-open .unified-bar-slot {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 60;
+    background: var(--bg, #fff);
+  }
+  /* Push reader content below the fixed unified bar */
+  #app-shell.reader-open .reader-pane {
+    top: 0;
+    padding-top: 48px;
+  }
 
   /* app-body stacks — inbox fills width */
   .app-body {
