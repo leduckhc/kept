@@ -254,4 +254,15 @@ async function migrate(db: Database): Promise<void> {
 
   // Account provider field (gmail, outlook, m365)
   await db.execute(`ALTER TABLE accounts ADD COLUMN provider TEXT DEFAULT 'gmail'`).catch(() => {});
+
+  // KPT-086: Priority Senders
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS priority_senders (
+      account_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      added_at INTEGER NOT NULL,
+      PRIMARY KEY (account_id, email)
+    )
+  `).catch(() => {});
 }

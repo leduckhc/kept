@@ -13,6 +13,7 @@ import { icon } from './icons';
 import { showUndoToast } from './toasts';
 import { Newspaper, Megaphone } from 'lucide-static';
 import { renderNewSendersSection } from './newSenders';
+import { sortWithPriority } from './prioritySenders';
 
 // IDs currently being dispatched — used by scheduledSend dispatch and scheduled view
 export const sendingIds = new Set<string>();
@@ -312,6 +313,10 @@ export function renderInbox(deps: ThreadListDeps) {
   // Apply search filter
   const searchFiltered = isSearchActive() ? getFilteredThreads(state.threads) : state.threads;
 
+  // Apply priority sender sorting (VIP emails surface at top)
+  const priorityEmails = new Set<string>(state.vipSenders.map(e => e.toLowerCase()));
+  const displayThreads = sortWithPriority(searchFiltered, priorityEmails);
+
   if (searchFiltered.length === 0) {
     let emptyTitle: string;
     let emptySubtitle: string;
@@ -341,9 +346,9 @@ export function renderInbox(deps: ThreadListDeps) {
   let html: string;
   if (isSearchActive() && getSearchQuery().trim()) {
     // Flat list — no sections while searching
-    html = searchFiltered.map(t => threadRow(t, false)).join('');
+    html = displayThreads.map(t => threadRow(t, false)).join('');
   } else {
-    const sections = groupBySection(searchFiltered, state.groupedSenders, state.groupedDomains, state.vipSenders);
+    const sections = groupBySection(displayThreads, state.groupedSenders, state.groupedDomains, state.vipSenders);
 
     // Try incremental DOM patching first (skip if searching or focus banner changed)
     const allThreads = sections.flatMap(s => s.threads);
@@ -415,7 +420,7 @@ export function renderInbox(deps: ThreadListDeps) {
       const chunk = rowHtmls.slice(loaded, loaded + LAZY_CHUNK_SIZE).join('');
       container.insertAdjacentHTML('beforeend', chunk);
       const newRows = container.querySelectorAll<HTMLElement>('.thread-row[data-id]:not([data-wired])');
-      wireNewRows(newRows, searchFiltered, false, deps);
+      wireNewRows(newRows, displayThreads, false, deps);
       loaded += LAZY_CHUNK_SIZE;
       if (loaded < rowHtmls.length) {
         if ('requestIdleCallback' in window) {
@@ -433,7 +438,7 @@ export function renderInbox(deps: ThreadListDeps) {
   } else {
     container.innerHTML = html;
   }
-  wireThreadRows(container, searchFiltered, false, deps);
+  wireThreadRows(container, displayThreads, false, deps);
   wireCategoryAndGroupRows(container, deps);
   markCachedAvatars(container);
   if (state.bulkMode) deps.updateBulkBar();

@@ -248,7 +248,7 @@ export function getFilteredThreads(threads: Thread[]): Thread[] {
 
   // Parse date operators first
   const { before, after, textQuery } = parseDateOperators(q);
-  let filtered = filterByDate(threads, { before, after });
+  const filtered = filterByDate(threads, { before, after });
 
   // If no remaining text query after date extraction, return date-filtered results
   const remaining = textQuery.trim();
