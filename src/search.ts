@@ -129,39 +129,164 @@ export function dismissSearchBar() {
   if (_dismissFn) _dismissFn();
 }
 
+// ── Date operator parsing (KPT-087) ──────────────────────
+
+export interface DateConstraints {
+  before: number | null; // unix ms (inclusive upper bound — end of day)
+  after: number | null;  // unix ms (inclusive lower bound — start of day)
+}
+
+export interface ParsedDateQuery extends DateConstraints {
+  textQuery: string; // remaining query after date operators are stripped
+}
+
+/**
+ * Parse before:, after:, date: operators from a search query string.
+ * Returns the date constraints and any remaining text query.
+ */
+export function parseDateOperators(query: string): ParsedDateQuery {
+  let before: number | null = null;
+  let after: number | null = null;
+  let remaining = query;
+
+  // Extract date: operator (exact day)
+  const dateMatch = remaining.match(/\bdate:(\S+)/i);
+  if (dateMatch) {
+    remaining = remaining.replace(dateMatch[0], '').trim();
+    const parsed = parseDateValue(dateMatch[1]);
+    if (parsed) {
+      after = startOfDay(parsed).getTime();
+      before = endOfDay(parsed).getTime();
+    }
+  }
+
+  // Extract before: operator
+  const beforeMatch = remaining.match(/\bbefore:(\S+)/i);
+  if (beforeMatch) {
+    remaining = remaining.replace(beforeMatch[0], '').trim();
+    const parsed = parseDateValue(beforeMatch[1]);
+    if (parsed) {
+      before = endOfDay(parsed).getTime();
+    }
+  }
+
+  // Extract after: operator
+  const afterMatch = remaining.match(/\bafter:(\S+)/i);
+  if (afterMatch) {
+    remaining = remaining.replace(afterMatch[0], '').trim();
+    const parsed = parseDateValue(afterMatch[1]);
+    if (parsed) {
+      after = startOfDay(parsed).getTime();
+    }
+  }
+
+  return { before, after, textQuery: remaining.trim() };
+}
+
+/**
+ * Filter threads by date constraints (inclusive on both ends).
+ */
+export function filterByDate(threads: Thread[], constraints: DateConstraints): Thread[] {
+  const { before: b, after: a } = constraints;
+  if (b === null && a === null) return threads;
+  return threads.filter(t => {
+    if (a !== null && t.receivedAt < a) return false;
+    if (b !== null && t.receivedAt > b) return false;
+    return true;
+  });
+}
+
+function startOfDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+}
+
+function endOfDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+}
+
+function parseDateValue(val: string): Date | null {
+  // Relative keywords
+  const now = new Date();
+  const lower = val.toLowerCase();
+
+  if (lower === 'today') return now;
+  if (lower === 'yesterday') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 1);
+    return d;
+  }
+  if (lower === 'lastweek' || lower === 'last-week') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 7);
+    return d;
+  }
+
+  // YYYY-MM-DD
+  const fullMatch = val.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (fullMatch) {
+    const d = new Date(`${val}T00:00:00.000Z`);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // YYYY-MM (treat as first day of month)
+  const monthMatch = val.match(/^(\d{4})-(\d{2})$/);
+  if (monthMatch) {
+    const d = new Date(`${val}-01T00:00:00.000Z`);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Fallback: try Date.parse
+  const parsed = new Date(val);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+// ── Main filter function ──────────────────────────────────
+
 export function getFilteredThreads(threads: Thread[]): Thread[] {
   const q = _query.trim().toLowerCase();
   if (!_active || !q) return threads;
 
-  if (q.startsWith('from:')) {
-    const val = q.slice(5).trim();
-    return threads.filter(t =>
+  // Parse date operators first
+  const { before, after, textQuery } = parseDateOperators(q);
+  let filtered = filterByDate(threads, { before, after });
+
+  // If no remaining text query after date extraction, return date-filtered results
+  const remaining = textQuery.trim();
+  if (!remaining) return filtered;
+
+  if (remaining.startsWith('from:')) {
+    const val = remaining.slice(5).trim();
+    return filtered.filter(t =>
       t.senderName.toLowerCase().includes(val) ||
       t.senderEmail.toLowerCase().includes(val)
     );
   }
 
-  if (q.startsWith('to:')) {
-    const val = q.slice(3).trim();
-    return threads.filter(t => t.snippet.toLowerCase().includes(val));
+  if (remaining.startsWith('to:')) {
+    const val = remaining.slice(3).trim();
+    return filtered.filter(t => t.snippet.toLowerCase().includes(val));
   }
 
-  if (q.startsWith('subject:')) {
-    const val = q.slice(8).trim();
-    return threads.filter(t => t.subject.toLowerCase().includes(val));
+  if (remaining.startsWith('subject:')) {
+    const val = remaining.slice(8).trim();
+    return filtered.filter(t => t.subject.toLowerCase().includes(val));
   }
 
-  return threads.filter(t =>
-    t.subject.toLowerCase().includes(q) ||
-    t.senderName.toLowerCase().includes(q) ||
-    t.senderEmail.toLowerCase().includes(q) ||
-    t.snippet.toLowerCase().includes(q)
+  return filtered.filter(t =>
+    t.subject.toLowerCase().includes(remaining) ||
+    t.senderName.toLowerCase().includes(remaining) ||
+    t.senderEmail.toLowerCase().includes(remaining) ||
+    t.snippet.toLowerCase().includes(remaining)
   );
 }
 
 export function highlightText(text: string, query: string): string {
   let term = query.trim().toLowerCase();
   if (!term) return esc(text);
+
+  // Strip date operators — they don't produce text highlights
+  const { textQuery } = parseDateOperators(term);
+  term = textQuery;
 
   if (term.startsWith('from:')) term = term.slice(5).trim();
   else if (term.startsWith('to:')) term = term.slice(3).trim();
