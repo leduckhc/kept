@@ -1,4 +1,9 @@
-// gmail.ts — Gmail API sync, send, reply, block, snooze
+// gmail.ts — Gmail API transport layer (sync, send, actions)
+// NOTE: This file is being phased out. New code should use:
+//   - providerFor(account).method() for API operations
+//   - import from './store' for DB operations
+// Remaining exports here are Gmail-specific API calls that haven't yet
+// been migrated to the GmailProvider class methods directly.
 
 // Tauri HTTP plugin loaded lazily (crashes in browser E2E mode)
 let _fetch: typeof globalThis.fetch | null = null;
