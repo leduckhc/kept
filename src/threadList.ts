@@ -729,7 +729,7 @@ export function renderRemindersView() {
       const isOverdue = remindDate <= now;
       const timeLabel = isOverdue ? 'Overdue' : `Fires ${formatDate(remindDate.getTime())}`;
       return `
-      <div class="thread-row${isOverdue ? ' reminder-overdue' : ''}" data-reminder-id="${esc(r.id)}">
+      <div class="thread-row${isOverdue ? ' reminder-overdue' : ''}" data-reminder-id="${esc(r.id)}" data-thread-id="${esc(r.threadId)}">
         <span class="unread-dot"></span>
         <div class="avatar-wrap"><div class="avatar" style="background:var(--accent)" data-initial="🔔"></div></div>
         <span class="thread-sender">${esc(r.sentTo)}</span>
@@ -752,6 +752,16 @@ export function renderRemindersView() {
       const id = row.dataset.reminderId!;
       dismissReminder(id);
       renderRemindersView();
+    });
+  });
+
+  container.querySelectorAll<HTMLElement>('.thread-row[data-thread-id]').forEach(row => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => {
+      const threadId = row.dataset.threadId;
+      if (threadId) {
+        document.dispatchEvent(new CustomEvent('kept:open-thread-by-id', { detail: { threadId } }));
+      }
     });
   });
 }

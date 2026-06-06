@@ -5,7 +5,7 @@ import { registerProvider } from './providerRegistry';
 import { GmailProvider } from './providers/gmail';
 import { registerAuthProvider } from './authProviderRegistry';
 import { GoogleAuthProvider } from './authProviders/google';
-import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection } from './store';
+import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection, rowToThread } from './store';
 import { fetchDraftByThread } from './gmail';
 import { loadLocalDrafts, type LocalDraft } from './localDrafts';
 
@@ -214,6 +214,8 @@ function showFollowupPrompt(opts: { threadId: string; subject: string; sentTo: s
 function checkOverdueReminders() {
   const overdue = getOverdueReminders();
   if (overdue.length === 0) return;
+  const MAX_TOASTS = 3;
+  const toShow = overdue.slice(0, MAX_TOASTS);
   overdue.forEach(r => {
     markReminderNotified(r.id);
     // Mark thread as unread in DB so it resurfaces in inbox
@@ -222,6 +224,8 @@ function checkOverdueReminders() {
         db.execute('UPDATE threads SET is_unread = 1, label = ? WHERE id = ? OR gmail_thread_id = ?', ['INBOX', r.threadId, r.threadId]).catch(() => {});
       }).catch(() => {});
     }
+  });
+  toShow.forEach(r => {
     const toast = document.createElement('div');
     toast.className = 'toast';
     toast.innerHTML = `🔔 No reply from <b>${esc(r.sentTo)}</b> — "${esc(r.subject)}" <a class="toast-dismiss">dismiss</a>`;
@@ -238,7 +242,22 @@ function checkOverdueReminders() {
   }
 }
 
+checkOverdueReminders();
 setInterval(checkOverdueReminders, 60000);
+
+// ── Reminder row click → open thread ─────────────────────
+document.addEventListener('kept:open-thread-by-id', async (e: Event) => {
+  const threadId = (e as CustomEvent).detail?.threadId;
+  if (!threadId) return;
+  const db = await getDb();
+  const rows = await db.select<Record<string, unknown>[]>(
+    'SELECT * FROM threads WHERE id = ? OR gmail_thread_id = ? LIMIT 1',
+    [threadId, threadId]
+  );
+  if (rows.length > 0) {
+    openThread(rowToThread(rows[0]));
+  }
+});
 
 // ── Auth screen ───────────────────────────────────────────
 function showAuth() {
