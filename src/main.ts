@@ -3,6 +3,8 @@ import { getAllAccounts, startOAuth, migrateTokensToKeychain, removeAccount } fr
 import { resolveActiveAccount, clearActiveAccountId } from './accountContext';
 import { registerProvider } from './providerRegistry';
 import { GmailProvider } from './providers/gmail';
+import { registerAuthProvider } from './authProviderRegistry';
+import { GoogleAuthProvider } from './authProviders/google';
 import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection } from './store';
 import { fetchDraftByThread } from './gmail';
 import { loadLocalDrafts, type LocalDraft } from './localDrafts';
@@ -138,6 +140,8 @@ function getAccountAvatar(): string {
 async function boot() {
   // Register email providers
   registerProvider('gmail', new GmailProvider());
+  // Register auth providers
+  registerAuthProvider('gmail', new GoogleAuthProvider());
 
   applyTheme(localStorage.getItem('theme') ?? 'light');
   applyLayoutMode(state.layoutMode);
