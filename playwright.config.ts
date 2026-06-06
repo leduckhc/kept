@@ -8,8 +8,9 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:1420',
+    baseURL: 'http://localhost:5175',
     trace: 'on-first-retry',
+    headless: true,
   },
   projects: [
     // Desktop viewports
@@ -33,8 +34,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'VITE_E2E=1 npx vite --port 1420',
-    port: 1420,
+    command: 'VITE_E2E=1 pnpm vite --port 5175',
+    port: 5175,
     reuseExistingServer: !process.env.CI,
     timeout: 15000,
   },

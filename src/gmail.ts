@@ -307,6 +307,7 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 export async function markRead(account: Account, thread: Thread): Promise<void> {
   const db = await getDb();
   await db.execute('UPDATE threads SET is_unread = 0 WHERE id = ?', [thread.id]);
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['UNREAD'] });
 }
@@ -314,33 +315,37 @@ export async function markRead(account: Account, thread: Thread): Promise<void> 
 export async function markUnread(account: Account, thread: Thread): Promise<void> {
   const db = await getDb();
   await db.execute('UPDATE threads SET is_unread = 1 WHERE id = ?', [thread.id]);
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['UNREAD'] });
 }
 
 // Mark thread as unread by threadId (no Thread object needed)
 export async function markThreadUnread(account: Account, threadId: string): Promise<void> {
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await gmailPost(a, `/users/me/threads/${threadId}/modify`, { addLabelIds: ['UNREAD'] });
 }
 
 // Report spam (add SPAM, remove INBOX)
 export async function reportSpam(account: Account, threadId: string): Promise<void> {
-  const a = await ensureFreshToken(account);
-  await gmailPost(a, `/users/me/threads/${threadId}/modify`, { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] });
   const db = await getDb();
   await db.execute('UPDATE threads SET is_archived = 1 WHERE gmail_thread_id = ?', [threadId]);
+  if (import.meta.env.VITE_E2E === '1') return;
+  const a = await ensureFreshToken(account);
+  await gmailPost(a, `/users/me/threads/${threadId}/modify`, { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] });
 }
 
 // Move to label (add target label, optionally remove INBOX)
 export async function moveToLabel(account: Account, threadId: string, labelId: string, removeFromInbox = true): Promise<void> {
-  const a = await ensureFreshToken(account);
-  const removeLabelIds = removeFromInbox ? ['INBOX'] : [];
-  await gmailPost(a, `/users/me/threads/${threadId}/modify`, { addLabelIds: [labelId], removeLabelIds });
   if (removeFromInbox) {
     const db = await getDb();
     await db.execute('UPDATE threads SET is_archived = 1 WHERE gmail_thread_id = ?', [threadId]);
   }
+  if (import.meta.env.VITE_E2E === '1') return;
+  const a = await ensureFreshToken(account);
+  const removeLabelIds = removeFromInbox ? ['INBOX'] : [];
+  await gmailPost(a, `/users/me/threads/${threadId}/modify`, { addLabelIds: [labelId], removeLabelIds });
 }
 
 // Fetch user's labels for the move-to picker
@@ -366,6 +371,7 @@ export async function toggleStar(account: Account, thread: Thread): Promise<bool
 export async function archiveThread(account: Account, thread: Thread): Promise<void> {
   const db = await getDb();
   await db.execute('UPDATE threads SET is_archived = 1 WHERE id = ?', [thread.id]);
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] });
 }
@@ -376,6 +382,7 @@ export async function archiveThreads(account: Account, threads: Thread[]): Promi
   const db = await getDb();
   const ids = threads.map(t => t.id);
   await db.execute(`UPDATE threads SET is_archived = 1 WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/modify`, { removeLabelIds: ['INBOX'] })
@@ -385,6 +392,7 @@ export async function archiveThreads(account: Account, threads: Thread[]): Promi
 export async function unarchiveThread(account: Account, thread: Thread): Promise<void> {
   const db = await getDb();
   await db.execute('UPDATE threads SET is_archived = 0 WHERE id = ?', [thread.id]);
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] });
 }
@@ -395,6 +403,7 @@ export async function unarchiveThreads(account: Account, threads: Thread[]): Pro
   const db = await getDb();
   const ids = threads.map(t => t.id);
   await db.execute(`UPDATE threads SET is_archived = 0 WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/modify`, { addLabelIds: ['INBOX'] })
@@ -404,6 +413,7 @@ export async function unarchiveThreads(account: Account, threads: Thread[]): Pro
 export async function trashThread(account: Account, thread: Thread): Promise<void> {
   const db = await getDb();
   await db.execute('UPDATE threads SET is_archived = 1, label = \'TRASH\' WHERE id = ?', [thread.id]);
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/trash`, {});
 }
@@ -414,6 +424,7 @@ export async function trashThreads(account: Account, threads: Thread[]): Promise
   const db = await getDb();
   const ids = threads.map(t => t.id);
   await db.execute(`UPDATE threads SET is_archived = 1, label = 'TRASH' WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+  if (import.meta.env.VITE_E2E === '1') return;
   const a = await ensureFreshToken(account);
   await chunkedParallel(threads, 50, t =>
     gmailPost(a, `/users/me/threads/${t.gmailThreadId}/trash`, {})
