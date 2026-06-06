@@ -24,10 +24,18 @@ export async function openThread(
   _showFollowupPrompt?: (opts: { threadId: string; subject: string; sentTo: string }) => void,
 ) {
   if (!state.account) return;
+
+  // Resolve the correct account for this thread (may differ from state.account in multi-account)
+  const resolvedAccount = t.accountId && t.accountId !== state.account.id
+    ? await getAccountById(t.accountId)
+    : state.account;
+  if (!resolvedAccount) return;
+  const threadAccount = resolvedAccount!;
+
   if (t.isUnread) {
     t.isUnread = false;
     document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.remove('unread');
-    markRead(state.account, t).catch(() => {
+    markRead(threadAccount, t).catch(() => {
       t.isUnread = true;
       document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.classList.add('unread');
     });
@@ -106,7 +114,7 @@ export async function openThread(
     const footer = reader.querySelector('.reader-footer') as HTMLElement | null;
     try {
       if (import.meta.env.DEV) console.log('[threadReader] Loading thread:', t.gmailThreadId, 'account:', state.account!.id); // eslint-disable-line no-console
-      const result = await fetchMessageBody(state.account!, t.gmailThreadId);
+      const result = await fetchMessageBody(threadAccount, t.gmailThreadId);
       lastMessageId = result.lastMessageId;
       // Capture last message's To/Cc for Reply All
       if (result.messages.length > 0) {
@@ -327,7 +335,7 @@ export async function openThread(
       sendTimer = setTimeout(async () => {
         if (cancelled) return;
         try {
-          await sendEmail(state.account!, {
+          await sendEmail(threadAccount, {
             to: t.senderEmail,
             subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
             body,
@@ -393,7 +401,7 @@ export async function openThread(
 
   document.getElementById('btn-archive-reader')!.addEventListener('click', async () => {
     if (!state.account) return;
-    await archiveThread(state.account, t);
+    await archiveThread(threadAccount, t);
     const fresh = state.account ? await getAccountById(state.account.id) : null;
     if (fresh) setAccount(fresh);
     state.threads = state.threads.filter(x => x.id !== t.id);
@@ -444,7 +452,7 @@ export async function openThread(
   document.getElementById('btn-block-reader')!.addEventListener('click', async () => {
     if (!state.account) return;
     if (!confirm(`Block all email from ${t.senderEmail}?`)) return;
-    await blockSender(state.account, t);
+    await blockSender(threadAccount, t);
     const fresh = state.account ? await getAccountById(state.account.id) : null;
     if (fresh) setAccount(fresh);
     state.threads = state.threads.filter(x => x.senderEmail !== t.senderEmail);
@@ -456,7 +464,7 @@ export async function openThread(
   document.getElementById('btn-mark-unread-reader')!.addEventListener('click', async () => {
     if (!state.account) return;
     try {
-      await markThreadUnread(state.account, t.gmailThreadId);
+      await markThreadUnread(threadAccount, t.gmailThreadId);
       t.isUnread = true;
       const db = await getDb();
       await db.execute('UPDATE threads SET is_unread = 1 WHERE id = ?', [t.id]);
@@ -472,7 +480,7 @@ export async function openThread(
     if (!state.account) return;
     if (!confirm('Report this thread as spam?')) return;
     try {
-      await reportSpam(state.account, t.gmailThreadId);
+      await reportSpam(threadAccount, t.gmailThreadId);
       state.threads = state.threads.filter(x => x.id !== t.id);
       showToast('Reported as spam');
       closeReader();
@@ -497,7 +505,7 @@ export async function openThread(
     try {
       // Cache labels in state
       if (!(state as unknown as Record<string, unknown>)._cachedLabels) {
-        (state as unknown as Record<string, unknown>)._cachedLabels = await fetchLabels(state.account);
+        (state as unknown as Record<string, unknown>)._cachedLabels = await fetchLabels(threadAccount);
       }
       const labels: Array<{id: string, name: string}> = (state as unknown as Record<string, unknown>)._cachedLabels as Array<{id: string, name: string}>;
 
@@ -514,7 +522,7 @@ export async function openThread(
         item.addEventListener('click', async () => {
           if (!state.account) return;
           try {
-            await moveToLabel(state.account, t.gmailThreadId, label.id);
+            await moveToLabel(threadAccount, t.gmailThreadId, label.id);
             state.threads = state.threads.filter(x => x.id !== t.id);
             showToast(`Moved to ${label.name}`);
             dropdown.remove();
