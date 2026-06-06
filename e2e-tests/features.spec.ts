@@ -163,14 +163,12 @@ test.describe('View switching', () => {
     expect(count).toBeGreaterThanOrEqual(3); // t05, t07, t19
   });
 
-  test.fixme('switching views and back to Inbox restores thread count', async ({ page }) => {
-    // KNOWN BUG: After Sent→Inbox switch, threads sometimes fail to re-render (race condition)
+  test('switching views and back to Inbox restores thread count', async ({ page }) => {
     const inboxCount = await page.locator('.thread-row').count();
     await page.locator('.sidebar-btn[data-view="Sent"]').click();
     await page.waitForTimeout(800);
     await page.locator('.sidebar-btn[data-view="Inbox"]').click();
-    await page.waitForTimeout(1000);
-    await page.waitForSelector('.thread-row', { timeout: 5000 }).catch(() => {});
+    await page.waitForSelector('.thread-row', { timeout: 5000 });
     const afterCount = await page.locator('.thread-row').count();
     expect(afterCount).toBeGreaterThanOrEqual(inboxCount - 1);
   });

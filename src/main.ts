@@ -717,7 +717,7 @@ function showShell() {
 }
 
 // ── View switching ────────────────────────────────────────
-function switchView(view: ViewName) {
+async function switchView(view: ViewName) {
   state.currentView = view;
   _activeSmartFolder = null;
   // Clear any active filters from the previous view
@@ -731,7 +731,7 @@ function switchView(view: ViewName) {
   // Render appropriate content
   if (view === 'Inbox') {
     // Reload inbox threads from DB (may have been overwritten by label views)
-    reloadInboxThreads();
+    await reloadInboxThreads();
   } else if (view === 'Triage') {
     renderTriageViewWrapper();
   } else if (view === 'Snoozed') {
