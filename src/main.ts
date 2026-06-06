@@ -37,17 +37,25 @@ let _commandPaletteModule: typeof import('./commandPalette') | null = null;
 let updateToolbarContextActions: () => void = () => {};
 
 // Unified bar state updater — re-renders the bar based on app context
-function updateUnifiedBar() {
+let _currentReaderSubject: string | null = null;
+
+function updateUnifiedBar(opts?: { subject?: string }) {
   const slot = document.getElementById('unified-bar-slot');
   if (!slot) return;
 
+  if (opts?.subject) _currentReaderSubject = opts.subject;
+
   const shell = document.getElementById('app-shell');
   const isReaderOpen = shell?.classList.contains('reader-open');
+  // On desktop 3-pane (no layout-2pane class), reader is shown alongside inbox
+  // so the unified bar should stay in inbox/folder mode. Reader mode only on mobile/tablet.
+  const isFullscreenReader = isReaderOpen && (
+    shell?.classList.contains('layout-2pane') ||
+    window.innerWidth < 1024
+  );
 
-  if (isReaderOpen && state.selectedThreadId) {
-    const t = state.threads.find(x => x.id === state.selectedThreadId);
-    const subject = t?.subject || '(no subject)';
-    slot.innerHTML = renderUnifiedBar({ mode: 'reader', subject });
+  if (isFullscreenReader && _currentReaderSubject) {
+    slot.innerHTML = renderUnifiedBar({ mode: 'reader', subject: _currentReaderSubject });
     wireUnifiedBarBack();
   } else if (_activeSmartFolder) {
     slot.innerHTML = renderUnifiedBar({
@@ -58,6 +66,7 @@ function updateUnifiedBar() {
     });
     wireUnifiedBarBack();
   } else {
+    _currentReaderSubject = null;
     slot.innerHTML = renderUnifiedBar({ mode: 'inbox' });
     wireUnifiedBarInbox();
   }
@@ -626,6 +635,7 @@ function switchView(view: ViewName) {
   } else {
     renderLabelView(view);
   }
+  updateUnifiedBar();
 }
 
 // ── Smart Folders ─────────────────────────────────────────
@@ -665,9 +675,8 @@ async function switchToSmartFolder(folderId: string) {
   state.threads = await runSmartFolder(state.account.id, folder);
   const container = document.getElementById('inbox');
   if (!container) return;
-  const header = `<div class="smart-folder-header"><span class="sf-dot" style="background:${folder.color}"></span><span>${esc(folder.name)}</span><span class="sf-count">${state.threads.length}</span></div>`;
   const rows = state.threads.map(t => threadRow(t, false)).join('');
-  container.innerHTML = header + (rows || `<div class="empty-state"><div class="empty-text">No matching messages</div></div>`);
+  container.innerHTML = rows || `<div class="empty-state"><div class="empty-text">No matching messages</div></div>`;
   wireThreadRows(container, state.threads, false, getThreadListDeps());
   updateUnifiedBar();
 }
@@ -936,7 +945,7 @@ function openThread(t: Thread) {
   return getThreadReader().then(m => {
     m.openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt);
     updateToolbarContextActions();
-    updateUnifiedBar();
+    updateUnifiedBar({ subject: t.subject || '(no subject)' });
   });
 }
 
