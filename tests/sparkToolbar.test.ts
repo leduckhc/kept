@@ -10,47 +10,45 @@ function createShellDOM(html: string): Document {
   return document;
 }
 
-describe('Spark Top Bar', () => {
+describe('Unified Bar — Inbox Mode (replaces old Spark Top Bar)', () => {
   const topbarHTML = `
-    <div class="toolbar">
-      <div class="toolbar-search-wrap" id="toolbar-search-wrap">
-        <button class="btn-icon btn-search-toggle" title="Search"></button>
-        <div class="search-pill">
-          <span class="toolbar-search-icon"></span>
-          <input class="search-input" id="search" placeholder="Search…" type="search" />
+    <div class="unified-bar" data-mode="inbox">
+      <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu"></button>
+      <div class="account-filter-wrap" id="account-filter"></div>
+      <div class="unified-bar-right">
+        <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
+          <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]"></button>
+          <div class="search-pill">
+            <span class="toolbar-search-icon"></span>
+            <input class="search-input" id="search" placeholder="Search…" type="search" />
+          </div>
         </div>
-      </div>
-      <div class="toolbar-actions-right">
-        <div class="toolbar-context-actions" id="toolbar-context-actions">
-        </div>
+        <div class="toolbar-context-actions" id="toolbar-context-actions"></div>
         <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]"></button>
       </div>
     </div>`;
 
-  it('has context action buttons on the right side (hidden by default)', () => {
+  it('has context action slot on the right side (hidden by default)', () => {
     const doc = createShellDOM(topbarHTML);
     const ctxActions = doc.querySelector('.toolbar-context-actions');
     expect(ctxActions).not.toBeNull();
-    // Hidden by default (no .visible class)
     expect(ctxActions!.classList.contains('visible')).toBe(false);
-    const buttons = ctxActions!.querySelectorAll('.toolbar-btn[data-action]');
-    expect(buttons.length).toBe(0);
   });
 
-  it('has search on the left/center', () => {
+  it('has search in right group', () => {
     const doc = createShellDOM(topbarHTML);
-    const toolbar = doc.querySelector('.toolbar')!;
-    const searchWrap = toolbar.querySelector('.toolbar-search-wrap');
+    const bar = doc.querySelector('.unified-bar')!;
+    const searchWrap = bar.querySelector('.toolbar-search-wrap');
     expect(searchWrap).not.toBeNull();
     const input = searchWrap!.querySelector('input.search-input');
     expect(input).not.toBeNull();
   });
 
-  it('has compose button on the right after context actions', () => {
+  it('has compose button in right group', () => {
     const doc = createShellDOM(topbarHTML);
-    const rightActions = doc.querySelector('.toolbar-actions-right');
-    expect(rightActions).not.toBeNull();
-    const compose = rightActions!.querySelector('#btn-compose');
+    const right = doc.querySelector('.unified-bar-right');
+    expect(right).not.toBeNull();
+    const compose = right!.querySelector('#btn-compose');
     expect(compose).not.toBeNull();
   });
 

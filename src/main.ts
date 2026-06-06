@@ -21,9 +21,10 @@ import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { startScheduledSendDispatch } from './scheduledSend';
 import { sendEmail } from './gmail';
 import { initSwipeGestures } from './swipe';
-import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doTrash, doMute, doSetAside, doUnsetAside } from './actions';
+import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute, doSetAside, doUnsetAside } from './actions';
 import { openInlineReply } from './inlineReply';
 import { icon } from './icons';
+import { renderUnifiedBar } from './unifiedBar';
 import { ACCOUNT_BADGE_COLORS } from './avatar';
 import { loadSmartFolders, showCreateSmartFolderDialog, runSmartFolder, deleteSmartFolder, type SmartFolder } from './smartFolders';
 
@@ -34,6 +35,82 @@ let _commandPaletteModule: typeof import('./commandPalette') | null = null;
 
 // Toolbar context-actions visibility updater (set after shell renders)
 let updateToolbarContextActions: () => void = () => {};
+
+// Unified bar state updater — re-renders the bar based on app context
+function updateUnifiedBar() {
+  const slot = document.getElementById('unified-bar-slot');
+  if (!slot) return;
+
+  const shell = document.getElementById('app-shell');
+  const isReaderOpen = shell?.classList.contains('reader-open');
+
+  if (isReaderOpen && state.selectedThreadId) {
+    const t = state.threads.find(x => x.id === state.selectedThreadId);
+    const subject = t?.subject || '(no subject)';
+    slot.innerHTML = renderUnifiedBar({ mode: 'reader', subject });
+    wireUnifiedBarBack();
+  } else if (_activeSmartFolder) {
+    slot.innerHTML = renderUnifiedBar({
+      mode: 'folder',
+      folderName: _activeSmartFolder.name,
+      folderColor: _activeSmartFolder.color,
+      folderCount: state.threads.length,
+    });
+    wireUnifiedBarBack();
+  } else {
+    slot.innerHTML = renderUnifiedBar({ mode: 'inbox' });
+    wireUnifiedBarInbox();
+  }
+}
+
+function wireUnifiedBarBack() {
+  document.getElementById('unified-bar-back')?.addEventListener('click', () => {
+    const shell = document.getElementById('app-shell');
+    if (shell?.classList.contains('reader-open')) {
+      // Close reader — trigger same logic as reader-back
+      const closeEvt = new CustomEvent('unified-bar:close-reader');
+      document.dispatchEvent(closeEvt);
+    } else if (_activeSmartFolder) {
+      _activeSmartFolder = null;
+      renderInbox();
+      updateUnifiedBar();
+    }
+  });
+  // Wire overflow menu toggle
+  const overflowBtn = document.querySelector('.unified-bar-overflow-btn');
+  const overflowWrap = document.querySelector('.unified-bar-overflow');
+  if (overflowBtn && overflowWrap) {
+    overflowBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      overflowWrap.classList.toggle('open');
+    });
+    document.addEventListener('click', () => overflowWrap.classList.remove('open'), { once: true });
+  }
+}
+
+function wireUnifiedBarInbox() {
+  // Hamburger
+  document.getElementById('btn-hamburger')?.addEventListener('click', () => {
+    document.getElementById('nav-drawer')?.classList.toggle('open');
+    document.getElementById('nav-drawer-backdrop')?.classList.toggle('visible');
+  });
+  // Search toggle — reuse existing showSearchBar
+  const searchWrap = document.getElementById('toolbar-search-wrap');
+  const searchToggle = document.getElementById('btn-search-toggle');
+  if (searchToggle && searchWrap) {
+    searchToggle.addEventListener('click', () => {
+      searchWrap.classList.remove('collapsed');
+      searchWrap.classList.add('expanded');
+      const input = document.getElementById('search') as HTMLInputElement;
+      input?.focus();
+    });
+  }
+  // Compose
+  document.getElementById('btn-compose')?.addEventListener('click', async () => {
+    const compose = await getCompose();
+    compose.openCompose({ mode: 'new' });
+  });
+}
 
 async function getCompose() { return _composeModule ??= await import('./compose'); }
 async function getThreadReader() { return _threadReaderModule ??= await import('./threadReader'); }
@@ -313,21 +390,8 @@ function showShell() {
         <button class="sidebar-btn sidebar-avatar" id="btn-account" title="Switch account">${getAccountAvatar()}</button>
       </nav>
       <div class="main-area">
-        <div class="toolbar">
-          <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu">${icon.menu('18px')}</button>
-          <div class="account-filter-wrap" id="account-filter"></div>
-          <div class="toolbar-actions-right">
-            <div class="toolbar-search-wrap collapsed" id="toolbar-search-wrap">
-              <button class="btn-icon btn-search-toggle" id="btn-search-toggle" title="Search [⌘F]">${icon.search('16px')}</button>
-              <div class="search-pill">
-                <span class="toolbar-search-icon">${icon.search('14px')}</span>
-                <input class="search-input" id="search" placeholder="Search…" type="search" />
-              </div>
-            </div>
-            <div class="toolbar-context-actions" id="toolbar-context-actions">
-            </div>
-            <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]">${icon.pencil('18px')}</button>
-          </div>
+        <div class="unified-bar-slot" id="unified-bar-slot">
+          ${renderUnifiedBar({ mode: 'inbox' })}
         </div>
         <div class="app-body">
           <div class="inbox" id="inbox"></div>
@@ -417,29 +481,15 @@ function showShell() {
     </div>
   `;
 
-  document.getElementById('btn-compose')!.addEventListener('click', () => openComposeNew());
+  document.getElementById('btn-compose')?.addEventListener('click', () => openComposeNew());
 
   // Toolbar context actions: show/hide based on selection or bulk mode
-  const ctxActions = document.getElementById('toolbar-context-actions')!;
   updateToolbarContextActions = () => {
+    const ctxActions = document.getElementById('toolbar-context-actions');
+    if (!ctxActions) return;
     const show = state.bulkMode || state.selectedThreadId !== null;
     ctxActions.classList.toggle('visible', show);
   };
-  // Wire toolbar action buttons (single-thread actions when a thread is open)
-  ctxActions.querySelectorAll('.toolbar-btn[data-action]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const action = (btn as HTMLElement).dataset.action!;
-      // In bulk mode, the bulk bar already handles actions — skip.
-      if (state.bulkMode) return;
-      if (!state.selectedThreadId) return;
-      const t = state.threads.find(x => x.id === state.selectedThreadId);
-      if (!t) return;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${state.selectedThreadId}"]`);
-      const deps = getActionDeps();
-      if (action === 'archive' && row) doArchive(t, row, deps);
-      else if (action === 'trash' && row) doTrash(t, row, deps);
-    });
-  });
 
   // Settings: Manage Snippets button
   document.getElementById('settings-manage-snippets')!.addEventListener('click', () => {
@@ -458,11 +508,17 @@ function showShell() {
   });
 
   // Hamburger menu
-  document.getElementById('btn-hamburger')!.addEventListener('click', () => toggleNavDrawer());
+  document.getElementById('btn-hamburger')?.addEventListener('click', () => toggleNavDrawer());
   document.getElementById('nav-drawer-backdrop')!.addEventListener('click', () => closeNavDrawer());
 
   // Resizable pane handle
   initResizeHandle();
+
+  // Unified bar: listen for reader close to switch back to inbox mode
+  document.addEventListener('unified-bar:reader-closed', () => updateUnifiedBar());
+
+  // Initial unified bar wiring
+  wireUnifiedBarInbox();
 
   document.getElementById('btn-account')!.addEventListener('click', () => {
     openSettings();
@@ -613,6 +669,7 @@ async function switchToSmartFolder(folderId: string) {
   const rows = state.threads.map(t => threadRow(t, false)).join('');
   container.innerHTML = header + (rows || `<div class="empty-state"><div class="empty-text">No matching messages</div></div>`);
   wireThreadRows(container, state.threads, false, getThreadListDeps());
+  updateUnifiedBar();
 }
 
 function showSmartFolderContextMenu(e: MouseEvent, folderId: string) {
@@ -879,6 +936,7 @@ function openThread(t: Thread) {
   return getThreadReader().then(m => {
     m.openThread(t, renderInbox, openSnippetPicker, showFollowupPrompt);
     updateToolbarContextActions();
+    updateUnifiedBar();
   });
 }
 
