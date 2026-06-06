@@ -147,32 +147,6 @@ export function openSettings() {
     }
   });
 
-  // Wire sign out all button
-  document.getElementById('settings-signout-all')!.addEventListener('click', async () => {
-    try {
-      for (const a of [...state.accounts]) {
-        await removeAccount(a).catch((e) => console.warn('removeAccount failed for', a.email, e));
-      }
-      state.accounts = [];
-      state.account = null;
-      state.threads = [];
-      state.syncing = false;
-      clearActiveAccountId();
-      localStorage.removeItem('kept-followup-reminders');
-      closeSettings();
-      _deps?.showAuth();
-    } catch (err) {
-      console.error('Sign out all error:', err);
-      // Force show auth even if cleanup had errors
-      state.accounts = [];
-      state.account = null;
-      state.threads = [];
-      clearActiveAccountId();
-      closeSettings();
-      _deps?.showAuth();
-    }
-  }, { once: true });
-
   // Animate in
   panel.classList.add('open');
   panel.setAttribute('aria-hidden', 'false');
@@ -201,41 +175,48 @@ function renderSettingsAccounts() {
           <div class="settings-account-name">${esc(a.email.split('@')[0])}</div>
           <div class="settings-account-email">${esc(a.email)}</div>
         </div>
-        <button class="settings-account-remove" data-id="${esc(a.id)}" title="Remove account"
-          aria-label="Remove ${esc(a.email)}">×</button>
+        <button class="settings-account-signout" data-id="${esc(a.id)}"
+          aria-label="Sign out ${esc(a.email)}">Sign out</button>
       </div>`;
   }).join('');
 
-  // Wire remove buttons
-  list.querySelectorAll<HTMLButtonElement>('.settings-account-remove').forEach(btn => {
+  // Wire sign out buttons
+  list.querySelectorAll<HTMLButtonElement>('.settings-account-signout').forEach(btn => {
     btn.addEventListener('click', async () => {
       const removeId = btn.dataset.id!;
       const target = state.accounts.find(a => a.id === removeId);
       if (!target) return;
+      btn.disabled = true;
+      btn.textContent = 'Signing out…';
       try {
         await removeAccount(target);
         state.accounts = state.accounts.filter(a => a.id !== removeId);
-        if (state.account?.id === removeId) {
-          const next = state.accounts[0] ?? null;
-          if (next) {
-            setAccount(next);
-            state.threads = await loadThreads(next.id);
-            closeSettings();
-            _deps?.renderInbox();
-            await _deps?.refreshAll();
-          } else {
-            clearActiveAccountId();
-            state.account = null;
-            state.threads = [];
-            state.syncing = false;
-            _deps?.showAuth();
-          }
+        if (state.accounts.length === 0) {
+          // Last account removed — go to auth screen
+          clearActiveAccountId();
+          state.account = null;
+          state.threads = [];
+          state.syncing = false;
+          localStorage.removeItem('kept-followup-reminders');
+          closeSettings();
+          _deps?.showAuth();
+        } else if (state.account?.id === removeId) {
+          // Removed the active account — switch to next available
+          const next = state.accounts[0];
+          setAccount(next);
+          state.threads = await loadThreads(next.id);
+          renderSettingsAccounts();
+          _deps?.renderInbox();
+          await _deps?.refreshAll();
         } else {
+          // Removed a non-active account — just re-render the list
           renderSettingsAccounts();
         }
       } catch (err) {
-        console.error('Remove account error:', err);
-        setStatus('Failed to remove account');
+        console.error('Sign out error:', err);
+        btn.disabled = false;
+        btn.textContent = 'Sign out';
+        setStatus(`Failed to sign out ${target.email}`);
       }
     });
   });

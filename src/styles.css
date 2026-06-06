@@ -1648,7 +1648,7 @@ body {
   cursor: default;
 }
 
-.settings-account-row:hover .settings-account-remove:not(:disabled) {
+.settings-account-row:hover .settings-account-signout {
   opacity: 1;
 }
 
@@ -1689,27 +1689,29 @@ body {
   text-overflow: ellipsis;
 }
 
-.settings-account-remove {
+.settings-account-signout {
   background: none;
-  border: none;
+  border: 1px solid #e74c3c;
   cursor: pointer;
-  font-size: 18px;
-  color: #9390b0;
-  padding: 4px 6px;
-  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #e74c3c;
+  padding: 5px 12px;
+  border-radius: 6px;
   opacity: 0;
   transition: opacity 0.15s, background 0.15s, color 0.15s;
-  line-height: 1;
 }
 
-.settings-account-remove:hover:not(:disabled) {
-  background: #fde8e8;
-  color: #c04040;
+.settings-account-signout:hover:not(:disabled) {
+  background: #e74c3c;
+  color: #fff;
 }
 
-.settings-account-remove:disabled {
+.settings-account-signout:disabled {
+  opacity: 1;
+  color: #9390b0;
+  border-color: #9390b0;
   cursor: not-allowed;
-  opacity: 0 !important;
 }
 
 /* Add account row */
@@ -1730,21 +1732,6 @@ body {
 
 .settings-add-account:hover { opacity: 0.8; }
 
-.settings-signout-all {
-  display: block;
-  width: 100%;
-  padding: 10px 16px;
-  margin-top: 8px;
-  background: none;
-  border: 1px solid #e74c3c;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #e74c3c;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.settings-signout-all:hover { background: #e74c3c; color: #fff; }
 
 .settings-add-account-icon {
   width: 36px;
