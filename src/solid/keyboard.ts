@@ -202,8 +202,10 @@ export function useKeyboardShortcuts() {
     }
   };
 
-  function moveSelection(direction: 1 | -1, threads: import('../store').Thread[]) {
-    const ids = threads.map(t => t.id);
+  function moveSelection(direction: 1 | -1, _threads: import('../store').Thread[]) {
+    // Use DOM-based navigation: only rows with data-id are individual navigable threads
+    const rows = Array.from(document.querySelectorAll('.thread-row[data-id]'));
+    const ids = rows.map(r => (r as HTMLElement).dataset.id!);
     if (ids.length === 0) return;
     const cur = appState.selectedThreadId ? ids.indexOf(appState.selectedThreadId) : -1;
     let next: number;

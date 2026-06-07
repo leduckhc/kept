@@ -66,7 +66,7 @@ describe('Staggered sync', () => {
     // We just need to verify the stagger logic exists in sync.ts
     // by checking the source code contains the stagger pattern
     const { readFileSync } = await import('fs');
-    const syncSource = readFileSync('./src/sync.ts', 'utf-8');
+    const syncSource = readFileSync('./src/solid/sync.ts', 'utf-8');
     
     expect(syncSource).toContain('interval');
     expect(syncSource).toContain('setTimeout');

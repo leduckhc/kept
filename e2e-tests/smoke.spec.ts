@@ -10,20 +10,24 @@ test.beforeEach(async ({ page }) => {
 test.describe('Thread click → reader', () => {
   test('clicking a thread row opens the reader pane', async ({ page }) => {
     const firstThread = page.locator('.thread-row:not(.category-row)').first();
-    const subject = await firstThread.locator('.thread-subject-line').textContent();
     await firstThread.click();
 
     // Reader should open — app-shell gets reader-open class
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
-    // Unified bar should switch to reader mode
-    await expect(page.locator('.unified-bar[data-mode="reader"]')).toBeVisible();
   });
 
-  test('clicking back closes the reader', async ({ page }) => {
+  test('clicking breadcrumb back closes the reader', async ({ page }) => {
     await page.locator('.thread-row:not(.category-row)').first().click();
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
 
-    await page.locator('#unified-bar-back').click();
+    // On 2-pane, unified bar shows reader mode with breadcrumb "Inbox" link
+    // On 3-pane (desktop-1920), bar stays inbox — use Escape instead
+    const breadcrumbBack = page.locator('.breadcrumb-link', { hasText: 'Inbox' });
+    if (await breadcrumbBack.isVisible()) {
+      await breadcrumbBack.click();
+    } else {
+      await page.keyboard.press('Escape');
+    }
     await expect(page.locator('#app-shell')).not.toHaveClass(/reader-open/);
   });
 
@@ -73,9 +77,9 @@ test.describe('Category filter → folder mode', () => {
     }
     await categoryRow.click();
 
-    // Unified bar should show folder mode with back button
+    // Unified bar should show folder mode with breadcrumb back link
     await expect(page.locator('.unified-bar[data-mode="folder"]')).toBeVisible();
-    await expect(page.locator('#unified-bar-back')).toBeVisible();
+    await expect(page.locator('.breadcrumb-link', { hasText: 'Inbox' })).toBeVisible();
   });
 
   test('clicking back from filter returns to inbox', async ({ page }) => {
@@ -87,7 +91,7 @@ test.describe('Category filter → folder mode', () => {
     await categoryRow.click();
     await expect(page.locator('.unified-bar[data-mode="folder"]')).toBeVisible();
 
-    await page.locator('#unified-bar-back').click();
+    await page.locator('.breadcrumb-link', { hasText: 'Inbox' }).click();
     await expect(page.locator('.unified-bar[data-mode="inbox"]')).toBeVisible();
   });
 
@@ -156,25 +160,15 @@ test.describe('Keyboard navigation', () => {
     await categoryRow.click();
     await expect(page.locator('.unified-bar[data-mode="folder"]')).toBeVisible();
 
-    // Go back
-    await page.locator('#unified-bar-back').click();
+    // Go back via breadcrumb
+    await page.locator('.breadcrumb-link', { hasText: 'Inbox' }).click();
     await expect(page.locator('.unified-bar[data-mode="inbox"]')).toBeVisible();
 
     // Wait for threads to re-render after back
-    await expect(page.locator('.thread-row')).toHaveCount(
-      await page.locator('.thread-row').count() || 1,
-      { timeout: 3000 }
-    ).catch(() => {});
-    const rowCount = await page.locator('.thread-row').count();
-    if (rowCount === 0) {
-      // Threads didn't re-render — separate bug tracked, skip keyboard portion
-      test.skip();
-      return;
-    }
+    await page.waitForSelector('.thread-row', { timeout: 3000 });
 
-    // Click on first thread row to focus inbox, then Escape to stay in list
-    await page.locator('.thread-row').first().click();
-    await page.keyboard.press('Escape');
+    // Click on inbox area then keyboard nav
+    await page.locator('.inbox').click();
     await page.keyboard.press('j');
     await expect(page.locator('.thread-row.is-selected')).toHaveCount(1, { timeout: 3000 });
   });

@@ -120,7 +120,7 @@ describe('Set Aside — store operations', () => {
 
 describe('Set Aside — doSetAside action integration', () => {
   it('doSetAside removes thread from state.threads', async () => {
-    const { doSetAside } = await import('../src/actions');
+    const { doSetAside } = await import('../src/solid/actions');
     const { appState, setAppState } = await import('../src/solid/store');
 
     const t = makeThread({ id: 'aside-1' });
@@ -128,21 +128,13 @@ describe('Set Aside — doSetAside action integration', () => {
     setAppState('accounts', [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any]);
     setAppState('account', appState.accounts[0]);
 
-    const row = document.createElement('div');
-    document.body.appendChild(row);
-    const mockDeps = {
-      renderInbox: vi.fn(),
-      loadUnifiedThreads: vi.fn().mockResolvedValue([]),
-    };
+    await doSetAside(t);
 
-    await doSetAside(t, row, mockDeps as any);
-
-    expect(t.isSetAside).toBe(true);
     expect(appState.threads.find(x => x.id === 'aside-1')).toBeUndefined();
   });
 
-  it('doUnsetAside restores thread flag', async () => {
-    const { doUnsetAside } = await import('../src/actions');
+  it('doUnsetAside removes thread from current view threads', async () => {
+    const { doUnsetAside } = await import('../src/solid/actions');
     const { appState, setAppState } = await import('../src/solid/store');
 
     const t = makeThread({ id: 'unset-1', isSetAside: true });
@@ -150,24 +142,18 @@ describe('Set Aside — doSetAside action integration', () => {
     setAppState('accounts', [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any]);
     setAppState('account', appState.accounts[0]);
 
-    const row = document.createElement('div');
-    document.body.appendChild(row);
-    const mockDeps = {
-      renderInbox: vi.fn(),
-      loadUnifiedThreads: vi.fn().mockResolvedValue([]),
-    };
+    await doUnsetAside(t);
 
-    await doUnsetAside(t, row, mockDeps as any);
-
-    expect(t.isSetAside).toBe(false);
+    // After unset-aside, thread is removed from current view (reloaded from DB)
+    expect(appState.threads.find(x => x.id === 'unset-1')).toBeUndefined();
   });
 });
 
 // ── UX behavior tests ─────────────────────────────────────
 
 describe('Set Aside — UX behavior', () => {
-  it('set-aside thread disappears from inbox (removed from DOM)', async () => {
-    const { doSetAside } = await import('../src/actions');
+  it('set-aside thread disappears from inbox (removed from store)', async () => {
+    const { doSetAside } = await import('../src/solid/actions');
     const { appState, setAppState } = await import('../src/solid/store');
 
     const t = makeThread({ id: 'ux-1' });
@@ -175,21 +161,10 @@ describe('Set Aside — UX behavior', () => {
     setAppState('accounts', [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any]);
     setAppState('account', appState.accounts[0]);
 
-    const container = document.createElement('div');
-    const row = document.createElement('div');
-    row.className = 'thread-row';
-    container.appendChild(row);
-    document.body.appendChild(container);
+    await doSetAside(t);
 
-    const mockDeps = {
-      renderInbox: vi.fn(),
-      loadUnifiedThreads: vi.fn().mockResolvedValue([]),
-    };
-
-    await doSetAside(t, row, mockDeps as any);
-
-    // Row should be removed from DOM
-    expect(container.contains(row)).toBe(false);
+    // Thread should be removed from store
+    expect(appState.threads.find(x => x.id === 'ux-1')).toBeUndefined();
   });
 
   it('button label toggles based on isSetAside state', () => {

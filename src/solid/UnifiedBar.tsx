@@ -19,6 +19,7 @@ import {
   appState, filteredThreads, selectedThread, clearBulkSelection,
   selectThread, setCategoryFilter, setSenderFilter, setDomainFilter,
 } from './store';
+import { doArchive, doToggleStar, doMarkUnread, doMute, doSetAside } from './actions';
 import { icon } from '../icons';
 
 // ── Types ───────────────────────────────────────────────────────
@@ -169,30 +170,43 @@ const ReaderContext: ZoneComponent = Object.assign(
 );
 
 const ReaderActions: ZoneComponent = Object.assign(
-  () => (
-    <div class="unified-bar-actions">
-      <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} />
-      <button class="btn-icon" data-action="pin" title="Pin" innerHTML={icon.pin('16px')} />
-      <button class="btn-icon" data-action="prioritize" title="Prioritize" innerHTML={icon.star('16px')} />
-      <div class="unified-bar-overflow">
-        <button class="btn-icon unified-bar-overflow-btn" title="More actions" innerHTML={icon.more('16px')} />
-        <div class="unified-bar-overflow-menu">
-          <button class="overflow-item" data-action="mark-unread">
-            <span innerHTML={icon.emailOpen('14px')} /> Mark unread
-          </button>
-          <button class="overflow-item" data-action="spam">
-            <span innerHTML={icon.spam('14px')} /> Report spam
-          </button>
-          <button class="overflow-item" data-action="move">
-            <span innerHTML={icon.folderMove('14px')} /> Move to label
-          </button>
-          <button class="overflow-item" data-action="followup">
-            <span innerHTML={icon.bell('14px')} /> Remind if no reply
-          </button>
+  () => {
+    const handleAction = (action: string) => {
+      const t = selectedThread();
+      if (!t) return;
+      switch (action) {
+        case 'archive': doArchive(t); selectThread(null); break;
+        case 'prioritize': doToggleStar(t); break;
+        case 'mark-unread': doMarkUnread(t); selectThread(null); break;
+        case 'mute': doMute(t); selectThread(null); break;
+        case 'set-aside': doSetAside(t); selectThread(null); break;
+      }
+    };
+    return (
+      <div class="unified-bar-actions">
+        <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} onClick={() => handleAction('archive')} />
+        <button class="btn-icon" data-action="pin" title="Pin" innerHTML={icon.pin('16px')} />
+        <button class="btn-icon" data-action="prioritize" title="Prioritize" innerHTML={icon.star('16px')} onClick={() => handleAction('prioritize')} />
+        <div class="unified-bar-overflow">
+          <button class="btn-icon unified-bar-overflow-btn" title="More actions" innerHTML={icon.more('16px')} />
+          <div class="unified-bar-overflow-menu">
+            <button class="overflow-item" data-action="mark-unread" onClick={() => handleAction('mark-unread')}>
+              <span innerHTML={icon.emailOpen('14px')} /> Mark unread
+            </button>
+            <button class="overflow-item" data-action="spam">
+              <span innerHTML={icon.spam('14px')} /> Report spam
+            </button>
+            <button class="overflow-item" data-action="move">
+              <span innerHTML={icon.folderMove('14px')} /> Move to label
+            </button>
+            <button class="overflow-item" data-action="followup">
+              <span innerHTML={icon.bell('14px')} /> Remind if no reply
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  ),
+    );
+  },
   { id: 'thread-actions' }
 );
 
