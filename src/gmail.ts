@@ -758,13 +758,35 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
   ).catch(() => [] as Array<{ gmail_message_id: string; sanitized_html: string | null }>);
   const sanitizedCache = new Map(cachedRows.map(r => [r.gmail_message_id, r.sanitized_html]));
 
-  const data = await gmailGet(a, `/users/me/threads/${gmailThreadId}?format=full`) as {
-    messages: Array<{
-      id: string;
-      internalDate: string;
-      payload: MimePart & { headers: Array<{ name: string; value: string }> };
-    }>;
-  };
+  let data: { messages: Array<{ id: string; internalDate: string; payload: MimePart & { headers: Array<{ name: string; value: string }> } }> };
+  try {
+    data = await gmailGet(a, `/users/me/threads/${gmailThreadId}?format=full`) as typeof data;
+  } catch (apiErr) {
+    // API failed (404 = thread purged, network error, etc.) — fall back to local DB
+    console.warn('Gmail API fetch failed, falling back to local DB:', apiErr);
+    const rows = await db.select<Array<{
+      id: string; from_name: string | null; from_email: string; to_addresses: string | null;
+      subject: string | null; body_text: string | null; body_html: string | null; received_at: number;
+    }>>(
+      `SELECT m.id, m.from_name, m.from_email, m.to_addresses, m.subject, m.body_text, m.body_html, m.received_at
+       FROM messages m JOIN threads t ON m.thread_id = t.id
+       WHERE t.gmail_thread_id = ? ORDER BY m.received_at ASC`,
+      [gmailThreadId]
+    );
+    if (rows.length === 0) throw apiErr; // No local data either — re-throw original error
+    const messages = rows.map(r => ({
+      from: r.from_name ? `${r.from_name} <${r.from_email}>` : r.from_email,
+      to: r.to_addresses ?? '',
+      cc: '',
+      replyTo: '',
+      body: r.body_text ?? '',
+      htmlBody: r.body_html ?? null,
+      sanitizedHtml: r.body_html ?? null,
+      receivedAt: r.received_at,
+      gmailMessageId: r.id,
+    }));
+    return { messages, lastMessageId: messages.length > 0 ? messages[messages.length - 1].gmailMessageId : null };
+  }
   const msgs = data.messages ?? [];
   const lastMessageId = msgs.length > 0 ? msgs[msgs.length - 1].id : null;
 
