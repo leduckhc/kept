@@ -3,6 +3,24 @@
 import { getDb } from './db';
 import { saveTokensToKeychain, getTokensFromKeychain, deleteTokensFromKeychain } from './keychain';
 
+/** Retry fetch on 429/5xx with exponential backoff (max 3 attempts). */
+async function fetchRetry(url: string, init: RequestInit): Promise<Response> {
+  const MAX = 3;
+  for (let attempt = 1; attempt <= MAX; attempt++) {
+    const res = await fetch(url, init);
+    if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
+      if (attempt === MAX) return res;
+      const retryAfter = res.headers.get('Retry-After');
+      const delay = retryAfter ? Math.min(parseInt(retryAfter, 10) * 1000, 30000) : 1000 * Math.pow(2, attempt - 1);
+      console.warn(`Auth ${res.status} on ${url}, retry ${attempt}/${MAX} in ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    return res;
+  }
+  throw new Error('fetchRetry: unreachable');
+}
+
 // Tauri plugins loaded lazily — they crash in browser context
 let _oauth: typeof import('@fabianlars/tauri-plugin-oauth') | null = null;
 let _shell: typeof import('@tauri-apps/plugin-shell') | null = null;
@@ -216,7 +234,7 @@ function waitForCode(expectedState: string): Promise<string> {
 }
 
 async function exchangeCode(code: string, verifier: string, redirectUri: string): Promise<Account> {
-  const res = await fetch('https://oauth2.googleapis.com/token', {
+  const res = await fetchRetry('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -264,7 +282,7 @@ async function exchangeCode(code: string, verifier: string, redirectUri: string)
 }
 
 async function fetchProfile(token: string): Promise<{ id: string; email: string }> {
-  const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+  const res = await fetchRetry('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Profile fetch failed: ${res.status}`);
@@ -293,7 +311,7 @@ async function _doRefreshToken(account: Account): Promise<Account> {
   if (!account.refreshToken) {
     throw new Error(`Cannot refresh token for ${account.email}: no refresh_token available. Please re-authenticate this account.`);
   }
-  const res = await fetch('https://oauth2.googleapis.com/token', {
+  const res = await fetchRetry('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
