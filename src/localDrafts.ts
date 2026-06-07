@@ -2,7 +2,7 @@
 // Drafts are saved locally on every keystroke (debounced), Gmail API sync is secondary.
 
 import { getDb } from './db';
-import type { ComposeMode } from './compose';
+import type { ComposeMode } from './solid/store';
 
 export interface LocalDraft {
   id: string;

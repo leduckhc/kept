@@ -66,7 +66,8 @@ export function getScheduledCount(): number {
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { showToast } from './toasts';
 import type { Account } from './auth';
-import { sendingIds } from './threadList';
+/** Set of thread IDs currently being sent (prevents duplicate dispatch) */
+const sendingIds = new Set<string>();
 
 type SendFn = (account: Account, opts: {
   to: string;

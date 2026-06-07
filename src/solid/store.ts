@@ -1,39 +1,64 @@
 /**
  * Reactive application store using SolidJS signals and stores.
- * Replaces the imperative `state` object from state.ts.
- *
- * Key difference: mutations via setAppState() automatically trigger
- * fine-grained re-renders — no manual renderInbox()/updateUnifiedBar() needed.
+ * This is the SINGLE source of truth for all UI state.
+ * Replaces the imperative `state` object from state.ts completely.
  */
 import { createMemo, createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { Thread } from '../store';
 import type { Account } from '../auth';
-import type { ViewName, LayoutMode } from '../state';
+
+// ── Types ───────────────────────────────────────────────────
+export type LayoutMode = '3-pane' | '2-pane';
+export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled' | 'Reminders' | 'Trash' | 'Archive' | 'SetAside' | 'Triage';
+export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward';
 
 // ── Core reactive store ─────────────────────────────────────
 export interface AppState {
+  // Auth
   account: Account | null;
   accounts: Account[];
-  unifiedMode: boolean;
-  accountFilter: string | null;
+  authenticated: boolean;
+  // View
+  currentView: ViewName;
+  layoutMode: LayoutMode;
+  // Threads
   threads: Thread[];
   searchQuery: string;
   syncing: boolean;
-  knownSenders: string[];
-  currentView: ViewName;
+  statusMessage: string;
+  // Selection
   selectedThreadId: string | null;
   bulkMode: boolean;
-  selectedIds: string[];  // Array for SolidJS store tracking (not Set)
+  selectedIds: string[];
   lastBulkSelectedId: string | null;
-  layoutMode: LayoutMode;
+  // Filters
   categoryFilter: string | null;
   senderFilter: string | null;
   domainFilter: string | null;
+  unifiedMode: boolean;
+  accountFilter: string | null;
+  // Settings
+  settingsOpen: boolean;
+  // Compose
+  composeOpen: boolean;
+  composeMode: ComposeMode;
+  composeTo: string;
+  composeSubject: string;
+  composeBody: string;
+  composeReplyThreadId: string | null;
+  composeCc: string;
+  composeBcc: string;
+  // Senders
+  knownSenders: string[];
   groupedSenders: string[];
   groupedDomains: string[];
   vipSenders: string[];
+  // Misc
   lastUsedAccountId: string | null;
+  navDrawerOpen: boolean;
+  darkMode: boolean;
+  smartNotifications: boolean;
 }
 
 // Everything in one createRoot so memos can track the store
@@ -41,25 +66,39 @@ const root = createRoot(() => {
   const [appState, setAppState] = createStore<AppState>({
     account: null,
     accounts: [],
-    unifiedMode: true,
-    accountFilter: null,
+    authenticated: false,
+    currentView: 'Inbox',
+    layoutMode: '2-pane',
     threads: [],
     searchQuery: '',
     syncing: false,
-    knownSenders: [],
-    currentView: 'Inbox',
+    statusMessage: '',
     selectedThreadId: null,
     bulkMode: false,
     selectedIds: [],
     lastBulkSelectedId: null,
-    layoutMode: '2-pane',
     categoryFilter: null,
     senderFilter: null,
     domainFilter: null,
+    unifiedMode: true,
+    accountFilter: null,
+    settingsOpen: false,
+    composeOpen: false,
+    composeMode: 'new',
+    composeTo: '',
+    composeSubject: '',
+    composeBody: '',
+    composeReplyThreadId: null,
+    composeCc: '',
+    composeBcc: '',
+    knownSenders: [],
     groupedSenders: [],
     groupedDomains: [],
     vipSenders: [],
     lastUsedAccountId: null,
+    navDrawerOpen: false,
+    darkMode: (localStorage.getItem('theme') ?? 'light') === 'dark',
+    smartNotifications: localStorage.getItem('smartNotifications') !== 'false',
   });
 
   // ── Derived state (auto-recomputing memos) ──────────────────
@@ -94,6 +133,10 @@ const root = createRoot(() => {
       threads = threads.filter(t => t.snoozedUntil !== null);
     } else if (view === 'SetAside') {
       threads = threads.filter(t => t.isSetAside);
+    } else if (view === 'Archive') {
+      threads = threads.filter(t => t.isArchived);
+    } else if (view === 'Drafts') {
+      threads = threads.filter(t => t.label === 'DRAFT');
     }
 
     // Category/sender/domain filter
@@ -187,4 +230,45 @@ export function setSenderFilter(sender: string | null) {
 
 export function setDomainFilter(domain: string | null) {
   setAppState('domainFilter', domain);
+}
+
+export function openCompose(mode: ComposeMode = 'new', opts?: { to?: string; subject?: string; body?: string; threadId?: string; cc?: string; bcc?: string }) {
+  setAppState('composeOpen', true);
+  setAppState('composeMode', mode);
+  setAppState('composeTo', opts?.to ?? '');
+  setAppState('composeSubject', opts?.subject ?? '');
+  setAppState('composeBody', opts?.body ?? '');
+  setAppState('composeReplyThreadId', opts?.threadId ?? null);
+  setAppState('composeCc', opts?.cc ?? '');
+  setAppState('composeBcc', opts?.bcc ?? '');
+}
+
+export function closeCompose() {
+  setAppState('composeOpen', false);
+  setAppState('composeTo', '');
+  setAppState('composeSubject', '');
+  setAppState('composeBody', '');
+  setAppState('composeReplyThreadId', null);
+  setAppState('composeCc', '');
+  setAppState('composeBcc', '');
+}
+
+export function openSettings() {
+  setAppState('settingsOpen', true);
+}
+
+export function closeSettings() {
+  setAppState('settingsOpen', false);
+}
+
+export function toggleNavDrawer() {
+  setAppState('navDrawerOpen', !appState.navDrawerOpen);
+}
+
+export function closeNavDrawer() {
+  setAppState('navDrawerOpen', false);
+}
+
+export function setStatus(msg: string) {
+  setAppState('statusMessage', msg);
 }

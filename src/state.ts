@@ -1,3 +1,10 @@
+/**
+ * state.ts — Legacy compatibility shim.
+ * Types are re-exported for modules that still reference them.
+ * The mutable `state` object is preserved as a thin proxy for pure-logic
+ * modules (snooze.ts, helpers.ts) that haven't been refactored yet.
+ * UI state lives in solid/store.ts.
+ */
 import type { Account } from './auth';
 import type { Thread } from './store';
 import { setActiveAccountId } from './accountContext';
@@ -5,6 +12,11 @@ import { setActiveAccountId } from './accountContext';
 export type LayoutMode = '3-pane' | '2-pane';
 export type ViewName = 'Inbox' | 'Snoozed' | 'Sent' | 'Drafts' | 'Starred' | 'Scheduled' | 'Reminders' | 'Trash' | 'Archive' | 'SetAside' | 'Triage';
 
+/**
+ * Legacy mutable state object — kept for pure-logic modules that
+ * still reference it (snooze.ts, helpers.ts). The Solid store is
+ * the canonical source of truth; this is read by legacy helpers only.
+ */
 export const state = {
   account: null as Account | null,
   accounts: [] as Account[],
@@ -24,7 +36,6 @@ export const state = {
   gPending: false,
   gTimeout: null as ReturnType<typeof setTimeout> | null,
   layoutMode: '2-pane' as LayoutMode,
-  // Newsletters & Updates + Group by Sender
   categoryFilter: null as string | null,
   senderFilter: null as string | null,
   domainFilter: null as string | null,
