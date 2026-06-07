@@ -81,7 +81,7 @@ test.describe('Toolbar & Header', () => {
   });
 
   test('toolbar is visible and within viewport', async ({ page }) => {
-    const toolbar = page.locator('.toolbar, .pill-toolbar, [class*="toolbar"]').first();
+    const toolbar = page.locator('.unified-bar').first();
     if (await toolbar.count() > 0) {
       const box = await toolbar.boundingBox();
       expect(box).not.toBeNull();
@@ -91,7 +91,7 @@ test.describe('Toolbar & Header', () => {
   });
 
   test('toolbar buttons are not clipped or overlapping', async ({ page }) => {
-    const buttons = page.locator('.toolbar .toolbar-btn, .pill-toolbar button');
+    const buttons = page.locator('.unified-bar .btn-icon, .unified-bar button');
     const count = await buttons.count();
     if (count < 2) return; // Skip if no toolbar buttons
 

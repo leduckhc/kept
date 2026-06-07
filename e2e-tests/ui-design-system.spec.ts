@@ -162,49 +162,48 @@ test.describe('Responsive thread row layout', () => {
 test.describe('Collapsible search bar', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('.toolbar');
+    await page.waitForSelector('.unified-bar');
   });
 
-  test('search pill toggle button exists in toolbar', async ({ page }) => {
-    const btn = page.locator('#btn-search-toggle');
-    await expect(btn).toBeVisible();
+  test('search pill exists in unified bar', async ({ page }) => {
+    const pill = page.locator('.search-pill-wrap');
+    await expect(pill).toBeVisible();
   });
 
   test('search starts collapsed', async ({ page }) => {
-    const wrap = page.locator('#toolbar-search-wrap');
-    await expect(wrap).toHaveClass(/collapsed/);
+    const wrap = page.locator('.search-pill-wrap');
+    await expect(wrap).not.toHaveClass(/expanded/);
   });
 
-  test('clicking search toggle expands the pill', async ({ page }) => {
-    await page.click('#btn-search-toggle');
-    const wrap = page.locator('#toolbar-search-wrap');
-    await expect(wrap).not.toHaveClass(/collapsed/);
+  test('clicking search input expands the pill', async ({ page }) => {
+    await page.click('#search');
+    const wrap = page.locator('.search-pill-wrap');
+    await expect(wrap).toHaveClass(/expanded/);
     const input = page.locator('#search');
-    await expect(input).toBeVisible();
+    await expect(input).toBeFocused();
   });
 
-  test('Cmd+F expands search', async ({ page }) => {
-    await page.keyboard.press('Meta+f');
-    const wrap = page.locator('#toolbar-search-wrap');
-    // Give animation time
+  test('/ key focuses and expands search', async ({ page }) => {
+    await page.keyboard.press('/');
+    const wrap = page.locator('.search-pill-wrap');
     await page.waitForTimeout(300);
-    await expect(wrap).not.toHaveClass(/collapsed/);
+    await expect(wrap).toHaveClass(/expanded/);
   });
 
   test('Escape collapses search', async ({ page }) => {
-    await page.click('#btn-search-toggle');
+    await page.click('#search');
     await page.waitForTimeout(250);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(250);
-    const wrap = page.locator('#toolbar-search-wrap');
-    await expect(wrap).toHaveClass(/collapsed/);
+    const wrap = page.locator('.search-pill-wrap');
+    await expect(wrap).not.toHaveClass(/expanded/);
   });
 });
 
 test.describe('Toolbar & icons', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('.toolbar');
+    await page.waitForSelector('.unified-bar');
   });
 
   test('hamburger button contains SVG icon (not text character)', async ({ page }) => {
