@@ -21,3 +21,10 @@ minimumReleaseAge: 4320
 
 # Reject packages whose trust attestation level decreased
 trustPolicy: no-downgrade
+
+# Force semver@7 — Babel 7 pins ^6.3.1 which lacks provenance attestation.
+# semver 7 is API-compatible for the range/compare calls Babel uses.
+overrides:
+  semver: ^7.8.1
+
+

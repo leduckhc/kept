@@ -8,6 +8,7 @@ export default defineConfig({
   plugins: [solidPlugin({ ssr: false })],
   test: {
     environment: 'happy-dom',
+    setupFiles: ['./tests/setup.ts'],
     exclude: ['e2e-tests/**', 'node_modules/**'],
     deps: {
       inline: [/solid-js/, /@solidjs\/testing-library/],
