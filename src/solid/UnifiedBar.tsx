@@ -1,33 +1,58 @@
 /**
- * UnifiedBar — Solid component: breadcrumb navigation, search pill,
- * contextual actions, crossfade transitions between modes.
+ * UnifiedBar — Solid component: 3-zone layout (NAV / CONTEXT / ACTIONS)
+ * with Strategy pattern for mode-specific rendering.
  *
- * Design decisions:
- * - Breadcrumb nav: "Inbox › Newsletters (12)" — tappable root replaces back arrow
- * - Search pill: always visible collapsed (120px), expands full-width on focus
- * - Compose: persists across modes on desktop (subtle "+" in reader/folder)
- * - Folder mode: inline bulk actions (select all, archive all, mark read)
- * - Transitions: 150ms crossfade between modes
+ * Architecture:
+ * - ModeStrategy interface: { nav, context, actions } — each is a Solid component
+ * - getModeStrategy(mode): returns the strategy for a given mode
+ * - deriveMode(): derives current mode from store state
+ * - UnifiedBar: orchestrator that renders 3 fixed zones, delegating to the active strategy
+ *
+ * Design rules:
+ * - Search + Compose are inbox-ONLY (absence signals context change)
+ * - Breadcrumb is the nav pattern for folder + reader (tappable root)
+ * - Bar is always 48px, single line (subject truncated on desktop)
+ * - 150ms crossfade on mode transitions
  */
-import { Show, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, Component, JSX } from 'solid-js';
 import {
   appState, filteredThreads, selectedThread, clearBulkSelection,
   selectThread, setCategoryFilter, setSenderFilter, setDomainFilter,
 } from './store';
 import { icon } from '../icons';
 
+// ── Types ───────────────────────────────────────────────────────
 export type UnifiedBarMode = 'inbox' | 'reader' | 'folder' | 'bulk';
 
-/** Derive mode from store state */
-function deriveMode(): UnifiedBarMode {
+/** Strategy interface: each zone is a Solid component with an id for testability */
+export interface ZoneComponent extends Component {
+  id: string;
+}
+
+export interface ModeStrategy {
+  nav: ZoneComponent;
+  context: ZoneComponent;
+  actions: ZoneComponent;
+}
+
+// ── Constants ───────────────────────────────────────────────────
+export const ZONE_CLASSES = {
+  nav: 'unified-bar-zone-nav',
+  context: 'unified-bar-zone-context',
+  actions: 'unified-bar-zone-actions',
+} as const;
+
+// ── Derive Mode (exported for testing) ──────────────────────────
+export function deriveMode(): UnifiedBarMode {
   if (appState.selectedIds.length > 0) return 'bulk';
   if (appState.selectedThreadId && appState.layoutMode === '2-pane') return 'reader';
   if (appState.categoryFilter || appState.senderFilter || appState.domainFilter) return 'folder';
   return 'inbox';
 }
 
-// ── Search Pill ─────────────────────────────────────────────
-function SearchPill() {
+// ── Shared Components ───────────────────────────────────────────
+
+function SearchPill(): JSX.Element {
   const [expanded, setExpanded] = createSignal(false);
   let inputRef: HTMLInputElement | undefined;
 
@@ -60,8 +85,7 @@ function SearchPill() {
   );
 }
 
-// ── Breadcrumb ──────────────────────────────────────────────
-function Breadcrumb(props: { segments: Array<{ label: string; onClick?: () => void }> }) {
+function Breadcrumb(props: { segments: Array<{ label: string; onClick?: () => void }> }): JSX.Element {
   return (
     <nav class="unified-bar-breadcrumb">
       {props.segments.map((seg, i) => (
@@ -77,131 +101,174 @@ function Breadcrumb(props: { segments: Array<{ label: string; onClick?: () => vo
   );
 }
 
-// ── Compose Button ──────────────────────────────────────────
-function ComposeButton(props: { mini?: boolean }) {
-  return (
-    <button
-      class={`btn-icon btn-compose${props.mini ? ' btn-compose-mini' : ''}`}
-      id="btn-compose"
-      title="Compose [c]"
-      innerHTML={icon.pencil(props.mini ? '14px' : '18px')}
-    />
-  );
-}
+// ── Inbox Strategy ──────────────────────────────────────────────
 
-// ── Mode: Inbox ─────────────────────────────────────────────
-function InboxMode() {
-  return (
+const InboxNav: ZoneComponent = Object.assign(
+  () => (
+    <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu"
+      innerHTML={icon.menu('18px')} />
+  ),
+  { id: 'hamburger' }
+);
+
+const InboxContext: ZoneComponent = Object.assign(
+  () => (
     <>
-      <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu"
-        innerHTML={icon.menu('18px')} />
       <div class="account-filter-wrap" id="account-filter"></div>
       <SearchPill />
+    </>
+  ),
+  { id: 'search-pill' }
+);
+
+const InboxActions: ZoneComponent = Object.assign(
+  () => (
+    <>
       <div class="toolbar-context-actions" id="toolbar-context-actions"></div>
-      <ComposeButton />
+      <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]"
+        innerHTML={icon.pencil('18px')} />
     </>
-  );
-}
+  ),
+  { id: 'compose' }
+);
 
-// ── Mode: Reader ────────────────────────────────────────────
-function ReaderMode() {
-  const thread = createMemo(() => selectedThread());
+const inboxStrategy: ModeStrategy = {
+  nav: InboxNav,
+  context: InboxContext,
+  actions: InboxActions,
+};
 
-  const onBack = () => {
-    selectThread(null);
-    document.getElementById('app-shell')?.classList.remove('reader-open');
-    document.dispatchEvent(new CustomEvent('unified-bar:reader-closed'));
-  };
+// ── Reader Strategy ─────────────────────────────────────────────
 
-  return (
-    <>
-      <div class="unified-bar-row">
-        <Breadcrumb segments={[
-          { label: 'Inbox', onClick: onBack },
-          { label: thread()?.subject ?? '' },
-        ]} />
-        <div class="unified-bar-actions">
-          <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} />
-          <button class="btn-icon" data-action="pin" title="Pin" innerHTML={icon.pin('16px')} />
-          <button class="btn-icon" data-action="prioritize" title="Prioritize" innerHTML={icon.star('16px')} />
-          <div class="unified-bar-overflow">
-            <button class="btn-icon unified-bar-overflow-btn" title="More actions" innerHTML={icon.more('16px')} />
-            <div class="unified-bar-overflow-menu">
-              <button class="overflow-item" data-action="mark-unread">
-                <span innerHTML={icon.emailOpen('14px')} /> Mark unread
-              </button>
-              <button class="overflow-item" data-action="spam">
-                <span innerHTML={icon.spam('14px')} /> Report spam
-              </button>
-              <button class="overflow-item" data-action="move">
-                <span innerHTML={icon.folderMove('14px')} /> Move to label
-              </button>
-              <button class="overflow-item" data-action="followup">
-                <span innerHTML={icon.bell('14px')} /> Remind if no reply
-              </button>
-            </div>
-          </div>
-          <ComposeButton mini />
-        </div>
-      </div>
-      <div class="unified-bar-subject-row">
-        <span class="unified-bar-subject unified-bar-subject-phone">
-          {thread()?.subject ?? ''}
-        </span>
-      </div>
-    </>
-  );
-}
-
-// ── Mode: Folder ────────────────────────────────────────────
-function FolderMode() {
-  const folderName = createMemo(() => {
-    if (appState.categoryFilter) return appState.categoryFilter.charAt(0).toUpperCase() + appState.categoryFilter.slice(1);
-    if (appState.senderFilter) return appState.senderFilter;
-    if (appState.domainFilter) return appState.domainFilter;
-    return '';
-  });
-
-  const folderColor = createMemo(() => {
-    if (appState.categoryFilter === 'newsletters') return '#7c6ef6';
-    if (appState.categoryFilter === 'updates') return '#3b82f6';
-    return '#64748b';
-  });
-
-  const threadCount = createMemo(() => filteredThreads().length);
-  const unreadCount = createMemo(() => filteredThreads().filter(t => t.isUnread).length);
-
-  const countLabel = createMemo(() => {
-    const unread = unreadCount();
-    const total = threadCount();
-    return unread > 0 ? `${unread} unread` : `${total}`;
-  });
-
-  const onBack = () => {
-    setCategoryFilter(null);
-    setSenderFilter(null);
-    setDomainFilter(null);
-    document.dispatchEvent(new CustomEvent('unified-bar:folder-back'));
-  };
-
-  const onSelectAll = () => {
-    document.dispatchEvent(new CustomEvent('unified-bar:folder-select-all'));
-  };
-  const onArchiveAll = () => {
-    document.dispatchEvent(new CustomEvent('unified-bar:folder-archive-all'));
-  };
-  const onMarkReadAll = () => {
-    document.dispatchEvent(new CustomEvent('unified-bar:folder-mark-read-all'));
-  };
-
-  return (
-    <>
+const ReaderNav: ZoneComponent = Object.assign(
+  () => {
+    const onBack = () => {
+      selectThread(null);
+      document.getElementById('app-shell')?.classList.remove('reader-open');
+      document.dispatchEvent(new CustomEvent('unified-bar:reader-closed'));
+    };
+    return (
       <Breadcrumb segments={[
         { label: 'Inbox', onClick: onBack },
-        { label: folderName() },
       ]} />
-      <span class="unified-bar-folder-dot" style={{ background: folderColor() }} />
-      <span class="unified-bar-folder-count">{countLabel()}</span>
+    );
+  },
+  { id: 'breadcrumb' }
+);
+
+const ReaderContext: ZoneComponent = Object.assign(
+  () => {
+    const thread = createMemo(() => selectedThread());
+    return (
+      <span class="unified-bar-subject" title={thread()?.subject ?? ''}>
+        {thread()?.subject ?? ''}
+      </span>
+    );
+  },
+  { id: 'subject' }
+);
+
+const ReaderActions: ZoneComponent = Object.assign(
+  () => (
+    <div class="unified-bar-actions">
+      <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} />
+      <button class="btn-icon" data-action="pin" title="Pin" innerHTML={icon.pin('16px')} />
+      <button class="btn-icon" data-action="prioritize" title="Prioritize" innerHTML={icon.star('16px')} />
+      <div class="unified-bar-overflow">
+        <button class="btn-icon unified-bar-overflow-btn" title="More actions" innerHTML={icon.more('16px')} />
+        <div class="unified-bar-overflow-menu">
+          <button class="overflow-item" data-action="mark-unread">
+            <span innerHTML={icon.emailOpen('14px')} /> Mark unread
+          </button>
+          <button class="overflow-item" data-action="spam">
+            <span innerHTML={icon.spam('14px')} /> Report spam
+          </button>
+          <button class="overflow-item" data-action="move">
+            <span innerHTML={icon.folderMove('14px')} /> Move to label
+          </button>
+          <button class="overflow-item" data-action="followup">
+            <span innerHTML={icon.bell('14px')} /> Remind if no reply
+          </button>
+        </div>
+      </div>
+    </div>
+  ),
+  { id: 'thread-actions' }
+);
+
+const readerStrategy: ModeStrategy = {
+  nav: ReaderNav,
+  context: ReaderContext,
+  actions: ReaderActions,
+};
+
+// ── Folder Strategy ─────────────────────────────────────────────
+
+const FolderNav: ZoneComponent = Object.assign(
+  () => {
+    const onBack = () => {
+      setCategoryFilter(null);
+      setSenderFilter(null);
+      setDomainFilter(null);
+      document.dispatchEvent(new CustomEvent('unified-bar:folder-back'));
+    };
+    return (
+      <Breadcrumb segments={[
+        { label: 'Inbox', onClick: onBack },
+      ]} />
+    );
+  },
+  { id: 'breadcrumb' }
+);
+
+const FolderContext: ZoneComponent = Object.assign(
+  () => {
+    const folderName = createMemo(() => {
+      if (appState.categoryFilter) return appState.categoryFilter.charAt(0).toUpperCase() + appState.categoryFilter.slice(1);
+      if (appState.senderFilter) return appState.senderFilter;
+      if (appState.domainFilter) return appState.domainFilter;
+      return '';
+    });
+
+    const folderColor = createMemo(() => {
+      if (appState.categoryFilter === 'newsletters') return '#7c6ef6';
+      if (appState.categoryFilter === 'updates') return '#3b82f6';
+      return '#64748b';
+    });
+
+    const threadCount = createMemo(() => filteredThreads().length);
+    const unreadCount = createMemo(() => filteredThreads().filter(t => t.isUnread).length);
+
+    const countLabel = createMemo(() => {
+      const unread = unreadCount();
+      const total = threadCount();
+      return unread > 0 ? `${unread} unread` : `${total}`;
+    });
+
+    return (
+      <div class="unified-bar-folder-info">
+        <span class="unified-bar-folder-dot" style={{ background: folderColor() }} />
+        <span class="unified-bar-folder-name">{folderName()}</span>
+        <span class="unified-bar-folder-count">{countLabel()}</span>
+      </div>
+    );
+  },
+  { id: 'folder-info' }
+);
+
+const FolderActions: ZoneComponent = Object.assign(
+  () => {
+    const onSelectAll = () => {
+      document.dispatchEvent(new CustomEvent('unified-bar:folder-select-all'));
+    };
+    const onArchiveAll = () => {
+      document.dispatchEvent(new CustomEvent('unified-bar:folder-archive-all'));
+    };
+    const onMarkReadAll = () => {
+      document.dispatchEvent(new CustomEvent('unified-bar:folder-mark-read-all'));
+    };
+
+    return (
       <div class="unified-bar-actions unified-bar-folder-actions">
         <button class="btn-icon btn-folder-action" title="Select all" onClick={onSelectAll}
           innerHTML={icon.checkSquare('15px')} />
@@ -209,34 +276,73 @@ function FolderMode() {
           innerHTML={icon.archive('15px')} />
         <button class="btn-icon btn-folder-action" title="Mark all read" onClick={onMarkReadAll}
           innerHTML={icon.markRead('15px')} />
-        <ComposeButton mini />
       </div>
-    </>
-  );
-}
+    );
+  },
+  { id: 'folder-actions' }
+);
 
-// ── Mode: Bulk ──────────────────────────────────────────────
-function BulkMode() {
-  const count = createMemo(() => appState.selectedIds.length);
-  const onCancel = () => clearBulkSelection();
+const folderStrategy: ModeStrategy = {
+  nav: FolderNav,
+  context: FolderContext,
+  actions: FolderActions,
+};
 
-  return (
-    <>
+// ── Bulk Strategy ───────────────────────────────────────────────
+
+const BulkNav: ZoneComponent = Object.assign(
+  () => {
+    const onCancel = () => clearBulkSelection();
+    return (
       <button class="btn-icon bulk-cancel-btn" id="bulk-cancel" title="Cancel selection"
         onClick={onCancel} innerHTML={icon.close('16px')} />
-      <span class="bulk-count">{count()} selected</span>
-      <div class="unified-bar-actions">
-        <button class="btn-icon bulk-action-btn" id="bulk-archive" title="Archive" innerHTML={icon.archive('16px')} />
-        <button class="btn-icon bulk-action-btn" id="bulk-trash" title="Trash" innerHTML={icon.trash('16px')} />
-        <button class="btn-icon bulk-action-btn" id="bulk-read" title="Mark Read" innerHTML={icon.markRead('16px')} />
-        <button class="btn-icon bulk-action-btn" id="bulk-unread" title="Mark Unread" innerHTML={icon.email('16px')} />
-        <button class="btn-icon bulk-action-btn" id="bulk-star" title="Star" innerHTML={icon.star('16px')} />
-      </div>
-    </>
-  );
+    );
+  },
+  { id: 'bulk-cancel' }
+);
+
+const BulkContext: ZoneComponent = Object.assign(
+  () => {
+    const count = createMemo(() => appState.selectedIds.length);
+    return <span class="bulk-count">{count()} selected</span>;
+  },
+  { id: 'selection-count' }
+);
+
+const BulkActions: ZoneComponent = Object.assign(
+  () => (
+    <div class="unified-bar-actions">
+      <button class="btn-icon bulk-action-btn" id="bulk-archive" title="Archive" innerHTML={icon.archive('16px')} />
+      <button class="btn-icon bulk-action-btn" id="bulk-trash" title="Trash" innerHTML={icon.trash('16px')} />
+      <button class="btn-icon bulk-action-btn" id="bulk-read" title="Mark Read" innerHTML={icon.markRead('16px')} />
+      <button class="btn-icon bulk-action-btn" id="bulk-unread" title="Mark Unread" innerHTML={icon.email('16px')} />
+      <button class="btn-icon bulk-action-btn" id="bulk-star" title="Star" innerHTML={icon.star('16px')} />
+    </div>
+  ),
+  { id: 'bulk-actions' }
+);
+
+const bulkStrategy: ModeStrategy = {
+  nav: BulkNav,
+  context: BulkContext,
+  actions: BulkActions,
+};
+
+// ── Strategy Registry ───────────────────────────────────────────
+
+const strategies: Record<UnifiedBarMode, ModeStrategy> = {
+  inbox: inboxStrategy,
+  reader: readerStrategy,
+  folder: folderStrategy,
+  bulk: bulkStrategy,
+};
+
+/** Get the strategy for a mode (exported for testing) */
+export function getModeStrategy(mode: UnifiedBarMode): ModeStrategy {
+  return strategies[mode];
 }
 
-// ── Main Component ──────────────────────────────────────────
+// ── Main Component (Orchestrator) ───────────────────────────────
 export function UnifiedBar() {
   const mode = createMemo(deriveMode);
   const [prevMode, setPrevMode] = createSignal<UnifiedBarMode>('inbox');
@@ -247,7 +353,6 @@ export function UnifiedBar() {
     const curr = mode();
     const prev = prevMode();
     if (curr === prev) return 'none';
-    // Forward: inbox→folder→reader, Back: reader→folder→inbox
     const depth: Record<UnifiedBarMode, number> = { inbox: 0, folder: 1, reader: 2, bulk: 3 };
     return depth[curr] > depth[prev] ? 'forward' : 'back';
   });
@@ -264,6 +369,8 @@ export function UnifiedBar() {
     }
   });
 
+  const strategy = createMemo(() => getModeStrategy(mode()));
+
   return (
     <div
       class="unified-bar"
@@ -271,10 +378,15 @@ export function UnifiedBar() {
       data-direction={direction()}
       classList={{ 'unified-bar--transitioning': transitioning() }}
     >
-      <Show when={mode() === 'inbox'}><InboxMode /></Show>
-      <Show when={mode() === 'reader'}><ReaderMode /></Show>
-      <Show when={mode() === 'folder'}><FolderMode /></Show>
-      <Show when={mode() === 'bulk'}><BulkMode /></Show>
+      <div class={ZONE_CLASSES.nav}>
+        {(() => { const Nav = strategy().nav; return <Nav />; })()}
+      </div>
+      <div class={ZONE_CLASSES.context}>
+        {(() => { const Context = strategy().context; return <Context />; })()}
+      </div>
+      <div class={ZONE_CLASSES.actions}>
+        {(() => { const Actions = strategy().actions; return <Actions />; })()}
+      </div>
     </div>
   );
 }
