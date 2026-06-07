@@ -59,9 +59,12 @@ export function ThreadReader() {
       setMessages([]);
       return;
     }
+    const threadId = t.id; // capture for staleness check
     setLoading(true);
     fetchMessageBody(appState.account, t.gmailThreadId)
       .then((result) => {
+        // Discard if thread changed while fetching
+        if (thread()?.id !== threadId) return;
         setMessages(result.messages);
         // Collapse all but last message in multi-message threads
         if (result.messages.length > 1) {
@@ -72,7 +75,14 @@ export function ThreadReader() {
         }
       })
       .catch((err) => {
-        console.error('Failed to fetch messages:', err);
+        // Discard if thread changed while fetching
+        if (thread()?.id !== threadId) return;
+        // Expected for archived/trashed threads (Gmail 404) — show snippet fallback
+        if (String(err).includes('404')) {
+          console.debug('Thread not available on Gmail, showing local data:', t.id);
+        } else {
+          console.error('Failed to fetch messages:', err);
+        }
         // Fallback: show snippet as plain text
         setMessages([{
           from: `${t.senderName} <${t.senderEmail}>`,
