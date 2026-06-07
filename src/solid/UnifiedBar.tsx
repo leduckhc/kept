@@ -205,7 +205,6 @@ const ReaderActions: ZoneComponent = Object.assign(
     return (
       <div class="unified-bar-actions">
         <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} onClick={() => handleAction('archive')} />
-        <button class="btn-icon" data-action="pin" title="Pin" innerHTML={icon.pin('16px')} />
         <button class="btn-icon" data-action="prioritize" title={isStarred() ? "Deprioritize" : "Prioritize"} innerHTML={isStarred() ? icon.starFilled('16px') : icon.star('16px')} onClick={() => handleAction('prioritize')} />
       </div>
     );
