@@ -34,6 +34,7 @@ export const icon = {
   send:        (s?: string) => sized(Send, s),
   pencil:      (s?: string) => sized(Pencil, s),
   star:        (s?: string) => sized(Star, s),
+  starFilled:  (s?: string) => sized(Star, s).replace('<svg ', '<svg fill="currentColor" '),
   starOutline: (s?: string) => sized(Star, s), // Lucide star is outline by default
   calendar:    (s?: string) => sized(Calendar, s),
 

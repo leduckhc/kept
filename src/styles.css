@@ -389,6 +389,9 @@ body {
   flex-shrink: 0;
   margin-left: auto;
 }
+.unified-bar-actions [data-action="prioritize"] svg[fill="currentColor"] {
+  color: #f59e0b;
+}
 .unified-bar-back {
   flex-shrink: 0;
 }

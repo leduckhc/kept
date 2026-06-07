@@ -7,6 +7,7 @@ import { Show } from 'solid-js';
 import { UnifiedBar } from './UnifiedBar';
 import { ThreadList } from './ThreadList';
 import { ThreadReader } from './ThreadReader';
+import { TriageView } from './TriageView';
 import { Sidebar, NavDrawer } from './Sidebar';
 import { Compose } from './Compose';
 import { Settings } from './Settings';
@@ -50,7 +51,9 @@ function AppShell() {
         </div>
         <div class="app-body">
           <div class="inbox" id="inbox">
-            <ThreadList />
+            <Show when={appState.currentView === 'Triage'} fallback={<ThreadList />}>
+              <TriageView />
+            </Show>
           </div>
           <div class="reader-pane" id="reader-pane">
             <Show when={selectedThread()} fallback={
