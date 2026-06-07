@@ -598,16 +598,18 @@ function showSmartFolderContextMenu(e: MouseEvent, folderId: string) {
 /** Reload inbox threads from the local DB and render immediately. */
 async function reloadInboxThreads() {
   if (!state.account) return;
-  // Clear container to force full rebuild (bypass incremental patchThreadList
-  // which fails when container still has stale content from a different view)
-  const container = document.getElementById('inbox');
-  if (container) container.innerHTML = '';
   if (state.unifiedMode) {
     state.threads = await loadUnifiedThreads();
   } else {
     state.threads = await loadThreads(state.account.id);
   }
-  renderInbox();
+  // For Inbox view, Solid owns rendering — bridge syncs state.threads → store.
+  // For other views that reuse this, legacy renderInbox still handles it.
+  if (state.currentView !== 'Inbox') {
+    const container = document.getElementById('inbox');
+    if (container) container.innerHTML = '';
+    renderInbox();
+  }
 }
 
 function renderAccountFilter() {
@@ -796,7 +798,13 @@ function getThreadListDeps() {
   };
 }
 
-function renderInbox() { _renderInbox(getThreadListDeps()); updateToolbarContextActions(); updateUnifiedBar(); }
+// Solid owns inbox rendering — legacy renderInbox is a noop for Inbox view.
+// Other views (Snoozed, Starred, etc.) still use legacy rendering into #inbox.
+function renderInbox() {
+  if (state.currentView === 'Inbox') return; // Solid handles it
+  _renderInbox(getThreadListDeps());
+  updateToolbarContextActions();
+}
 function renderSnoozedView() { return _renderSnoozedView(getThreadListDeps()); }
 function renderStarredView() { return _renderStarredView(getThreadListDeps()); }
 function renderSetAsideView() { return _renderSetAsideView(getThreadListDeps()); }

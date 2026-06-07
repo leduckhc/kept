@@ -3,8 +3,12 @@
  * SolidJS store. This allows old imperative code to coexist with new Solid
  * components during incremental migration.
  *
+ * Also syncs Solid store → legacy state (reverse bridge) so keyboard.ts,
+ * compose.ts, and other legacy modules see store updates.
+ *
  * Removed in Phase 4 when all mutations go through setAppState directly.
  */
+import { createEffect } from 'solid-js';
 import { state } from '../state';
 import { appState, setAppState } from './store';
 
@@ -67,6 +71,49 @@ export function initBridge() {
       setAppState('accountFilter', state.accountFilter);
     }
   }, 50);
+}
+
+/**
+ * Reverse bridge: Solid store → legacy state.
+ * Uses createEffect so changes propagate immediately (no polling delay).
+ * Must be called inside a reactive context (e.g. from mountSolid).
+ */
+export function initReverseBridge() {
+  // Thread selection
+  createEffect(() => {
+    const id = appState.selectedThreadId;
+    if (state.selectedThreadId !== id) {
+      state.selectedThreadId = id;
+    }
+  });
+
+  // Bulk selection
+  createEffect(() => {
+    const ids = appState.selectedIds;
+    const legacyIds = [...state.selectedIds];
+    if (ids.length !== legacyIds.length || ids.some((id, i) => id !== legacyIds[i])) {
+      state.selectedIds = new Set(ids);
+    }
+  });
+
+  // Bulk mode
+  createEffect(() => {
+    const bulk = appState.bulkMode;
+    if (state.bulkMode !== bulk) {
+      state.bulkMode = bulk;
+    }
+  });
+
+  // Filters
+  createEffect(() => {
+    if (state.categoryFilter !== appState.categoryFilter) state.categoryFilter = appState.categoryFilter;
+  });
+  createEffect(() => {
+    if (state.senderFilter !== appState.senderFilter) state.senderFilter = appState.senderFilter;
+  });
+  createEffect(() => {
+    if (state.domainFilter !== appState.domainFilter) state.domainFilter = appState.domainFilter;
+  });
 }
 
 /** Stop the bridge (call during Phase 4 cleanup). */

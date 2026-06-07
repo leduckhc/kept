@@ -5,13 +5,16 @@
  */
 import { render } from 'solid-js/web';
 import { App } from './App';
-import { initBridge } from './bridge';
+import { initBridge, initReverseBridge } from './bridge';
 
 let dispose: (() => void) | null = null;
 
 export function mountSolid(container: HTMLElement) {
   if (dispose) dispose(); // Clean up previous mount
-  dispose = render(() => <App />, container);
+  dispose = render(() => {
+    initReverseBridge(); // Solid store → legacy state (runs inside reactive owner)
+    return <App />;
+  }, container);
   initBridge();
 }
 

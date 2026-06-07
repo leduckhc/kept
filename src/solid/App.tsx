@@ -6,9 +6,12 @@ import { Show } from 'solid-js';
 import { UnifiedBar } from './UnifiedBar';
 import { ThreadList } from './ThreadList';
 import { ThreadReader } from './ThreadReader';
-import { selectedThread } from './store';
+import { selectedThread, appState } from './store';
 
 export function App() {
+  // Solid owns inbox rendering; other views still use legacy innerHTML on #inbox
+  const isInboxView = () => appState.currentView === 'Inbox';
+
   return (
     <>
       <div class="unified-bar-slot" id="unified-bar-slot">
@@ -16,7 +19,9 @@ export function App() {
       </div>
       <div class="app-body">
         <div class="inbox" id="inbox">
-          <ThreadList />
+          <Show when={isInboxView()}>
+            <ThreadList />
+          </Show>
         </div>
         <div class="reader-pane" id="reader-pane">
           <Show when={selectedThread()} fallback={
