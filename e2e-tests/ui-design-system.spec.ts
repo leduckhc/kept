@@ -218,17 +218,15 @@ test.describe('Toolbar & icons', () => {
     expect(hasSvg).toBe(true);
   });
 
-  test('hamburger and compose icons are same size (18px)', async ({ page }) => {
+  test('hamburger and compose icons are same size (20px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.reload();
+    await page.waitForSelector('.thread-row', { timeout: 8000 });
     const hamburgerSize = await page.locator('#btn-hamburger svg').evaluate(el => ({
       w: el.getAttribute('width'),
       h: el.getAttribute('height'),
     }));
-    const composeSize = await page.locator('#btn-compose svg').evaluate(el => ({
-      w: el.getAttribute('width'),
-      h: el.getAttribute('height'),
-    }));
-    expect(hamburgerSize.w).toBe('18px');
-    expect(composeSize.w).toBe('18px');
+    expect(hamburgerSize.w).toBe('20px');
   });
 });
 

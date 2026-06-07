@@ -18,7 +18,7 @@ import { createMemo, createSignal, Component, JSX } from 'solid-js';
 import {
   appState, filteredThreads, selectedThread, clearBulkSelection,
   selectThread, setCategoryFilter, setSenderFilter, setDomainFilter,
-  setSearchQuery, openCompose,
+  setSearchQuery, openCompose, toggleNavDrawer,
 } from './store';
 import { doArchive, doToggleStar, doMarkUnread, doMute, doSetAside, bulkArchive, bulkTrash, bulkMarkRead, bulkMarkUnread, bulkStar } from './actions';
 import { icon } from '../icons';
@@ -111,7 +111,7 @@ function Breadcrumb(props: { segments: Array<{ label: string; onClick?: () => vo
 const InboxNav: ZoneComponent = Object.assign(
   () => (
     <button class="btn-icon btn-hamburger" id="btn-hamburger" title="Menu"
-      innerHTML={icon.menu('18px')} />
+      onClick={toggleNavDrawer} innerHTML={icon.menu('20px')} />
   ),
   { id: 'hamburger' }
 );

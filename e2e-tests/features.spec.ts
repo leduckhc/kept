@@ -80,9 +80,15 @@ test.describe('Compose', () => {
     await expect(page.locator('.compose-panel, .compose-overlay, #compose')).toBeVisible({ timeout: 3000 });
   });
 
-  test('compose button hidden in reader mode on mobile', async ({ page, browserName }) => {
-    // Only relevant on narrow viewport
-    test.skip(true, 'Requires narrow viewport project');
+    test('compose button hidden in reader mode on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.reload();
+    await page.waitForSelector('.thread-row', { timeout: 8000 });
+    // Click a thread to open reader
+    await page.locator('.thread-row:not(.category-row)').first().click();
+    await page.waitForTimeout(500);
+    // Compose button should not be visible (unified bar switches to reader mode on mobile)
+    await expect(page.locator('#btn-compose')).not.toBeVisible({ timeout: 2000 });
   });
 });
 
@@ -252,8 +258,15 @@ test.describe('Unread state', () => {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 test.describe('Settings', () => {
-  test('hamburger menu opens settings/sidebar', async ({ page }) => {
-    test.skip(true, 'Mobile sidebar toggle not yet implemented in Solid');
+  test('hamburger menu opens nav drawer on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.reload();
+    await page.waitForSelector('.thread-row', { timeout: 8000 });
+    await page.locator('#btn-hamburger').click();
+    await expect(page.locator('.nav-drawer.open')).toBeVisible({ timeout: 2000 });
+    // Nav drawer has view items
+    const count = await page.locator('.nav-drawer-item').count();
+    expect(count).toBeGreaterThan(0);
   });
 });
 

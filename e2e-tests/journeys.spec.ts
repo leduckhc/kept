@@ -301,10 +301,32 @@ test.describe('Journey: Keyboard power user', () => {
 
 test.describe('Journey: Responsive behavior', () => {
   test('thread reader is full-width on narrow viewport', async ({ page }) => {
-    test.skip(true, 'Mobile layout (sidebar toggle) not yet fully implemented in Solid');
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.reload();
+    await page.waitForSelector('.thread-row', { timeout: 8000 });
+
+    await page.locator('.thread-row:not(.category-row)').first().click();
+    await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
+
+    // On mobile, reader pane should be visible
+    const reader = page.locator('#reader-pane').first();
+    await expect(reader).toBeVisible({ timeout: 3000 });
   });
 
   test('sidebar hidden on mobile, toggle via hamburger', async ({ page }) => {
-    test.skip(true, 'Mobile sidebar toggle not yet implemented in Solid');
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.reload();
+    await page.waitForSelector('.thread-row', { timeout: 8000 });
+
+    // Sidebar (desktop) should be hidden; nav drawer closed
+    await expect(page.locator('.nav-drawer.open')).not.toBeVisible();
+
+    // Click hamburger
+    await page.locator('#btn-hamburger').click();
+    await expect(page.locator('.nav-drawer.open')).toBeVisible({ timeout: 2000 });
+
+    // Click backdrop closes it
+    await page.locator('#nav-drawer-backdrop').click();
+    await expect(page.locator('.nav-drawer.open')).not.toBeVisible({ timeout: 2000 });
   });
 });
