@@ -185,6 +185,13 @@ const ReaderContext: ZoneComponent = Object.assign(
 const ReaderActions: ZoneComponent = Object.assign(
   () => {
     const [actionsOpen, setActionsOpen] = createSignal(false);
+    // Read isStarred from the store proxy directly for fine-grained reactivity
+    const isStarred = createMemo(() => {
+      const id = appState.selectedThreadId;
+      if (!id) return false;
+      const idx = appState.threads.findIndex(t => t.id === id);
+      return idx >= 0 ? appState.threads[idx].isStarred : false;
+    });
     const handleAction = (action: string) => {
       const t = selectedThread();
       if (!t) return;
@@ -203,7 +210,7 @@ const ReaderActions: ZoneComponent = Object.assign(
         <div class="reader-actions-full">
           <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} onClick={() => handleAction('archive')} />
           <button class="btn-icon" data-action="pin" title="Pin" innerHTML={icon.pin('16px')} />
-          <button class="btn-icon" data-action="prioritize" title={selectedThread()?.isStarred ? "Deprioritize" : "Prioritize"} innerHTML={selectedThread()?.isStarred ? icon.starFilled('16px') : icon.star('16px')} onClick={() => handleAction('prioritize')} />
+          <button class="btn-icon" data-action="prioritize" title={isStarred() ? "Deprioritize" : "Prioritize"} innerHTML={isStarred() ? icon.starFilled('16px') : icon.star('16px')} onClick={() => handleAction('prioritize')} />
           <div class="unified-bar-overflow">
             <button class="btn-icon unified-bar-overflow-btn" title="More actions" innerHTML={icon.more('16px')} />
             <div class="unified-bar-overflow-menu">
@@ -232,7 +239,7 @@ const ReaderActions: ZoneComponent = Object.assign(
         {/* Slide-out panel (mobile scrolled, after trigger click) */}
         <div class="reader-actions-slide">
           <button class="btn-icon" title="Archive" innerHTML={icon.archive('16px')} onClick={() => handleAction('archive')} />
-          <button class="btn-icon" title={selectedThread()?.isStarred ? "Unstar" : "Star"} innerHTML={selectedThread()?.isStarred ? icon.starFilled('16px') : icon.star('16px')} onClick={() => handleAction('prioritize')} />
+          <button class="btn-icon" title={isStarred() ? "Unstar" : "Star"} innerHTML={isStarred() ? icon.starFilled('16px') : icon.star('16px')} onClick={() => handleAction('prioritize')} />
           <button class="btn-icon" title="Mute" innerHTML={icon.mute('16px')} onClick={() => handleAction('mute')} />
           <button class="btn-icon" title="More" innerHTML={icon.more('16px')} />
         </div>
