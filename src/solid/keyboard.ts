@@ -3,7 +3,7 @@
  * Reads store reactively; no DOM queries for state.
  */
 import { onMount, onCleanup } from 'solid-js';
-import { appState, selectThread, switchView, toggleBulkSelect, clearBulkSelection, openCompose, setSearchQuery } from './store';
+import { appState, selectThread, focusThread, switchView, toggleBulkSelect, clearBulkSelection, openCompose, setSearchQuery, setCategoryFilter, setSenderFilter, setDomainFilter } from './store';
 import { filteredThreads, selectedThread } from './store';
 import { doArchive, doToggleStar, doMarkUnread, doMute, doSetAside, bulkArchive, bulkTrash } from './actions';
 import { syncAndRender } from './sync';
@@ -32,6 +32,9 @@ export function useKeyboardShortcuts() {
 
     const threads = filteredThreads();
     const current = selectedThread();
+    // target = thread to act on (focused via keyboard OR opened in reader)
+    const focusedId = appState.focusedThreadId;
+    const target = current ?? (focusedId ? threads.find(t => t.id === focusedId) ?? null : null);
     const key = e.key;
     const meta = e.metaKey || e.ctrlKey;
 
@@ -70,17 +73,13 @@ export function useKeyboardShortcuts() {
 
     // Open thread
     if (key === 'Enter' || key === 'o') {
-      if (appState.selectedThreadId && !current) {
-        // Already selected as nav highlight, open it
-        return;
-      }
-      if (appState.selectedThreadId) {
-        selectThread(appState.selectedThreadId);
+      if (appState.focusedThreadId) {
+        selectThread(appState.focusedThreadId);
       }
       return;
     }
 
-    // Close reader / cancel bulk
+    // Close reader / cancel bulk / go back from filter / go back to Inbox from view
     if (key === 'Escape') {
       if (appState.bulkMode) {
         clearBulkSelection();
@@ -88,6 +87,20 @@ export function useKeyboardShortcuts() {
       }
       if (current) {
         selectThread(null);
+        return;
+      }
+      if (appState.categoryFilter || appState.senderFilter || appState.domainFilter) {
+        setCategoryFilter(null);
+        setSenderFilter(null);
+        setDomainFilter(null);
+        return;
+      }
+      if (appState.currentView !== 'Inbox') {
+        switchView('Inbox');
+        return;
+      }
+      if (appState.focusedThreadId) {
+        focusThread(null);
         return;
       }
     }
@@ -100,15 +113,15 @@ export function useKeyboardShortcuts() {
     }
 
     // Reply
-    if (key === 'r' && !meta && current) {
-      openCompose('reply', { to: current.senderEmail, subject: `Re: ${current.subject}`, threadId: current.id });
+    if (key === 'r' && !meta && target) {
+      openCompose('reply', { to: target.senderEmail, subject: `Re: ${target.subject}`, threadId: target.id });
       e.preventDefault();
       return;
     }
 
     // Forward
-    if (key === 'f' && !meta && current) {
-      openCompose('forward', { subject: `Fwd: ${current.subject}`, threadId: current.id });
+    if (key === 'f' && !meta && target) {
+      openCompose('forward', { subject: `Fwd: ${target.subject}`, threadId: target.id });
       e.preventDefault();
       return;
     }
@@ -125,8 +138,8 @@ export function useKeyboardShortcuts() {
     if (key === 'e' && !meta) {
       if (appState.bulkMode) {
         bulkArchive();
-      } else if (current) {
-        doArchive(current);
+      } else if (target) {
+        doArchive(target);
         selectThread(null);
       }
       return;
@@ -142,24 +155,24 @@ export function useKeyboardShortcuts() {
 
     // Star
     if (key === 's' && !meta) {
-      if (current) {
-        doToggleStar(current);
+      if (target) {
+        doToggleStar(target);
       }
       return;
     }
 
     // Mark unread
     if (key === 'u' && !meta) {
-      if (current) {
-        doMarkUnread(current);
+      if (target) {
+        doMarkUnread(target);
       }
       return;
     }
 
     // Mute
     if (key === 'm' && !meta) {
-      if (current) {
-        doMute(current);
+      if (target) {
+        doMute(target);
         selectThread(null);
       }
       return;
@@ -167,8 +180,8 @@ export function useKeyboardShortcuts() {
 
     // Set aside
     if (key === 'v' && !meta) {
-      if (current) {
-        doSetAside(current);
+      if (target) {
+        doSetAside(target);
         selectThread(null);
       }
       return;
@@ -207,16 +220,28 @@ export function useKeyboardShortcuts() {
     const rows = Array.from(document.querySelectorAll('.thread-row[data-id]'));
     const ids = rows.map(r => (r as HTMLElement).dataset.id!);
     if (ids.length === 0) return;
-    const cur = appState.selectedThreadId ? ids.indexOf(appState.selectedThreadId) : -1;
+    const cur = appState.focusedThreadId ? ids.indexOf(appState.focusedThreadId) : -1;
     let next: number;
     if (direction === 1) {
       next = cur < ids.length - 1 ? cur + 1 : cur === -1 ? 0 : cur;
     } else {
       next = cur > 0 ? cur - 1 : 0;
     }
-    selectThread(ids[next]);
+    focusThread(ids[next]);
+    // Scroll into view and mark keyboard-nav mode
+    document.body.classList.add('keyboard-nav');
+    const row = rows[next] as HTMLElement;
+    row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
-  onMount(() => document.addEventListener('keydown', handleKeydown));
-  onCleanup(() => document.removeEventListener('keydown', handleKeydown));
+  onMount(() => {
+    document.addEventListener('keydown', handleKeydown);
+    // Remove keyboard-nav mode when mouse moves (restore hover actions)
+    const onMouseMove = () => document.body.classList.remove('keyboard-nav');
+    document.addEventListener('mousemove', onMouseMove);
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeydown);
+      document.removeEventListener('mousemove', onMouseMove);
+    });
+  });
 }

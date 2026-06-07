@@ -28,18 +28,22 @@ async function reloadThreads(): Promise<Thread[]> {
 export async function doMarkRead(t: Thread) {
   const acct = accountFor(t);
   if (!acct) return;
+  // Optimistic: update immediately
+  const idx = appState.threads.findIndex(x => x.id === t.id);
+  if (idx >= 0) {
+    setAppState('threads', idx, 'isUnread', false);
+  }
   try {
     await markRead(acct, t);
     const fresh = await getAccountById(acct.id);
     if (fresh && !appState.unifiedMode) setAppState('account', fresh);
-    // Update thread in store
-    const idx = appState.threads.findIndex(x => x.id === t.id);
-    if (idx >= 0) {
-      setAppState('threads', idx, 'isUnread', false);
-    }
   } catch (e) {
     console.error('Mark read failed:', e);
     showToast('Mark read failed');
+    // Rollback on failure
+    if (idx >= 0) {
+      setAppState('threads', idx, 'isUnread', true);
+    }
   }
 }
 
@@ -76,24 +80,30 @@ export async function doToggleStar(t: Thread) {
 export async function doArchive(t: Thread) {
   const acct = accountFor(t);
   if (!acct) return;
+  // Optimistic: remove thread immediately
+  const prevThreads = [...appState.threads];
+  setThreads(appState.threads.filter(x => x.id !== t.id));
+  invalidateSectionCache();
   try {
     await archiveThread(acct, t);
     const fresh = await getAccountById(acct.id);
     if (fresh && !appState.unifiedMode) setAppState('account', fresh);
-    setThreads(appState.threads.filter(x => x.id !== t.id));
-    invalidateSectionCache();
   } catch (e) {
     console.error('Archive failed:', e);
     showToast('Archive failed');
+    // Rollback on failure
+    setThreads(prevThreads);
   }
 }
 
 export async function doTrash(t: Thread) {
   const acct = accountFor(t);
   if (!acct) return;
+  // Optimistic: remove thread immediately
+  const prevThreads = [...appState.threads];
+  setThreads(appState.threads.filter(x => x.id !== t.id));
   try {
     await trashThread(acct, t);
-    setThreads(appState.threads.filter(x => x.id !== t.id));
     showUndoToast('Moved to Trash', async () => {
       await untrashThread(acct, t);
       const threads = await reloadThreads();
@@ -102,6 +112,8 @@ export async function doTrash(t: Thread) {
   } catch (e) {
     console.error('Trash failed:', e);
     showToast('Trash failed');
+    // Rollback on failure
+    setThreads(prevThreads);
   }
 }
 

@@ -146,7 +146,7 @@ describe('Solid ThreadList rendering', () => {
 
   it('is-selected class applied to current thread row', () => {
     setAppState('threads', [makeThread({ id: 'sel-1' })]);
-    setAppState('selectedThreadId', 'sel-1');
+    setAppState('focusedThreadId', 'sel-1');
 
     const { container } = render(() => <ThreadList />);
     const row = container.querySelector('.thread-row[data-id="sel-1"]');

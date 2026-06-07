@@ -8,6 +8,7 @@ import {
   appState, filteredThreads, selectThread, toggleBulkSelect,
   setCategoryFilter, setSenderFilter, setDomainFilter, isBulkMode,
 } from './store';
+import { doArchive, doTrash, doMarkRead } from './actions';
 import { groupBySection } from '../store';
 import { icon } from '../icons';
 import type { Thread } from '../store';
@@ -34,6 +35,18 @@ function formatDate(ts: number): string {
 function senderInitial(thread: Thread): string {
   const name = thread.senderName || thread.senderEmail;
   return name.charAt(0).toUpperCase();
+}
+
+const AVATAR_COLORS = [
+  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
+  '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6',
+];
+
+function avatarColor(thread: Thread): string {
+  const name = thread.senderName || thread.senderEmail;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 // ── Section Header ───────────────────────────────────────────
@@ -116,9 +129,12 @@ function CategoryRow(props: { type: 'newsletters' | 'updates'; threads: Thread[]
         </div>
       </div>
       <div class="thread-actions category-actions">
-        <button class="btn-action btn-archive-all" title="Archive all" innerHTML={icon.archive('16px')} />
-        <button class="btn-action btn-trash-all" title="Delete all" innerHTML={icon.trash('16px')} />
-        <button class="btn-action btn-read-all" title="Mark all read" innerHTML={icon.markRead('16px')} />
+        <button class="btn-action btn-archive-all" title="Archive all" innerHTML={icon.archive('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); props.threads.forEach(t => doArchive(t)); }} />
+        <button class="btn-action btn-trash-all" title="Delete all" innerHTML={icon.trash('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); props.threads.forEach(t => doTrash(t)); }} />
+        <button class="btn-action btn-read-all" title="Mark all read" innerHTML={icon.markRead('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); props.threads.forEach(t => doMarkRead(t)); }} />
       </div>
     </div>
   );
@@ -159,8 +175,10 @@ function SenderGroupRow(props: { email: string; threads: Thread[] }) {
       </div>
       <span class="thread-date">{formatDate(latest().receivedAt)}</span>
       <div class="thread-actions">
-        <button class="btn-action btn-archive" title="Archive all" innerHTML={icon.archive('16px')} />
-        <button class="btn-action btn-trash" title="Delete all" innerHTML={icon.trash('16px')} />
+        <button class="btn-action btn-archive" title="Archive all" innerHTML={icon.archive('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); props.threads.forEach(t => doArchive(t)); }} />
+        <button class="btn-action btn-trash" title="Delete all" innerHTML={icon.trash('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); props.threads.forEach(t => doTrash(t)); }} />
       </div>
     </div>
   );
@@ -206,8 +224,10 @@ function DomainGroupRow(props: { domain: string; threads: Thread[] }) {
       </div>
       <span class="thread-date">{formatDate(latest().receivedAt)}</span>
       <div class="thread-actions">
-        <button class="btn-action btn-archive" title="Archive all" innerHTML={icon.archive('16px')} />
-        <button class="btn-action btn-trash" title="Delete all" innerHTML={icon.trash('16px')} />
+        <button class="btn-action btn-archive" title="Archive all" innerHTML={icon.archive('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); props.threads.forEach(t => doArchive(t)); }} />
+        <button class="btn-action btn-trash" title="Delete all" innerHTML={icon.trash('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); props.threads.forEach(t => doTrash(t)); }} />
       </div>
     </div>
   );
@@ -219,7 +239,7 @@ function ThreadRow(props: { thread: Thread }) {
   const t = () => props.thread;
 
   const isSelected = createMemo(() => appState.selectedIds.includes(t().id));
-  const isCurrent = createMemo(() => appState.selectedThreadId === t().id);
+  const isCurrent = createMemo(() => appState.focusedThreadId === t().id);
 
   const classes = createMemo(() => {
     const parts = ['thread-row'];
@@ -252,7 +272,7 @@ function ThreadRow(props: { thread: Thread }) {
         <span class="unread-dot" />
       </Show>
       <div class="avatar-wrap" onClick={onAvatarClick}>
-        <div class="avatar">{senderInitial(t())}</div>
+        <div class="avatar" style={{ 'background-color': avatarColor(t()) }} data-initial={senderInitial(t())}>{senderInitial(t())}</div>
       </div>
       <span class="thread-sender">{escapeHtml(t().senderName || t().senderEmail)}</span>
       <div class={`thread-mid${t().hasAttachment ? ' has-attachment' : ''}`}>
@@ -266,8 +286,10 @@ function ThreadRow(props: { thread: Thread }) {
       </div>
       <span class="thread-date">{formatDate(t().receivedAt)}</span>
       <div class="thread-actions">
-        <button class="btn-action btn-archive" title="Archive" innerHTML={icon.archive('16px')} />
-        <button class="btn-action btn-trash" title="Trash" innerHTML={icon.trash('16px')} />
+        <button class="btn-action btn-archive" title="Archive" innerHTML={icon.archive('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); doArchive(t()); }} />
+        <button class="btn-action btn-trash" title="Trash" innerHTML={icon.trash('16px')}
+          onClick={(e: MouseEvent) => { e.stopPropagation(); doTrash(t()); }} />
       </div>
     </div>
   );
@@ -357,9 +379,23 @@ export function ThreadList() {
       {/* Empty state */}
       <Show when={threads().length === 0 && !appState.syncing}>
         <div class="empty-state">
-          <div class="empty-state-icon">🎉</div>
-          <div class="empty-state-title">All caught up</div>
-          <div class="empty-state-subtitle">No new messages. Go enjoy your day.</div>
+          <div class="empty-state-icon">
+            {appState.currentView === 'Triage' ? '✅' :
+             appState.currentView === 'Scheduled' ? '📅' :
+             appState.currentView === 'Reminders' ? '🔔' : '🎉'}
+          </div>
+          <div class="empty-state-title">
+            {appState.currentView === 'Triage' ? 'Nothing to triage' :
+             appState.currentView === 'Scheduled' ? 'No scheduled sends' :
+             appState.currentView === 'Reminders' ? 'No active reminders' :
+             'All caught up'}
+          </div>
+          <div class="empty-state-subtitle">
+            {appState.currentView === 'Triage' ? 'All messages have been reviewed.' :
+             appState.currentView === 'Scheduled' ? 'Schedule an email to send it later.' :
+             appState.currentView === 'Reminders' ? 'Set a follow-up reminder on any thread.' :
+             'No new messages. Go enjoy your day.'}
+          </div>
         </div>
       </Show>
 

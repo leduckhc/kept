@@ -426,6 +426,13 @@ body {
   padding: 2px 8px;
 }
 
+/* View title (Triage, Scheduled, Reminders, etc.) */
+.unified-bar-view-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 /* Overflow menu */
 .unified-bar-overflow {
   position: relative;
@@ -941,6 +948,7 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: #fff;
+  background-color: var(--avatar-bg, #6366f1);
   flex-shrink: 0;
   position: relative;
   overflow: hidden;

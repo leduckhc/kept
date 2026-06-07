@@ -29,6 +29,7 @@ export interface AppState {
   statusMessage: string;
   // Selection
   selectedThreadId: string | null;
+  focusedThreadId: string | null;
   bulkMode: boolean;
   selectedIds: string[];
   lastBulkSelectedId: string | null;
@@ -74,6 +75,7 @@ const root = createRoot(() => {
     syncing: false,
     statusMessage: '',
     selectedThreadId: null,
+    focusedThreadId: null,
     bulkMode: false,
     selectedIds: [],
     lastBulkSelectedId: null,
@@ -137,6 +139,15 @@ const root = createRoot(() => {
       threads = threads.filter(t => t.isArchived);
     } else if (view === 'Drafts') {
       threads = threads.filter(t => t.label === 'DRAFT');
+    } else if (view === 'Triage') {
+      threads = threads.filter(t => t.isUnread && !t.isArchived && !t.isMuted);
+    } else if (view === 'Scheduled') {
+      threads = []; // Scheduled sends come from localStorage, not thread DB
+    } else if (view === 'Reminders') {
+      threads = []; // Follow-up reminders come from localStorage, not thread DB
+    } else if (view === 'Inbox') {
+      // Default: show non-archived, non-muted threads in INBOX
+      threads = threads.filter(t => !t.isArchived && !t.isMuted && t.label !== 'SENT' && t.label !== 'DRAFT');
     }
 
     // Category/sender/domain filter
@@ -177,11 +188,16 @@ export const filteredThreads = root.filteredThreads;
 
 export function selectThread(id: string | null) {
   setAppState('selectedThreadId', id);
+  setAppState('focusedThreadId', id);
   // Clear bulk when opening a thread
   if (id) {
     setAppState('bulkMode', false);
     setAppState('selectedIds', []);
   }
+}
+
+export function focusThread(id: string | null) {
+  setAppState('focusedThreadId', id);
 }
 
 export function toggleBulkSelect(id: string) {

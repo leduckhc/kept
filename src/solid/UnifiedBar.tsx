@@ -18,13 +18,13 @@ import { createMemo, createSignal, Component, JSX } from 'solid-js';
 import {
   appState, filteredThreads, selectedThread, clearBulkSelection,
   selectThread, setCategoryFilter, setSenderFilter, setDomainFilter,
-  setSearchQuery, openCompose, toggleNavDrawer,
+  setSearchQuery, openCompose, toggleNavDrawer, switchView,
 } from './store';
 import { doArchive, doToggleStar, doMarkUnread, doMute, doSetAside, bulkArchive, bulkTrash, bulkMarkRead, bulkMarkUnread, bulkStar } from './actions';
 import { icon } from '../icons';
 
 // ── Types ───────────────────────────────────────────────────────
-export type UnifiedBarMode = 'inbox' | 'reader' | 'folder' | 'bulk';
+export type UnifiedBarMode = 'inbox' | 'reader' | 'folder' | 'bulk' | 'view';
 
 /** Strategy interface: each zone is a Solid component with an id for testability */
 export interface ZoneComponent extends Component {
@@ -49,6 +49,7 @@ export function deriveMode(): UnifiedBarMode {
   if (appState.selectedIds.length > 0) return 'bulk';
   if (appState.selectedThreadId && appState.layoutMode === '2-pane') return 'reader';
   if (appState.categoryFilter || appState.senderFilter || appState.domainFilter) return 'folder';
+  if (appState.currentView !== 'Inbox') return 'view';
   return 'inbox';
 }
 
@@ -97,7 +98,10 @@ function Breadcrumb(props: { segments: Array<{ label: string; onClick?: () => vo
         <>
           {i > 0 && <span class="breadcrumb-sep">›</span>}
           {seg.onClick
-            ? <button class="breadcrumb-link" onClick={seg.onClick}>{seg.label}</button>
+            ? <button class="breadcrumb-link" onClick={seg.onClick}>
+                <span class="breadcrumb-back-arrow" innerHTML={icon.arrowLeft('16px')} />
+                {seg.label}
+              </button>
             : <span class="breadcrumb-current">{seg.label}</span>
           }
         </>
@@ -306,6 +310,41 @@ const folderStrategy: ModeStrategy = {
   actions: FolderActions,
 };
 
+// ── View Strategy (non-Inbox views: Triage, Scheduled, Reminders, etc.) ──
+
+const ViewNav: ZoneComponent = Object.assign(
+  () => {
+    const onBack = () => {
+      switchView('Inbox');
+    };
+    return (
+      <Breadcrumb segments={[
+        { label: 'Inbox', onClick: onBack },
+      ]} />
+    );
+  },
+  { id: 'breadcrumb' }
+);
+
+const ViewContext: ZoneComponent = Object.assign(
+  () => {
+    const viewName = createMemo(() => appState.currentView);
+    return <span class="unified-bar-view-title">{viewName()}</span>;
+  },
+  { id: 'view-title' }
+);
+
+const ViewActions: ZoneComponent = Object.assign(
+  () => <div class="unified-bar-actions" />,
+  { id: 'view-actions' }
+);
+
+const viewStrategy: ModeStrategy = {
+  nav: ViewNav,
+  context: ViewContext,
+  actions: ViewActions,
+};
+
 // ── Bulk Strategy ───────────────────────────────────────────────
 
 const BulkNav: ZoneComponent = Object.assign(
@@ -352,6 +391,7 @@ const strategies: Record<UnifiedBarMode, ModeStrategy> = {
   inbox: inboxStrategy,
   reader: readerStrategy,
   folder: folderStrategy,
+  view: viewStrategy,
   bulk: bulkStrategy,
 };
 
@@ -371,7 +411,7 @@ export function UnifiedBar() {
     const curr = mode();
     const prev = prevMode();
     if (curr === prev) return 'none';
-    const depth: Record<UnifiedBarMode, number> = { inbox: 0, folder: 1, reader: 2, bulk: 3 };
+    const depth: Record<UnifiedBarMode, number> = { inbox: 0, view: 1, folder: 1, reader: 2, bulk: 3 };
     return depth[curr] > depth[prev] ? 'forward' : 'back';
   });
 
