@@ -355,10 +355,11 @@ export async function fetchLabels(account: Account): Promise<Array<{id: string, 
   return (data.labels || []).filter((l) => l.type === 'user').map((l) => ({ id: l.id, name: l.name }));
 }
 
-export async function toggleStar(account: Account, thread: Thread): Promise<boolean> {
-  const newStarred = !thread.isStarred;
+export async function toggleStar(account: Account, thread: Thread, targetStarred?: boolean): Promise<boolean> {
+  const newStarred = targetStarred ?? !thread.isStarred;
   const db = await getDb();
   await db.execute('UPDATE threads SET is_starred = ? WHERE id = ?', [newStarred ? 1 : 0, thread.id]);
+  if (import.meta.env.VITE_E2E === '1') return newStarred;
   const a = await ensureFreshToken(account);
   if (newStarred) {
     await gmailPost(a, `/users/me/threads/${thread.gmailThreadId}/modify`, { addLabelIds: ['STARRED'] });

@@ -3,7 +3,7 @@
  * Shows one email at a time, centered, with quick action buttons.
  * Progress bar shows how far through the unread queue you are.
  */
-import { createSignal, createMemo, Show } from 'solid-js';
+import { createSignal, createMemo, Show, onMount, onCleanup } from 'solid-js';
 import { appState, selectThread } from './store';
 import { doArchive, doToggleStar, doMarkRead } from './actions';
 import { icon } from '../icons';
@@ -75,6 +75,34 @@ export function TriageView() {
     }
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
+
+  // Keyboard shortcuts for triage mode
+  onMount(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      // Don't intercept when typing in inputs
+      const el = document.activeElement;
+      if (el && ((el as HTMLElement).tagName === 'INPUT' || (el as HTMLElement).tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable)) {
+        return;
+      }
+      if (!current()) return;
+
+      if (e.key === 'e' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        handleArchive();
+      } else if (e.key === 's' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        handleStar();
+      } else if (e.key === 'k' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        handleSkip();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleOpen();
+      }
+    };
+    document.addEventListener('keydown', handleKeydown);
+    onCleanup(() => document.removeEventListener('keydown', handleKeydown));
+  });
 
   return (
     <div class="triage-container">

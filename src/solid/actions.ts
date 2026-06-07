@@ -65,15 +65,25 @@ export async function doMarkUnread(t: Thread) {
 export async function doToggleStar(t: Thread) {
   const acct = accountFor(t);
   if (!acct) return;
+  // Optimistic: toggle immediately
+  const idx = appState.threads.findIndex(x => x.id === t.id);
+  const previousStarred = t.isStarred;
+  if (idx >= 0) {
+    setAppState('threads', idx, 'isStarred', !previousStarred);
+  }
   try {
-    const nowStarred = await toggleStar(acct, t);
-    const idx = appState.threads.findIndex(x => x.id === t.id);
+    const nowStarred = await toggleStar(acct, t, !previousStarred);
+    // Reconcile with server response (may differ if race)
     if (idx >= 0) {
       setAppState('threads', idx, 'isStarred', nowStarred);
     }
   } catch (e) {
     console.error('Toggle star failed:', e);
     showToast('Star toggle failed');
+    // Rollback on failure
+    if (idx >= 0) {
+      setAppState('threads', idx, 'isStarred', previousStarred);
+    }
   }
 }
 
