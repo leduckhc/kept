@@ -130,13 +130,13 @@ const root = createRoot(() => {
     } else if (view === 'Sent') {
       threads = threads.filter(t => t.label === 'SENT');
     } else if (view === 'Trash') {
-      threads = threads.filter(t => t.isArchived);
+      threads = threads.filter(t => t.label === 'TRASH');
     } else if (view === 'Snoozed') {
       threads = threads.filter(t => t.snoozedUntil !== null);
     } else if (view === 'SetAside') {
       threads = threads.filter(t => t.isSetAside);
     } else if (view === 'Archive') {
-      threads = threads.filter(t => t.isArchived);
+      threads = threads.filter(t => t.isArchived && t.label !== 'TRASH');
     } else if (view === 'Drafts') {
       threads = threads.filter(t => t.label === 'DRAFT');
     } else if (view === 'Triage') {
@@ -147,7 +147,7 @@ const root = createRoot(() => {
       threads = []; // Follow-up reminders come from localStorage, not thread DB
     } else if (view === 'Inbox') {
       // Default: show non-archived, non-muted threads in INBOX
-      threads = threads.filter(t => !t.isArchived && !t.isMuted && t.label !== 'SENT' && t.label !== 'DRAFT');
+      threads = threads.filter(t => !t.isArchived && !t.isMuted && t.label !== 'SENT' && t.label !== 'DRAFT' && t.label !== 'TRASH');
     }
 
     // Category/sender/domain filter

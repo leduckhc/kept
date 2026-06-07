@@ -76,7 +76,7 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
   let activeLabel: string;
   let activeSearch: string | undefined;
 
-  const KNOWN_LABELS = ['INBOX', 'SENT', 'DRAFT', 'STARRED', 'TRASH', 'ARCHIVE'];
+  const KNOWN_LABELS = ['INBOX', 'SENT', 'DRAFT', 'STARRED', 'TRASH', 'ARCHIVE', 'ALL'];
   if (labelOrSearch && KNOWN_LABELS.includes(labelOrSearch)) {
     activeLabel = labelOrSearch;
     activeSearch = search;
@@ -150,7 +150,9 @@ export async function loadThreads(accountId: string, labelOrSearch?: string, sea
   // No search — label-aware query
   let sql: string;
   const params: (string | number)[] = [accountId];
-  if (activeLabel === 'STARRED') {
+  if (activeLabel === 'ALL') {
+    sql = `SELECT * FROM threads WHERE account_id = ? AND is_blocked = 0 ORDER BY received_at DESC LIMIT 500`;
+  } else if (activeLabel === 'STARRED') {
     sql = `SELECT * FROM threads WHERE account_id = ? AND is_starred = 1 AND is_archived = 0 AND is_blocked = 0
            AND (is_muted IS NULL OR is_muted = 0) AND (is_set_aside IS NULL OR is_set_aside = 0) AND (snoozed_until IS NULL OR snoozed_until <= ?) ORDER BY received_at DESC LIMIT 500`;
     params.push(nowMs);
@@ -176,7 +178,11 @@ export async function loadThreadsUnified(accountFilter?: string | null, label = 
   let sql: string;
   let params: (string | number)[];
 
-  if (label === 'STARRED') {
+  if (label === 'ALL') {
+    // Load all threads (DB is cache, views filter in-memory)
+    sql = `SELECT * FROM threads WHERE is_blocked = 0`;
+    params = [];
+  } else if (label === 'STARRED') {
     sql = `SELECT * FROM threads WHERE is_starred = 1 AND is_archived = 0 AND is_blocked = 0
            AND (is_muted IS NULL OR is_muted = 0)
            AND (is_set_aside IS NULL OR is_set_aside = 0)

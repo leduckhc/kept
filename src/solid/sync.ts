@@ -14,7 +14,7 @@ import { appState, setAppState, setThreads, setStatus } from './store';
 let _syncAbort: AbortController | null = null;
 
 async function loadUnifiedThreads(): Promise<Thread[]> {
-  return loadThreadsUnified(appState.accountFilter);
+  return loadThreadsUnified(appState.accountFilter, 'ALL');
 }
 
 async function reloadThreads(): Promise<Thread[]> {
@@ -22,7 +22,7 @@ async function reloadThreads(): Promise<Thread[]> {
     return loadUnifiedThreads();
   }
   if (appState.account) {
-    return loadThreads(appState.account.id);
+    return loadThreads(appState.account.id, 'ALL');
   }
   return [];
 }
@@ -136,12 +136,12 @@ export async function syncAndRender() {
       setThreads(threads);
       setStatus(`Synced — ${threads.length} threads`);
     } else {
-      const preSync = await loadThreads(appState.account.id);
+      const preSync = await loadThreads(appState.account.id, 'ALL');
       const knownIds = new Set(preSync.map(t => t.id));
       const isSubsequentSync = await hasSyncedBefore(appState.account.id);
 
       await syncInbox(appState.account, n => setStatus(`Syncing… ${n} threads`));
-      const threads = await loadThreads(appState.account.id);
+      const threads = await loadThreads(appState.account.id, 'ALL');
       setThreads(threads);
       setStatus(`Synced — ${threads.length} threads`);
 

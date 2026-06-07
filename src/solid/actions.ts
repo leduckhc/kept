@@ -17,10 +17,10 @@ function accountFor(t: Thread): Account | null {
 
 async function reloadThreads(): Promise<Thread[]> {
   if (appState.unifiedMode) {
-    return loadThreadsUnified(appState.accountFilter);
+    return loadThreadsUnified(appState.accountFilter, 'ALL');
   }
   if (appState.account) {
-    return loadThreads(appState.account.id);
+    return loadThreads(appState.account.id, 'ALL');
   }
   return [];
 }

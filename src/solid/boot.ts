@@ -53,8 +53,8 @@ export async function boot() {
       setupSnoozeResurface(async () => {
         const { loadThreads, loadThreadsUnified } = await import('../store');
         const threads = appState.unifiedMode
-          ? await loadThreadsUnified(appState.accountFilter)
-          : await loadThreads(appState.account!.id);
+          ? await loadThreadsUnified(appState.accountFilter, 'ALL')
+          : await loadThreads(appState.account!.id, 'ALL');
         setAppState('threads', threads);
       });
 
