@@ -14,7 +14,7 @@
  * - Bar is always 48px, single line (subject truncated on desktop)
  * - 150ms crossfade on mode transitions
  */
-import { createMemo, createSignal, Component, JSX } from 'solid-js';
+import { createMemo, createSignal, createEffect, onCleanup, Component, JSX } from 'solid-js';
 import {
   appState, filteredThreads, selectedThread, clearBulkSelection,
   selectThread, setCategoryFilter, setSenderFilter, setDomainFilter,
@@ -147,6 +147,9 @@ const inboxStrategy: ModeStrategy = {
   actions: InboxActions,
 };
 
+// ── Reader scroll state (mobile: 2-line→1-line on scroll) ────────
+const [readerScrolled, setReaderScrolled] = createSignal(false);
+
 // ── Reader Strategy ─────────────────────────────────────────────
 
 const ReaderNav: ZoneComponent = Object.assign(
@@ -169,9 +172,11 @@ const ReaderContext: ZoneComponent = Object.assign(
   () => {
     const thread = createMemo(() => selectedThread());
     return (
-      <span class="unified-bar-subject" title={thread()?.subject ?? ''}>
-        {thread()?.subject ?? ''}
-      </span>
+      <>
+        <span class="unified-bar-subject-inline" title={thread()?.subject ?? ''}>
+          {thread()?.subject ?? ''}
+        </span>
+      </>
     );
   },
   { id: 'subject' }
@@ -179,6 +184,7 @@ const ReaderContext: ZoneComponent = Object.assign(
 
 const ReaderActions: ZoneComponent = Object.assign(
   () => {
+    const [actionsOpen, setActionsOpen] = createSignal(false);
     const handleAction = (action: string) => {
       const t = selectedThread();
       if (!t) return;
@@ -189,28 +195,46 @@ const ReaderActions: ZoneComponent = Object.assign(
         case 'mute': doMute(t); selectThread(null); break;
         case 'set-aside': doSetAside(t); selectThread(null); break;
       }
+      setActionsOpen(false);
     };
     return (
-      <div class="unified-bar-actions">
-        <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} onClick={() => handleAction('archive')} />
-        <button class="btn-icon" data-action="pin" title="Pin" innerHTML={icon.pin('16px')} />
-        <button class="btn-icon" data-action="prioritize" title="Prioritize" innerHTML={icon.star('16px')} onClick={() => handleAction('prioritize')} />
-        <div class="unified-bar-overflow">
-          <button class="btn-icon unified-bar-overflow-btn" title="More actions" innerHTML={icon.more('16px')} />
-          <div class="unified-bar-overflow-menu">
-            <button class="overflow-item" data-action="mark-unread" onClick={() => handleAction('mark-unread')}>
-              <span innerHTML={icon.emailOpen('14px')} /> Mark unread
-            </button>
-            <button class="overflow-item" data-action="spam">
-              <span innerHTML={icon.spam('14px')} /> Report spam
-            </button>
-            <button class="overflow-item" data-action="move">
-              <span innerHTML={icon.folderMove('14px')} /> Move to label
-            </button>
-            <button class="overflow-item" data-action="followup">
-              <span innerHTML={icon.bell('14px')} /> Remind if no reply
-            </button>
+      <div class="unified-bar-actions" classList={{ 'reader-actions-expanded': actionsOpen() }}>
+        {/* Visible actions (desktop always, mobile when not scrolled) */}
+        <div class="reader-actions-full">
+          <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} onClick={() => handleAction('archive')} />
+          <button class="btn-icon" data-action="pin" title="Pin" innerHTML={icon.pin('16px')} />
+          <button class="btn-icon" data-action="prioritize" title="Prioritize" innerHTML={icon.star('16px')} onClick={() => handleAction('prioritize')} />
+          <div class="unified-bar-overflow">
+            <button class="btn-icon unified-bar-overflow-btn" title="More actions" innerHTML={icon.more('16px')} />
+            <div class="unified-bar-overflow-menu">
+              <button class="overflow-item" data-action="mark-unread" onClick={() => handleAction('mark-unread')}>
+                <span innerHTML={icon.emailOpen('14px')} /> Mark unread
+              </button>
+              <button class="overflow-item" data-action="spam">
+                <span innerHTML={icon.spam('14px')} /> Report spam
+              </button>
+              <button class="overflow-item" data-action="move">
+                <span innerHTML={icon.folderMove('14px')} /> Move to label
+              </button>
+              <button class="overflow-item" data-action="followup">
+                <span innerHTML={icon.bell('14px')} /> Remind if no reply
+              </button>
+            </div>
           </div>
+        </div>
+        {/* Collapsed trigger (mobile scrolled only) */}
+        <button
+          class="btn-icon reader-actions-trigger"
+          title="Actions"
+          innerHTML={icon.more('16px')}
+          onClick={() => setActionsOpen(!actionsOpen())}
+        />
+        {/* Slide-out panel (mobile scrolled, after trigger click) */}
+        <div class="reader-actions-slide">
+          <button class="btn-icon" title="Archive" innerHTML={icon.archive('16px')} onClick={() => handleAction('archive')} />
+          <button class="btn-icon" title="Star" innerHTML={icon.star('16px')} onClick={() => handleAction('prioritize')} />
+          <button class="btn-icon" title="Mute" innerHTML={icon.mute('16px')} onClick={() => handleAction('mute')} />
+          <button class="btn-icon" title="More" innerHTML={icon.more('16px')} />
         </div>
       </div>
     );
@@ -429,11 +453,27 @@ export function UnifiedBar() {
 
   const strategy = createMemo(() => getModeStrategy(mode()));
 
+  // Track reader pane scroll for mobile 2-line→1-line collapse
+  createEffect(() => {
+    if (mode() !== 'reader') {
+      setReaderScrolled(false);
+      return;
+    }
+    const pane = document.getElementById('reader-pane');
+    if (!pane) return;
+    const onScroll = () => setReaderScrolled(pane.scrollTop > 40);
+    pane.addEventListener('scroll', onScroll, { passive: true });
+    onCleanup(() => pane.removeEventListener('scroll', onScroll));
+  });
+
+  const thread = createMemo(() => selectedThread());
+
   return (
     <div
       class="unified-bar"
       data-mode={mode()}
       data-direction={direction()}
+      data-scrolled={readerScrolled() ? '' : undefined}
       classList={{ 'unified-bar--transitioning': transitioning() }}
     >
       <div class={ZONE_CLASSES.nav}>
@@ -444,6 +484,10 @@ export function UnifiedBar() {
       </div>
       <div class={ZONE_CLASSES.actions}>
         {(() => { const Actions = strategy().actions; return <Actions />; })()}
+      </div>
+      {/* Phone-only 2nd row: subject (hidden when scrolled) */}
+      <div class="unified-bar-subject-row">
+        <span class="unified-bar-subject-phone">{thread()?.subject ?? ''}</span>
       </div>
     </div>
   );

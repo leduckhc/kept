@@ -369,9 +369,9 @@ body {
   text-overflow: ellipsis;
 }
 .unified-bar-subject-row {
-  display: none; /* shown only on phone */
-  width: 100%;
-  padding: 0 12px 6px;
+  display: none; /* shown only on phone reader mode */
+  flex-basis: 100%;
+  padding: 0 12px 2px;
 }
 .unified-bar-subject-phone {
   font-size: 13px;
@@ -434,6 +434,11 @@ body {
 }
 
 /* Overflow menu */
+/* Reader actions: mobile slide pattern */
+.reader-actions-full { display: flex; align-items: center; gap: 4px; }
+.reader-actions-trigger { display: none; }
+.reader-actions-slide { display: none; align-items: center; gap: 4px; }
+
 .unified-bar-overflow {
   position: relative;
 }
@@ -2744,7 +2749,35 @@ body {
     display: block;
   }
   .unified-bar[data-mode="reader"] {
+    flex-wrap: wrap;
+    height: auto;
+    padding-bottom: 4px;
+  }
+  /* When scrolled on phone: collapse back to 1-line */
+  .unified-bar[data-mode="reader"][data-scrolled] .unified-bar-subject-row {
+    display: none;
+  }
+  .unified-bar[data-mode="reader"][data-scrolled] .unified-bar-subject-inline {
+    display: block;
+  }
+  .unified-bar[data-mode="reader"][data-scrolled] {
+    flex-wrap: nowrap;
+    height: 48px;
     padding-bottom: 0;
+  }
+  /* Phone: hide full actions when scrolled, show trigger */
+  .unified-bar[data-mode="reader"][data-scrolled] .reader-actions-full {
+    display: none;
+  }
+  .unified-bar[data-mode="reader"][data-scrolled] .reader-actions-trigger {
+    display: flex;
+  }
+  /* Slide panel: visible when expanded */
+  .unified-bar[data-mode="reader"][data-scrolled] .reader-actions-expanded .reader-actions-slide {
+    display: flex;
+  }
+  .unified-bar[data-mode="reader"][data-scrolled] .reader-actions-expanded .reader-actions-trigger {
+    display: none;
   }
   /* Phone reader: 2-line bar needs more top padding on reader */
   #app-shell.reader-open .reader-pane {
