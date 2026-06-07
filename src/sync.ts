@@ -4,7 +4,7 @@ import { type Thread, loadThreads, hasSyncedBefore, invalidateSectionCache, getG
 import { syncInbox } from './gmail';
 import { notifyNewThreads, updateBadge, ensureNotificationPermission } from './notifications';
 import { setStatus, flashStatus, esc } from './helpers';
-import { state } from './state';
+import { appState, setAppState } from './solid/store';
 import { loadPhotoCache, resolvePhotos, hasCachedResult } from './senderPhotos';
 import { patchAvatarsWithPhotos } from './avatar';
 import { runAutoLabelsOnSync } from './autoLabels';
@@ -24,28 +24,28 @@ export function initSync(deps: SyncDeps) {
 
 /** On boot: load active account threads, then kick off parallel sync for all accounts. */
 export async function refreshAll() {
-  if (!state.account || !_deps) return;
+  if (!appState.account || !_deps) return;
   const { renderCurrentView, loadUnifiedThreads } = _deps;
 
   // Load photo cache from DB on first call
   await loadPhotoCache();
 
   // Reload grouped senders & domains for current account
-  if (state.accountFilter === null) {
+  if (appState.accountFilter === null) {
     // Unified mode: union of all accounts' VIPs and groups
-    state.groupedSenders = await getAllGroupedSenders();
-    state.groupedDomains = await getAllGroupedDomains();
-    state.vipSenders = await getAllVipSenders();
+    setAppState('groupedSenders', await getAllGroupedSenders());
+    setAppState('groupedDomains', await getAllGroupedDomains());
+    setAppState('vipSenders', await getAllVipSenders());
   } else {
-    state.groupedSenders = await getGroupedSenders(state.accountFilter);
-    state.groupedDomains = await getGroupedDomains(state.accountFilter);
-    state.vipSenders = await getVipSenders(state.accountFilter);
+    setAppState('groupedSenders', await getGroupedSenders(appState.accountFilter));
+    setAppState('groupedDomains', await getGroupedDomains(appState.accountFilter));
+    setAppState('vipSenders', await getVipSenders(appState.accountFilter));
   }
 
-  if (state.unifiedMode) {
-    state.threads = await loadUnifiedThreads();
+  if (appState.unifiedMode) {
+    setAppState('threads', await loadUnifiedThreads());
   } else {
-    state.threads = await loadThreads(state.account.id);
+    setAppState('threads', await loadThreads(appState.account.id));
   }
   renderCurrentView();
 
@@ -54,14 +54,14 @@ export async function refreshAll() {
 
   // E2E mode: skip network sync entirely, DB is pre-seeded
   if (import.meta.env.VITE_E2E === '1') {
-    setStatus(`E2E mode — ${state.threads.length} threads loaded`);
+    setStatus(`E2E mode — ${appState.threads.length} threads loaded`);
     return;
   }
 
   // Parallel sync — one per account, errors are non-fatal per account
   const allAccts = await getAllAccounts();
   const syncPromises = allAccts.map(acct =>
-    syncInbox(acct, acct.id === state.account!.id ? n => setStatus(`Syncing… ${n} threads`) : undefined)
+    syncInbox(acct, acct.id === appState.account!.id ? n => setStatus(`Syncing… ${n} threads`) : undefined)
       .catch(err => console.error(`Sync error for ${acct.email}:`, err))
   );
   const btn = document.getElementById('btn-sync');
@@ -70,32 +70,32 @@ export async function refreshAll() {
   await Promise.all(syncPromises);
   if (btn) btn.style.opacity = '';
   invalidateSectionCache();
-  if (state.unifiedMode) {
-    state.threads = await loadUnifiedThreads();
+  if (appState.unifiedMode) {
+    setAppState('threads', await loadUnifiedThreads());
   } else {
-    state.threads = await loadThreads(state.account.id);
+    setAppState('threads', await loadThreads(appState.account.id));
   }
   renderCurrentView();
-  flashStatus(`Synced — ${state.threads.length} threads`);
+  flashStatus(`Synced — ${appState.threads.length} threads`);
 }
 
 export async function syncAndRender() {
-  if (state.syncing || !state.account || !_deps) return;
+  if (appState.syncing || !appState.account || !_deps) return;
   const { renderCurrentView, loadUnifiedThreads, refreshKnownSenders } = _deps;
 
   // E2E mode: just reload from DB, no network
   if (import.meta.env.VITE_E2E === '1') {
-    if (state.unifiedMode) {
-      state.threads = await loadUnifiedThreads();
+    if (appState.unifiedMode) {
+      setAppState('threads', await loadUnifiedThreads());
     } else {
-      state.threads = await loadThreads(state.account.id);
+      setAppState('threads', await loadThreads(appState.account.id));
     }
     renderCurrentView();
-    setStatus(`E2E mode — ${state.threads.length} threads`);
+    setStatus(`E2E mode — ${appState.threads.length} threads`);
     return;
   }
 
-  state.syncing = true;
+  setAppState('syncing', true);
   setStatus('Syncing…');
   const btn = document.getElementById('btn-sync');
   if (btn) btn.style.opacity = '0.4';
@@ -103,7 +103,7 @@ export async function syncAndRender() {
   if (_syncAbort) _syncAbort.abort();
   const abort = _syncAbort = new AbortController();
   try {
-    if (state.unifiedMode) {
+    if (appState.unifiedMode) {
       const allAccts = await getAllAccounts();
       const interval = Math.floor(60_000 / Math.max(allAccts.length, 1));
       for (let i = 0; i < allAccts.length; i++) {
@@ -111,34 +111,34 @@ export async function syncAndRender() {
         const a = allAccts[i];
         if (i > 0) await new Promise(r => setTimeout(r, interval));
         if (abort.signal.aborted) break;
-        await syncInbox(a, a.id === state.account!.id ? n => setStatus(`Syncing ${a.email.split('@')[0]}… ${n}`) : undefined)
+        await syncInbox(a, a.id === appState.account!.id ? n => setStatus(`Syncing ${a.email.split('@')[0]}… ${n}`) : undefined)
           .catch(err => console.error(`Sync error for ${a.email}:`, err));
       }
-      state.threads = await loadUnifiedThreads();
+      setAppState('threads', await loadUnifiedThreads());
       renderCurrentView();
-      flashStatus(`Synced — ${state.threads.length} threads`);
+      flashStatus(`Synced — ${appState.threads.length} threads`);
     } else {
       // Capture thread IDs known before sync to detect new arrivals
-      const preSync = await loadThreads(state.account.id);
+      const preSync = await loadThreads(appState.account.id);
       const knownIds = new Set(preSync.map(t => t.id));
       // Gate: only send notifications on second+ sync (historyId already set)
-      const isSubsequentSync = await hasSyncedBefore(state.account.id);
+      const isSubsequentSync = await hasSyncedBefore(appState.account.id);
 
-      await syncInbox(state.account, n => setStatus(`Syncing… ${n} threads`));
-      state.threads = await loadThreads(state.account.id);
+      await syncInbox(appState.account, n => setStatus(`Syncing… ${n} threads`));
+      setAppState('threads', await loadThreads(appState.account.id));
       renderCurrentView();
-      flashStatus(`Synced — ${state.threads.length} threads`);
+      flashStatus(`Synced — ${appState.threads.length} threads`);
 
       // Refresh known-senders after sync (SENT folder may have grown)
       refreshKnownSenders().catch(() => {});
 
       // Fire notifications for newly-arrived threads (not first sync)
       if (isSubsequentSync) {
-        const newThreads = state.threads.filter(t => !knownIds.has(t.id));
+        const newThreads = appState.threads.filter(t => !knownIds.has(t.id));
         if (newThreads.length > 0) {
           const smartNotifs = localStorage.getItem('smartNotifications') !== 'false';
           const toNotify = smartNotifs
-            ? newThreads.filter(t => state.knownSenders.has(t.senderEmail.toLowerCase()))
+            ? newThreads.filter(t => appState.knownSenders.includes(t.senderEmail.toLowerCase()))
             : newThreads;
           if (toNotify.length > 0) {
             notifyNewThreads(toNotify.map(t => ({ senderName: t.senderName, subject: t.subject }))).catch(() => {});
@@ -148,15 +148,15 @@ export async function syncAndRender() {
     }
 
     // Update tray badge / dock badge with total unread count
-    const unreadCount = state.threads.filter(t => t.isUnread).length;
+    const unreadCount = appState.threads.filter(t => t.isUnread).length;
     updateBadge(unreadCount).catch(() => {});
 
     // KPT-085: Run auto-label rules after sync
-    if (state.unifiedMode) {
+    if (appState.unifiedMode) {
       const allAccts2 = await getAllAccounts();
       await Promise.all(allAccts2.map(a => runAutoLabelsOnSync(a.id).catch(() => 0)));
     } else {
-      await runAutoLabelsOnSync(state.account.id).catch(() => 0);
+      await runAutoLabelsOnSync(appState.account.id).catch(() => 0);
     }
 
     // Background: resolve Google profile photos for visible senders
@@ -166,7 +166,7 @@ export async function syncAndRender() {
     const msg = e instanceof Error ? e.message : String(e);
     flashStatus(`Sync error: ${msg}`);
     // Show error in inbox if it's empty so user sees it
-    if (state.threads.length === 0) {
+    if (appState.threads.length === 0) {
       const container = document.getElementById('inbox');
       if (container) container.innerHTML = `
         <div class="empty-state" style="color:var(--text-muted)">
@@ -176,27 +176,27 @@ export async function syncAndRender() {
         </div>`;
     }
   } finally {
-    state.syncing = false;
+    setAppState('syncing', false);
     if (btn) btn.style.opacity = '';
   }
 }
 
 /** Load and merge inbox threads from all accounts, sorted by receivedAt desc. */
 export async function loadUnifiedThreads(): Promise<Thread[]> {
-  return loadThreadsUnified(state.accountFilter);
+  return loadThreadsUnified(appState.accountFilter);
 }
 
 /** Resolve Google profile photos for sender emails visible in current inbox (non-blocking). */
 async function resolveVisiblePhotos(): Promise<void> {
-  if (!state.account || import.meta.env.VITE_E2E === '1') return;
+  if (!appState.account || import.meta.env.VITE_E2E === '1') return;
   // Collect unique emails from current threads that aren't already cached
-  const emails = [...new Set(state.threads.map(t => t.senderEmail.toLowerCase()))];
+  const emails = [...new Set(appState.threads.map(t => t.senderEmail.toLowerCase()))];
   const uncached = emails.filter(e => !hasCachedResult(e));
   if (uncached.length === 0) return;
   // In unified mode, try all accounts (primary first) in case primary token is stale
-  if (state.unifiedMode) {
+  if (appState.unifiedMode) {
     const allAccts = await getAllAccounts();
-    const ordered = [state.account, ...allAccts.filter(a => a.id !== state.account!.id)];
+    const ordered = [appState.account, ...allAccts.filter(a => a.id !== appState.account!.id)];
     for (const acct of ordered) {
       try {
         const resolved = await resolvePhotos(uncached, acct);
@@ -205,7 +205,7 @@ async function resolveVisiblePhotos(): Promise<void> {
       } catch { /* try next account */ }
     }
   } else {
-    const resolved = await resolvePhotos(uncached, state.account);
+    const resolved = await resolvePhotos(uncached, appState.account);
     patchAvatarsWithPhotos(resolved);
   }
 }

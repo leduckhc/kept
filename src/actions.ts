@@ -3,7 +3,8 @@ import { type Thread, unsnoozeThread, unmuteThread, loadThreads, setAsideThread,
 import { markRead, markUnread, archiveThread, trashThread, untrashThread, blockSender, toggleStar, muteThread } from './gmail';
 import { setStatus } from './helpers';
 import { showToast, showUndoToast } from './toasts';
-import { state, setAccount } from './state';
+import { appState, setAppState } from './solid/store';
+import { setActiveAccountId } from './accountContext';
 
 export interface ActionDeps {
   renderInbox: () => void;
@@ -11,10 +12,10 @@ export interface ActionDeps {
 }
 
 export function accountFor(t: Thread): Account | null {
-  if (state.unifiedMode && t.accountId) {
-    return state.accounts.find(a => a.id === t.accountId) ?? state.account;
+  if (appState.unifiedMode && t.accountId) {
+    return appState.accounts.find(a => a.id === t.accountId) ?? appState.account;
   }
-  return state.account;
+  return appState.account;
 }
 
 export async function doMarkRead(t: Thread, row: HTMLElement, deps: ActionDeps) {
@@ -23,7 +24,7 @@ export async function doMarkRead(t: Thread, row: HTMLElement, deps: ActionDeps) 
   try {
     await markRead(acct, t);
     const fresh = await getAccountById(acct.id);
-    if (fresh && !state.unifiedMode) setAccount(fresh);
+    if (fresh && !appState.unifiedMode) { setAppState('account', fresh); setActiveAccountId(fresh.id); }
     t.isUnread = false;
     row.classList.remove('unread');
     row.querySelector<HTMLElement>('.unread-dot')?.classList.remove('filled');
@@ -74,9 +75,9 @@ export async function doArchive(t: Thread, row: HTMLElement, deps: ActionDeps) {
   try {
     await archiveThread(acct, t);
     const fresh = await getAccountById(acct.id);
-    if (fresh && !state.unifiedMode) setAccount(fresh);
+    if (fresh && !appState.unifiedMode) { setAppState('account', fresh); setActiveAccountId(fresh.id); }
     row.remove();
-    state.threads = state.threads.filter(x => x.id !== t.id);
+    setAppState('threads', appState.threads.filter(x => x.id !== t.id));
     deps.renderInbox();
   } catch (e) {
     console.error('Archive failed:', e);
@@ -91,10 +92,10 @@ export async function doTrash(t: Thread, row: HTMLElement, deps: ActionDeps) {
   try {
     await trashThread(acct, t);
     row.remove();
-    state.threads = state.threads.filter(x => x.id !== t.id);
+    setAppState('threads', appState.threads.filter(x => x.id !== t.id));
     showUndoToast('Moved to Trash', async () => {
       await untrashThread(acct, t);
-      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+      setAppState('threads', appState.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id));
       deps.renderInbox();
     });
   } catch (e) {
@@ -110,11 +111,11 @@ export async function doBlock(t: Thread, _row: HTMLElement, deps: ActionDeps): P
   if (!confirm(`Block all email from ${t.senderEmail}?\n\nThis will archive + unsubscribe + label in Gmail.`)) return false;
   await blockSender(acct, t);
   const fresh = await getAccountById(acct.id);
-  if (fresh && !state.unifiedMode) setAccount(fresh);
-  state.threads = state.threads.filter(x => !(x.senderEmail === t.senderEmail && x.accountId === t.accountId));
+  if (fresh && !appState.unifiedMode) { setAppState('account', fresh); setActiveAccountId(fresh.id); }
+  setAppState('threads', appState.threads.filter(x => !(x.senderEmail === t.senderEmail && x.accountId === t.accountId)));
   deps.renderInbox();
   showUndoToast(`Blocked ${t.senderEmail}`, async () => {
-    state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+    setAppState('threads', appState.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id));
     deps.renderInbox();
   });
   return true;
@@ -125,10 +126,10 @@ export async function doUnsnooze(t: Thread, row: HTMLElement, deps: ActionDeps) 
   await unsnoozeThread(t);
   t.snoozedUntil = null;
   row.remove();
-  state.threads = state.threads.filter(x => x.id !== t.id);
+  setAppState('threads', appState.threads.filter(x => x.id !== t.id));
   showToast('Back in inbox', 3000);
   if (acct) {
-    state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+    setAppState('threads', appState.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id));
   }
 }
 
@@ -139,11 +140,11 @@ export async function doMute(t: Thread, row: HTMLElement, deps: ActionDeps) {
     await muteThread(acct, t);
     t.isMuted = true;
     row.remove();
-    state.threads = state.threads.filter(x => x.id !== t.id);
+    setAppState('threads', appState.threads.filter(x => x.id !== t.id));
     showUndoToast('Thread muted', async () => {
       await unmuteThread(t);
       t.isMuted = false;
-      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+      setAppState('threads', appState.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id));
       deps.renderInbox();
     });
   } catch (e) {
@@ -159,11 +160,11 @@ export async function doSetAside(t: Thread, row: HTMLElement, deps: ActionDeps) 
     await setAsideThread(t);
     t.isSetAside = true;
     row.remove();
-    state.threads = state.threads.filter(x => x.id !== t.id);
+    setAppState('threads', appState.threads.filter(x => x.id !== t.id));
     showUndoToast('Set aside', async () => {
       await unsetAsideThread(t);
       t.isSetAside = false;
-      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+      setAppState('threads', appState.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id));
       deps.renderInbox();
     });
   } catch (e) {
@@ -179,9 +180,9 @@ export async function doUnsetAside(t: Thread, row: HTMLElement, deps: ActionDeps
     await unsetAsideThread(t);
     t.isSetAside = false;
     row.remove();
-    state.threads = state.threads.filter(x => x.id !== t.id);
+    setAppState('threads', appState.threads.filter(x => x.id !== t.id));
     showToast('Back in inbox', 3000);
-    state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id);
+    setAppState('threads', appState.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(acct.id));
   } catch (e) {
     console.error('Unset aside failed:', e);
     setStatus('Unset aside failed');

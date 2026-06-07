@@ -2,7 +2,7 @@ import { type Thread, loadThreads, snoozeThread, unsnoozeThread } from './store'
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { formatDate, toDatetimeLocal } from './helpers';
 import { showUndoToast } from './toasts';
-import { state } from './state';
+import { appState, setAppState } from './solid/store';
 import { icon } from './icons';
 
 export function snoozePresets(): Array<{ label: string; untilMs: () => number }> {
@@ -149,14 +149,14 @@ export async function doSnooze(t: Thread, row: HTMLElement, untilMs: number, ren
   row.classList.add('snoozing-out');
   setTimeout(() => {
     row.remove();
-    state.threads = state.threads.filter(x => x.id !== t.id);
+    setAppState('threads', appState.threads.filter(x => x.id !== t.id));
   }, 250);
-  const acct = state.account;
+  const acct = appState.account;
   showUndoToast(`Snoozed until ${formatDate(untilMs)}`, async () => {
     await unsnoozeThread(t);
     t.snoozedUntil = null;
     if (acct) {
-      state.threads = await loadThreads(acct.id);
+      setAppState('threads', await loadThreads(acct.id));
       renderInbox?.();
     }
   });
@@ -164,10 +164,10 @@ export async function doSnooze(t: Thread, row: HTMLElement, untilMs: number, ren
 
 export function setupSnoozeResurface(renderInbox: () => void) {
   setInterval(async () => {
-    if (!state.account) return;
-    const fresh = await loadThreads(state.account.id, state.searchQuery || undefined);
-    if (fresh.length !== state.threads.length) {
-      state.threads = fresh;
+    if (!appState.account) return;
+    const fresh = await loadThreads(appState.account.id, appState.searchQuery || undefined);
+    if (fresh.length !== appState.threads.length) {
+      setAppState('threads', fresh);
       renderInbox();
     }
   }, 60_000);
@@ -175,9 +175,9 @@ export function setupSnoozeResurface(renderInbox: () => void) {
   const isTauri = '__TAURI_INTERNALS__' in window;
   if (isTauri) {
     getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused && state.account) {
-        loadThreads(state.account.id, state.searchQuery || undefined).then(fresh => {
-          state.threads = fresh;
+      if (focused && appState.account) {
+        loadThreads(appState.account.id, appState.searchQuery || undefined).then(fresh => {
+          setAppState('threads', fresh);
           renderInbox();
         }).catch(() => {});
       }

@@ -3,7 +3,7 @@
 
 import { getDb } from './db';
 import { loadThreads, type Thread } from './store';
-import { state } from './state';
+import { appState } from './solid/store';
 
 export interface SmartFolder {
   id: string;
@@ -115,8 +115,8 @@ export function showCreateSmartFolderDialog(prefillQuery?: string): Promise<Smar
       const name = (overlay.querySelector('#sf-name') as HTMLInputElement).value.trim();
       const query = (overlay.querySelector('#sf-query') as HTMLInputElement).value.trim();
       if (!name || !query) return;
-      if (!state.account) { close(); return; }
-      const folder = await createSmartFolder(state.account.id, name, query, selectedColor);
+      if (!appState.account) { close(); return; }
+      const folder = await createSmartFolder(appState.account.id, name, query, selectedColor);
       overlay.remove();
       resolve(folder);
     });

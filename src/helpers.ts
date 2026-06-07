@@ -1,4 +1,4 @@
-import { state, type LayoutMode } from './state';
+import { setAppState, type LayoutMode } from './solid/store';
 
 export function applyTheme(theme: string) {
   const resolved = theme === 'system'
@@ -19,7 +19,7 @@ if (typeof window !== 'undefined') {
 }
 
 export function applyLayoutMode(mode: LayoutMode) {
-  state.layoutMode = mode;
+  setAppState('layoutMode', mode);
   localStorage.setItem('kept.layoutMode', mode);
   const shell = document.getElementById('app-shell');
   if (shell) {

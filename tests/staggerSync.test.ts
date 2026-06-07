@@ -55,13 +55,13 @@ describe('Staggered sync', () => {
       runAutoLabelsOnSync: vi.fn(async () => 0),
     }));
     
-    const { state } = await import('../src/state');
-    state.account = { id: '1', email: 'a@test.com' } as any;
-    state.accounts = [{ id: '1' }, { id: '2' }, { id: '3' }] as any;
-    state.unifiedMode = true;
-    state.accountFilter = null;
-    state.syncing = false;
-    state.threads = [];
+    const { appState, setAppState } = await import('../src/solid/store');
+    setAppState('account', { id: '1', email: 'a@test.com' } as any);
+    setAppState('accounts', [{ id: '1' }, { id: '2' }, { id: '3' }] as any);
+    setAppState('unifiedMode', true);
+    setAppState('accountFilter', null);
+    setAppState('syncing', false);
+    setAppState('threads', []);
     
     // We just need to verify the stagger logic exists in sync.ts
     // by checking the source code contains the stagger pattern

@@ -25,8 +25,9 @@ vi.mock('../src/db', () => ({
   }),
 }));
 
-vi.mock('../src/state', () => ({
-  state: { account: { id: 'acc-1', email: 'test@gmail.com', name: 'Test' } },
+vi.mock('../src/solid/store', () => ({
+  appState: { account: { id: 'acc-1', email: 'test@gmail.com', name: 'Test' } },
+  setAppState: vi.fn(),
 }));
 
 vi.mock('../src/store', () => ({

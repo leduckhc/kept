@@ -121,12 +121,12 @@ describe('Set Aside — store operations', () => {
 describe('Set Aside — doSetAside action integration', () => {
   it('doSetAside removes thread from state.threads', async () => {
     const { doSetAside } = await import('../src/actions');
-    const { state } = await import('../src/state');
+    const { appState, setAppState } = await import('../src/solid/store');
 
     const t = makeThread({ id: 'aside-1' });
-    state.threads = [t, makeThread({ id: 'aside-2' })];
-    state.accounts = [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any];
-    state.account = state.accounts[0];
+    setAppState('threads', [t, makeThread({ id: 'aside-2' })]);
+    setAppState('accounts', [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any]);
+    setAppState('account', appState.accounts[0]);
 
     const row = document.createElement('div');
     document.body.appendChild(row);
@@ -138,17 +138,17 @@ describe('Set Aside — doSetAside action integration', () => {
     await doSetAside(t, row, mockDeps as any);
 
     expect(t.isSetAside).toBe(true);
-    expect(state.threads.find(x => x.id === 'aside-1')).toBeUndefined();
+    expect(appState.threads.find(x => x.id === 'aside-1')).toBeUndefined();
   });
 
   it('doUnsetAside restores thread flag', async () => {
     const { doUnsetAside } = await import('../src/actions');
-    const { state } = await import('../src/state');
+    const { appState, setAppState } = await import('../src/solid/store');
 
     const t = makeThread({ id: 'unset-1', isSetAside: true });
-    state.threads = [t];
-    state.accounts = [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any];
-    state.account = state.accounts[0];
+    setAppState('threads', [t]);
+    setAppState('accounts', [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any]);
+    setAppState('account', appState.accounts[0]);
 
     const row = document.createElement('div');
     document.body.appendChild(row);
@@ -168,12 +168,12 @@ describe('Set Aside — doSetAside action integration', () => {
 describe('Set Aside — UX behavior', () => {
   it('set-aside thread disappears from inbox (removed from DOM)', async () => {
     const { doSetAside } = await import('../src/actions');
-    const { state } = await import('../src/state');
+    const { appState, setAppState } = await import('../src/solid/store');
 
     const t = makeThread({ id: 'ux-1' });
-    state.threads = [t];
-    state.accounts = [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any];
-    state.account = state.accounts[0];
+    setAppState('threads', [t]);
+    setAppState('accounts', [{ id: 'acc-1', email: 'test@gmail.com', name: 'Test' } as any]);
+    setAppState('account', appState.accounts[0]);
 
     const container = document.createElement('div');
     const row = document.createElement('div');
