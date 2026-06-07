@@ -36,7 +36,6 @@ let _commandPaletteModule: typeof import('./commandPalette') | null = null;
 let updateToolbarContextActions: () => void = () => {};
 
 // Unified bar — Solid owns rendering; legacy call-sites still invoke this noop.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function updateUnifiedBar(_opts?: { subject?: string }) {}
 
 async function getCompose() { return _composeModule ??= await import('./compose'); }
