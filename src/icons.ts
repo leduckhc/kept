@@ -10,6 +10,7 @@ import {
   Keyboard, Paperclip, AlarmClock, MailOpen, Eye, ArrowLeft,
   ThumbsUp, ThumbsDown, Globe, Maximize2, ShieldBan, FolderInput,
   OctagonX, Bookmark, Crown, ClipboardList, Zap, Pin, EllipsisVertical,
+  SquareCheck,
 } from 'lucide-static';
 
 /**
@@ -90,6 +91,7 @@ export const icon = {
   // Thread actions — move/spam
   folderMove:  (s?: string) => sized(FolderInput, s),
   spam:        (s?: string) => sized(OctagonX, s),
+  checkSquare: (s?: string) => sized(SquareCheck, s),
   pin:         (s?: string) => sized(Pin, s),
   more:        (s?: string) => sized(EllipsisVertical, s),
   bookmark:    (s?: string) => sized(Bookmark, s),

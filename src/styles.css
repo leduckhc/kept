@@ -436,6 +436,139 @@ body {
   background: var(--bg-hover);
 }
 
+/* ── Breadcrumb navigation ─────────────────────────────── */
+.unified-bar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.breadcrumb-link {
+  border: none;
+  background: none;
+  color: var(--accent, #3b82f6);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+.breadcrumb-link:hover {
+  text-decoration: underline;
+}
+.breadcrumb-sep {
+  color: var(--text-muted);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.breadcrumb-current {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* ── Search Pill ───────────────────────────────────────── */
+.search-pill-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-hover, #f3f4f6);
+  border-radius: 20px;
+  padding: 6px 12px;
+  width: 140px;
+  transition: width 0.2s ease, background 0.15s ease;
+  cursor: text;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.search-pill-wrap:focus-within,
+.search-pill-wrap.expanded {
+  width: 100%;
+  max-width: 320px;
+  background: var(--bg-elevated, #fff);
+  box-shadow: 0 0 0 1.5px var(--accent, #3b82f6);
+}
+.search-pill-icon {
+  flex-shrink: 0;
+  opacity: 0.5;
+  display: flex;
+}
+.search-pill-input {
+  border: none;
+  background: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--text);
+  width: 100%;
+  min-width: 0;
+}
+.search-pill-input::placeholder {
+  color: var(--text-muted);
+}
+/* Hide compose when search is expanded */
+.search-pill-wrap.expanded ~ .btn-compose {
+  display: none;
+}
+
+/* ── Compose mini (reader/folder modes) ────────────────── */
+.btn-compose-mini {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.btn-compose-mini:hover {
+  opacity: 1;
+}
+
+/* ── Folder actions ────────────────────────────────────── */
+.unified-bar-folder-actions {
+  gap: 2px;
+}
+.btn-folder-action {
+  opacity: 0.6;
+  transition: opacity 0.15s, background 0.15s;
+  border-radius: 6px;
+  padding: 4px;
+}
+.btn-folder-action:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+}
+
+/* ── Mode transitions ──────────────────────────────────── */
+.unified-bar > * {
+  animation: barFadeIn 0.15s ease;
+}
+.unified-bar--transitioning > * {
+  animation: barFadeOut 0.15s ease forwards;
+}
+@keyframes barFadeIn {
+  from { opacity: 0; transform: translateX(4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes barFadeOut {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-4px); }
+}
+.unified-bar[data-direction="back"] > * {
+  animation-name: barFadeInBack;
+}
+.unified-bar--transitioning[data-direction="back"] > * {
+  animation-name: barFadeOutBack;
+}
+@keyframes barFadeInBack {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes barFadeOutBack {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(4px); }
+}
+
 /* ── Toolbar (legacy, retained for search-wrap internals) ── */
 .toolbar {
   display: flex;
@@ -2564,6 +2697,22 @@ body {
   .unified-bar {
     gap: 4px;
     padding: 0 8px;
+  }
+  /* Phone: breadcrumb collapses — hide current segment, show only back link */
+  .unified-bar-breadcrumb .breadcrumb-sep,
+  .unified-bar-breadcrumb .breadcrumb-current {
+    display: none;
+  }
+  .unified-bar-breadcrumb .breadcrumb-link::before {
+    content: '‹ ';
+  }
+  /* Phone: search pill smaller */
+  .search-pill-wrap {
+    width: 100px;
+  }
+  .search-pill-wrap:focus-within,
+  .search-pill-wrap.expanded {
+    max-width: 200px;
   }
 
   .thread-row {

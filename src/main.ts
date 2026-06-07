@@ -7,9 +7,6 @@ import { registerAuthProvider } from './authProviderRegistry';
 import { GoogleAuthProvider } from './authProviders/google';
 import { type Thread, loadThreads, loadRepliedToSenders, loadAllSenderEmails, groupBySection, rowToThread } from './store';
 import { fetchDraftByThread } from './gmail';
-import { archiveThread, unarchiveThread, trashThread, untrashThread } from './gmail';
-import { pushUndo } from './undoStack';
-import { showToast } from './toasts';
 import { loadLocalDrafts, type LocalDraft } from './localDrafts';
 
 import { saveReminder, getOverdueReminders, markReminderNotified, dismissReminder } from './followupReminders';
@@ -24,10 +21,9 @@ import { openSnoozePicker, setupSnoozeResurface } from './snooze';
 import { startScheduledSendDispatch } from './scheduledSend';
 import { sendEmail } from './gmail';
 import { initSwipeGestures } from './swipe';
-import { type ActionDeps, doMarkUnread, doMarkRead, doToggleStar, doArchive, doMute, doSetAside, doUnsetAside, accountFor } from './actions';
+import { type ActionDeps, doMarkUnread, doToggleStar, doArchive, doMute, doSetAside, doUnsetAside } from './actions';
 import { openInlineReply } from './inlineReply';
 import { icon } from './icons';
-import { renderUnifiedBar } from './unifiedBar';
 import { ACCOUNT_BADGE_COLORS } from './avatar';
 import { loadSmartFolders, showCreateSmartFolderDialog, runSmartFolder, deleteSmartFolder, type SmartFolder } from './smartFolders';
 
@@ -39,242 +35,12 @@ let _commandPaletteModule: typeof import('./commandPalette') | null = null;
 // Toolbar context-actions visibility updater (set after shell renders)
 let updateToolbarContextActions: () => void = () => {};
 
-// Unified bar state updater — re-renders the bar based on app context
-let _currentReaderSubject: string | null = null;
-
-function updateUnifiedBar(opts?: { subject?: string }) {
-  const slot = document.getElementById('unified-bar-slot');
-  if (!slot) return;
-
-  if (opts?.subject) _currentReaderSubject = opts.subject;
-
-  const shell = document.getElementById('app-shell');
-  const isReaderOpen = shell?.classList.contains('reader-open');
-  // On desktop 3-pane (no layout-2pane class), reader is shown alongside inbox
-  // so the unified bar should stay in inbox/folder mode. Reader mode only on mobile/tablet.
-  const isFullscreenReader = isReaderOpen && (
-    shell?.classList.contains('layout-2pane') ||
-    window.innerWidth < 1024
-  );
-
-  if (isFullscreenReader && _currentReaderSubject) {
-    slot.innerHTML = renderUnifiedBar({ mode: 'reader', subject: _currentReaderSubject });
-    slot.dataset.mode = 'reader';
-    wireUnifiedBarBack();
-  } else if (_activeSmartFolder) {
-    slot.innerHTML = renderUnifiedBar({
-      mode: 'folder',
-      folderName: _activeSmartFolder.name,
-      folderColor: _activeSmartFolder.color,
-      folderCount: state.threads.length,
-    });
-    slot.dataset.mode = 'folder';
-    wireUnifiedBarBack();
-  } else if (state.categoryFilter || state.senderFilter || state.domainFilter) {
-    const filterLabel = state.categoryFilter
-      ? (state.categoryFilter === 'newsletters' ? 'Newsletters'
-         : state.categoryFilter === 'updates' ? 'Updates'
-         : state.categoryFilter)
-      : state.domainFilter
-        ? state.domainFilter
-        : state.senderFilter!;
-    slot.innerHTML = renderUnifiedBar({
-      mode: 'folder',
-      folderName: filterLabel,
-      folderColor: '#888',
-      folderCount: state.threads.filter(t => {
-        if (state.categoryFilter) return t.category === state.categoryFilter;
-        if (state.senderFilter) return t.senderEmail === state.senderFilter;
-        if (state.domainFilter) return t.senderEmail.endsWith('@' + state.domainFilter);
-        return true;
-      }).length,
-    });
-    slot.dataset.mode = 'filter';
-    wireUnifiedBarBack();
-  } else if (state.bulkMode && state.selectedIds.size > 0) {
-    slot.innerHTML = renderUnifiedBar({ mode: 'bulk', count: state.selectedIds.size });
-    slot.dataset.mode = 'bulk';
-    wireUnifiedBarBulk();
-  } else {
-    _currentReaderSubject = null;
-    // Skip re-render if already in inbox mode (preserves search focus/value)
-    if (slot.dataset.mode === 'inbox') return;
-    slot.innerHTML = renderUnifiedBar({ mode: 'inbox' });
-    slot.dataset.mode = 'inbox';
-    wireUnifiedBarInbox();
-  }
-}
-
-function wireUnifiedBarBack() {
-  document.getElementById('unified-bar-back')?.addEventListener('click', () => {
-    const shell = document.getElementById('app-shell');
-    if (shell?.classList.contains('reader-open')) {
-      // Close reader — trigger same logic as reader-back
-      const closeEvt = new CustomEvent('unified-bar:close-reader');
-      document.dispatchEvent(closeEvt);
-    } else if (_activeSmartFolder) {
-      _activeSmartFolder = null;
-      renderInbox();
-      updateUnifiedBar();
-    } else if (state.categoryFilter || state.senderFilter || state.domainFilter) {
-      state.categoryFilter = null;
-      state.senderFilter = null;
-      state.domainFilter = null;
-      renderInbox();
-      updateUnifiedBar();
-    }
-  });
-  // Wire overflow menu toggle
-  const overflowBtn = document.querySelector('.unified-bar-overflow-btn');
-  const overflowWrap = document.querySelector('.unified-bar-overflow');
-  if (overflowBtn && overflowWrap) {
-    overflowBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      overflowWrap.classList.toggle('open');
-    });
-    document.addEventListener('click', () => overflowWrap.classList.remove('open'), { once: true });
-  }
-}
-
-function wireUnifiedBarBulk() {
-  document.getElementById('bulk-cancel')?.addEventListener('click', () => exitBulkMode());
-  document.getElementById('bulk-archive')?.addEventListener('click', async () => {
-    const ids = Array.from(state.selectedIds);
-    const threads = ids.map(id => state.threads.find(x => x.id === id)).filter(Boolean) as typeof state.threads;
-    const deps = getActionDeps();
-    for (const t of threads) {
-      const acct = accountFor(t);
-      if (!acct) continue;
-      await archiveThread(acct, t);
-      document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.remove();
-      state.threads = state.threads.filter(x => x.id !== t.id);
-    }
-    pushUndo(`Archived ${threads.length} thread${threads.length !== 1 ? 's' : ''}`, async () => {
-      for (const t of threads) {
-        const acct = accountFor(t);
-        if (acct) await unarchiveThread(acct, t);
-      }
-      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(state.account!.id);
-      deps.renderInbox();
-    });
-    showToast(`Archived ${threads.length} thread${threads.length !== 1 ? 's' : ''}`);
-    exitBulkMode();
-  });
-  document.getElementById('bulk-trash')?.addEventListener('click', async () => {
-    const ids = Array.from(state.selectedIds);
-    const threads = ids.map(id => state.threads.find(x => x.id === id)).filter(Boolean) as typeof state.threads;
-    const deps = getActionDeps();
-    for (const t of threads) {
-      const acct = accountFor(t);
-      if (!acct) continue;
-      await trashThread(acct, t);
-      document.querySelector<HTMLElement>(`.thread-row[data-id="${t.id}"]`)?.remove();
-      state.threads = state.threads.filter(x => x.id !== t.id);
-    }
-    pushUndo(`Trashed ${threads.length} thread${threads.length !== 1 ? 's' : ''}`, async () => {
-      for (const t of threads) {
-        const acct = accountFor(t);
-        if (acct) await untrashThread(acct, t);
-      }
-      state.threads = state.unifiedMode ? await deps.loadUnifiedThreads() : await loadThreads(state.account!.id);
-      deps.renderInbox();
-    });
-    showToast(`Moved ${threads.length} thread${threads.length !== 1 ? 's' : ''} to trash`);
-    exitBulkMode();
-  });
-  document.getElementById('bulk-read')?.addEventListener('click', async () => {
-    const ids = Array.from(state.selectedIds);
-    for (const id of ids) {
-      const t = state.threads.find(x => x.id === id);
-      if (!t) continue;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doMarkRead(t, row, getActionDeps());
-    }
-    exitBulkMode();
-  });
-  document.getElementById('bulk-unread')?.addEventListener('click', async () => {
-    const ids = Array.from(state.selectedIds);
-    for (const id of ids) {
-      const t = state.threads.find(x => x.id === id);
-      if (!t) continue;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doMarkUnread(t, row);
-    }
-    exitBulkMode();
-  });
-  document.getElementById('bulk-star')?.addEventListener('click', async () => {
-    const ids = Array.from(state.selectedIds);
-    for (const id of ids) {
-      const t = state.threads.find(x => x.id === id);
-      if (!t) continue;
-      const row = document.querySelector<HTMLElement>(`.thread-row[data-id="${id}"]`);
-      if (row) await doToggleStar(t, row);
-    }
-    exitBulkMode();
-  });
-}
-
-function wireUnifiedBarInbox() {
-  // Hamburger
-  document.getElementById('btn-hamburger')?.addEventListener('click', () => {
-    document.getElementById('nav-drawer')?.classList.toggle('open');
-    document.getElementById('nav-drawer-backdrop')?.classList.toggle('visible');
-  });
-  // Search toggle + input wiring
-  const searchWrap = document.getElementById('toolbar-search-wrap');
-  const searchToggle = document.getElementById('btn-search-toggle');
-  const searchEl = document.getElementById('search') as HTMLInputElement | null;
-
-  function expandSearch() {
-    if (!searchWrap || !searchEl) return;
-    searchWrap.classList.remove('collapsed');
-    searchWrap.classList.add('expanded');
-    requestAnimationFrame(() => searchEl.focus());
-  }
-  function collapseSearch() {
-    if (!searchWrap || !searchEl) return;
-    if (searchEl.value) return; // don't collapse if there's a query
-    searchWrap.classList.remove('expanded');
-    searchWrap.classList.add('collapsed');
-    searchEl.blur();
-  }
-
-  if (searchToggle && searchWrap) {
-    searchToggle.addEventListener('click', expandSearch);
-  }
-  if (searchEl) {
-    // Restore expanded state if there's an active query
-    if (state.searchQuery && searchWrap) {
-      searchEl.value = state.searchQuery;
-      searchWrap.classList.remove('collapsed');
-      searchWrap.classList.add('expanded');
-    }
-    searchEl.addEventListener('input', () => {
-      state.searchQuery = searchEl.value;
-      if (searchDebounce !== null) clearTimeout(searchDebounce);
-      searchDebounce = setTimeout(async () => {
-        if (!state.account) return;
-        state.threads = await loadThreads(state.account.id, state.searchQuery || undefined);
-        renderInbox();
-      }, 200);
-    });
-    searchEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        searchEl.value = '';
-        state.searchQuery = '';
-        collapseSearch();
-        if (state.account) loadThreads(state.account.id).then(t => { state.threads = t; renderInbox(); });
-      }
-    });
-  }
-  // Compose
-  document.getElementById('btn-compose')?.addEventListener('click', async () => {
-    const compose = await getCompose();
-    compose.openCompose({ mode: 'new' });
-  });
-}
+// Unified bar — Solid owns rendering; legacy call-sites still invoke this noop.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function updateUnifiedBar(_opts?: { subject?: string }) {}
 
 async function getCompose() { return _composeModule ??= await import('./compose'); }
+
 async function getThreadReader() { return _threadReaderModule ??= await import('./threadReader'); }
 async function getCommandPalette() { return _commandPaletteModule ??= await import('./commandPalette'); }
 import {
@@ -302,8 +68,9 @@ import './search'; // search module self-registers
 import { showSearchBar } from './search';
 import { initResizeHandle } from './resizeHandle';
 import { startTriage, isTriageActive, renderTriageView, handleTriageKey, type TriageDeps } from './triageMode';
+import { mountSolid } from './solid/mount';
 
-let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',     icon: icon.email('18px') },
@@ -550,18 +317,7 @@ function showShell() {
         <button class="sidebar-btn sidebar-avatar" id="btn-account" title="Switch account">${getAccountAvatar()}</button>
       </nav>
       <div class="main-area">
-        <div class="unified-bar-slot" id="unified-bar-slot">
-          ${renderUnifiedBar({ mode: 'inbox' })}
-        </div>
-        <div class="app-body">
-          <div class="inbox" id="inbox"></div>
-          <div class="reader-pane" id="reader-pane">
-            <div class="reader-pane-empty">
-              <div class="reader-pane-empty-icon">${icon.email()}</div>
-              <div class="reader-pane-empty-text">Select a conversation</div>
-            </div>
-          </div>
-        </div>
+        <div id="solid-root"></div>
         <div class="statusbar">
           <span id="status-right"></span>
         </div>
@@ -678,7 +434,7 @@ function showShell() {
   document.addEventListener('unified-bar:reader-closed', () => updateUnifiedBar());
 
   // Initial unified bar wiring
-  wireUnifiedBarInbox();
+  // Unified bar wiring — handled by Solid component now
 
   document.getElementById('btn-account')!.addEventListener('click', () => {
     openSettings();
@@ -734,6 +490,10 @@ function showShell() {
   // Expose hooks for native menu events (Tauri)
   (window as unknown as Record<string, unknown>).__kept_sync = () => syncAndRender();
   (window as unknown as Record<string, unknown>).__kept_settings = () => openSettings();
+
+  // Mount Solid UI (coexists with legacy — bridge syncs state)
+  const solidRoot = document.getElementById('solid-root');
+  if (solidRoot) mountSolid(solidRoot);
 }
 
 // ── View switching ────────────────────────────────────────

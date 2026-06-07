@@ -1,11 +1,12 @@
 import { defineConfig } from "vite";
+import solidPlugin from "vite-plugin-solid";
 
 const host = process.env.TAURI_DEV_HOST;
 const isE2E = process.env.VITE_E2E === '1';
 
 // https://vite.dev/config/
 export default defineConfig(async () => {
-  const plugins: any[] = [];
+  const plugins: any[] = [solidPlugin()];
 
   if (isE2E) {
     const { default: sqliteProxy } = await import('./e2e/vite-plugin-sqlite-proxy');
