@@ -205,6 +205,7 @@ export function clearBulkSelection() {
 export function switchView(view: ViewName) {
   setAppState('currentView', view);
   setAppState('selectedThreadId', null);
+  setAppState('searchQuery', '');
   clearBulkSelection();
   // Clear filters on view switch
   setAppState('categoryFilter', null);

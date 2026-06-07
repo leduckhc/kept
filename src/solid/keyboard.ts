@@ -80,14 +80,14 @@ export function useKeyboardShortcuts() {
       return;
     }
 
-    // Close reader
+    // Close reader / cancel bulk
     if (key === 'Escape') {
-      if (current) {
-        selectThread(null);
-        return;
-      }
       if (appState.bulkMode) {
         clearBulkSelection();
+        return;
+      }
+      if (current) {
+        selectThread(null);
         return;
       }
     }

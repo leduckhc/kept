@@ -18,8 +18,9 @@ import { createMemo, createSignal, Component, JSX } from 'solid-js';
 import {
   appState, filteredThreads, selectedThread, clearBulkSelection,
   selectThread, setCategoryFilter, setSenderFilter, setDomainFilter,
+  setSearchQuery, openCompose,
 } from './store';
-import { doArchive, doToggleStar, doMarkUnread, doMute, doSetAside } from './actions';
+import { doArchive, doToggleStar, doMarkUnread, doMute, doSetAside, bulkArchive, bulkTrash, bulkMarkRead, bulkMarkUnread, bulkStar } from './actions';
 import { icon } from '../icons';
 
 // ── Types ───────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ function SearchPill(): JSX.Element {
     if (e.key === 'Escape') {
       const el = ref();
       if (el) { el.value = ''; el.blur(); }
+      setSearchQuery('');
       setExpanded(false);
     }
   };
@@ -78,6 +80,8 @@ function SearchPill(): JSX.Element {
         id="search"
         type="search"
         placeholder="Search…"
+        value={appState.searchQuery}
+        onInput={(e) => setSearchQuery(e.currentTarget.value)}
         onFocus={onFocus}
         onBlur={onBlur}
         onKeyDown={onKeyDown}
@@ -127,7 +131,7 @@ const InboxActions: ZoneComponent = Object.assign(
     <>
       <div class="toolbar-context-actions" id="toolbar-context-actions"></div>
       <button class="btn-icon btn-compose" id="btn-compose" title="Compose [c]"
-        innerHTML={icon.pencil('18px')} />
+        onClick={() => openCompose()} innerHTML={icon.pencil('18px')} />
     </>
   ),
   { id: 'compose' }
@@ -326,11 +330,11 @@ const BulkContext: ZoneComponent = Object.assign(
 const BulkActions: ZoneComponent = Object.assign(
   () => (
     <div class="unified-bar-actions">
-      <button class="btn-icon bulk-action-btn" id="bulk-archive" title="Archive" innerHTML={icon.archive('16px')} />
-      <button class="btn-icon bulk-action-btn" id="bulk-trash" title="Trash" innerHTML={icon.trash('16px')} />
-      <button class="btn-icon bulk-action-btn" id="bulk-read" title="Mark Read" innerHTML={icon.markRead('16px')} />
-      <button class="btn-icon bulk-action-btn" id="bulk-unread" title="Mark Unread" innerHTML={icon.email('16px')} />
-      <button class="btn-icon bulk-action-btn" id="bulk-star" title="Star" innerHTML={icon.star('16px')} />
+      <button class="btn-icon bulk-action-btn" id="bulk-archive" title="Archive" innerHTML={icon.archive('16px')} onClick={() => bulkArchive()} />
+      <button class="btn-icon bulk-action-btn" id="bulk-trash" title="Trash" innerHTML={icon.trash('16px')} onClick={() => bulkTrash()} />
+      <button class="btn-icon bulk-action-btn" id="bulk-read" title="Mark Read" innerHTML={icon.markRead('16px')} onClick={() => bulkMarkRead()} />
+      <button class="btn-icon bulk-action-btn" id="bulk-unread" title="Mark Unread" innerHTML={icon.email('16px')} onClick={() => bulkMarkUnread()} />
+      <button class="btn-icon bulk-action-btn" id="bulk-star" title="Star" innerHTML={icon.star('16px')} onClick={() => bulkStar()} />
     </div>
   ),
   { id: 'bulk-actions' }
