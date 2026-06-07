@@ -905,14 +905,14 @@ body {
   border-radius: 20px;
   margin: 0 4px;
 }
-.thread-row:hover { background: #ede9fa; }
-[data-theme="dark"] .thread-row:hover { background: #2d2640; }
+.thread-row:hover { background: var(--lavender-tint); }
+[data-theme="dark"] .thread-row:hover { background: var(--surface-hover); }
 /* When keyboard nav is active, suppress hover highlight */
 .keyboard-nav .thread-row:hover:not(.is-selected) { background: transparent; }
 .keyboard-nav .thread-row:hover .thread-actions { display: none; }
 .keyboard-nav .thread-row:hover .thread-date { display: block; }
 /* Hover + selected simultaneously: selected wins */
-.thread-row.is-selected:hover { background: var(--kbd-selected-bg, #ede9fa); }
+.thread-row.is-selected:hover { background: var(--surface-active); }
 .thread-row.selected {
   background: var(--surface-active);
 }
@@ -1738,11 +1738,11 @@ body {
 
 /* ── Keyboard navigation ─────────────────────────────────── */
 .thread-row.is-selected {
-  background: #ede9fa;
+  background: var(--lavender-tint);
   outline: none;
 }
 [data-theme="dark"] .thread-row.is-selected {
-  background: #2d2640;
+  background: var(--surface-active);
 }
 
 /* ── Keyboard cheat sheet overlay ───────────────────────── */

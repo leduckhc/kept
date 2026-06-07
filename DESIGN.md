@@ -89,8 +89,8 @@ No display font. Single stack everywhere. Consistency over personality.
 |---------|-------|
 | Unified bar height | 48px (single line, all modes) |
 | Thread row padding | 6px vertical, 12px horizontal |
-| Thread row min-height | 36px (desktop grid), 40px (phone stacked) |
-| Section header padding | 5px 12px |
+| Thread row height | 32px (desktop grid), 40px min (phone stacked) |
+| Section header padding | 8px 12px |
 | Gap between zones (unified bar) | 10px |
 | Icon button hit area | 28×28px (visual 16px icon) |
 | Sidebar width | 48px (icon-only) |
