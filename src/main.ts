@@ -59,6 +59,7 @@ function updateUnifiedBar(opts?: { subject?: string }) {
 
   if (isFullscreenReader && _currentReaderSubject) {
     slot.innerHTML = renderUnifiedBar({ mode: 'reader', subject: _currentReaderSubject });
+    slot.dataset.mode = 'reader';
     wireUnifiedBarBack();
   } else if (_activeSmartFolder) {
     slot.innerHTML = renderUnifiedBar({
@@ -67,6 +68,7 @@ function updateUnifiedBar(opts?: { subject?: string }) {
       folderColor: _activeSmartFolder.color,
       folderCount: state.threads.length,
     });
+    slot.dataset.mode = 'folder';
     wireUnifiedBarBack();
   } else if (state.categoryFilter || state.senderFilter || state.domainFilter) {
     const filterLabel = state.categoryFilter
@@ -87,13 +89,18 @@ function updateUnifiedBar(opts?: { subject?: string }) {
         return true;
       }).length,
     });
+    slot.dataset.mode = 'filter';
     wireUnifiedBarBack();
   } else if (state.bulkMode && state.selectedIds.size > 0) {
     slot.innerHTML = renderUnifiedBar({ mode: 'bulk', count: state.selectedIds.size });
+    slot.dataset.mode = 'bulk';
     wireUnifiedBarBulk();
   } else {
     _currentReaderSubject = null;
+    // Skip re-render if already in inbox mode (preserves search focus/value)
+    if (slot.dataset.mode === 'inbox') return;
     slot.innerHTML = renderUnifiedBar({ mode: 'inbox' });
+    slot.dataset.mode = 'inbox';
     wireUnifiedBarInbox();
   }
 }
@@ -213,15 +220,51 @@ function wireUnifiedBarInbox() {
     document.getElementById('nav-drawer')?.classList.toggle('open');
     document.getElementById('nav-drawer-backdrop')?.classList.toggle('visible');
   });
-  // Search toggle — reuse existing showSearchBar
+  // Search toggle + input wiring
   const searchWrap = document.getElementById('toolbar-search-wrap');
   const searchToggle = document.getElementById('btn-search-toggle');
+  const searchEl = document.getElementById('search') as HTMLInputElement | null;
+
+  function expandSearch() {
+    if (!searchWrap || !searchEl) return;
+    searchWrap.classList.remove('collapsed');
+    searchWrap.classList.add('expanded');
+    requestAnimationFrame(() => searchEl.focus());
+  }
+  function collapseSearch() {
+    if (!searchWrap || !searchEl) return;
+    if (searchEl.value) return; // don't collapse if there's a query
+    searchWrap.classList.remove('expanded');
+    searchWrap.classList.add('collapsed');
+    searchEl.blur();
+  }
+
   if (searchToggle && searchWrap) {
-    searchToggle.addEventListener('click', () => {
+    searchToggle.addEventListener('click', expandSearch);
+  }
+  if (searchEl) {
+    // Restore expanded state if there's an active query
+    if (state.searchQuery && searchWrap) {
+      searchEl.value = state.searchQuery;
       searchWrap.classList.remove('collapsed');
       searchWrap.classList.add('expanded');
-      const input = document.getElementById('search') as HTMLInputElement;
-      input?.focus();
+    }
+    searchEl.addEventListener('input', () => {
+      state.searchQuery = searchEl.value;
+      if (searchDebounce !== null) clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(async () => {
+        if (!state.account) return;
+        state.threads = await loadThreads(state.account.id, state.searchQuery || undefined);
+        renderInbox();
+      }, 200);
+    });
+    searchEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        searchEl.value = '';
+        state.searchQuery = '';
+        collapseSearch();
+        if (state.account) loadThreads(state.account.id).then(t => { state.threads = t; renderInbox(); });
+      }
     });
   }
   // Compose
@@ -617,7 +660,7 @@ function showShell() {
   initAutoLabelsSettings();
 
   // Sidebar nav + mobile tab buttons + drawer items
-  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn[data-view], .nav-drawer-item[data-view]').forEach(btn => {
     btn.addEventListener('click', () => {
       switchView(btn.dataset.view as ViewName);
       closeNavDrawer();
@@ -650,45 +693,16 @@ function showShell() {
     }
   });
 
-  const searchEl = document.getElementById('search') as HTMLInputElement;
-  const searchWrap = document.getElementById('toolbar-search-wrap')!;
-  const searchToggle = document.getElementById('btn-search-toggle')!;
-
-  function expandSearch() {
-    searchWrap.classList.remove('collapsed');
-    searchWrap.classList.add('expanded');
-    requestAnimationFrame(() => searchEl.focus());
-  }
-  function collapseSearch() {
-    if (searchEl.value) return; // don't collapse if there's a query
-    searchWrap.classList.remove('expanded');
-    searchWrap.classList.add('collapsed');
-    searchEl.blur();
-  }
-
-  searchToggle.addEventListener('click', expandSearch);
-
-  searchEl.addEventListener('input', () => {
-    state.searchQuery = searchEl.value;
-    if (searchDebounce !== null) clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(async () => {
-      if (!state.account) return;
-      state.threads = await loadThreads(state.account.id, state.searchQuery || undefined);
-      renderInbox();
-    }, 200);
-  });
-  searchEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      searchEl.value = '';
-      state.searchQuery = '';
-      collapseSearch();
-      if (state.account) loadThreads(state.account.id).then(t => { state.threads = t; renderInbox(); });
-    }
-  });
-  // Collapse on click outside
+  // Collapse search on click outside (document-level, only needs one registration)
   document.addEventListener('click', (e) => {
-    if (searchWrap.classList.contains('expanded') && !searchWrap.contains(e.target as Node)) {
-      collapseSearch();
+    const searchWrap = document.getElementById('toolbar-search-wrap');
+    if (searchWrap?.classList.contains('expanded') && !searchWrap.contains(e.target as Node)) {
+      const searchEl = document.getElementById('search') as HTMLInputElement | null;
+      if (searchEl && !searchEl.value) {
+        searchWrap.classList.remove('expanded');
+        searchWrap.classList.add('collapsed');
+        searchEl.blur();
+      }
     }
   });
 
@@ -697,7 +711,13 @@ function showShell() {
     // Cmd/Ctrl+F: expand search bar (prevent browser find)
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
       e.preventDefault();
-      expandSearch();
+      const searchWrap = document.getElementById('toolbar-search-wrap');
+      const searchEl = document.getElementById('search') as HTMLInputElement | null;
+      if (searchWrap && searchEl) {
+        searchWrap.classList.remove('collapsed');
+        searchWrap.classList.add('expanded');
+        requestAnimationFrame(() => searchEl.focus());
+      }
       return;
     }
     const tag = (e.target as HTMLElement).tagName;
@@ -725,7 +745,7 @@ async function switchView(view: ViewName) {
   state.senderFilter = null;
   state.domainFilter = null;
   // Update sidebar + mobile tab buttons + drawer items
-  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn, .nav-drawer-item').forEach(btn => {
+  document.querySelectorAll<HTMLButtonElement>('.sidebar-btn[data-view], .nav-drawer-item[data-view]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
   // Render appropriate content
@@ -819,6 +839,10 @@ function showSmartFolderContextMenu(e: MouseEvent, folderId: string) {
 /** Reload inbox threads from the local DB and render immediately. */
 async function reloadInboxThreads() {
   if (!state.account) return;
+  // Clear container to force full rebuild (bypass incremental patchThreadList
+  // which fails when container still has stale content from a different view)
+  const container = document.getElementById('inbox');
+  if (container) container.innerHTML = '';
   if (state.unifiedMode) {
     state.threads = await loadUnifiedThreads();
   } else {

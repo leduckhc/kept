@@ -7,17 +7,10 @@
  */
 import { test, expect } from '@playwright/test';
 
-// Reset IndexedDB before each test to start from seed state
+// Reset DB to seed state before each test
 test.beforeEach(async ({ page }) => {
+  await page.request.post('/__e2e_sql/reset');
   await page.goto('/');
-  await page.evaluate(() => {
-    return new Promise<void>((resolve) => {
-      const req = indexedDB.deleteDatabase('kept-e2e');
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-    });
-  });
-  await page.reload();
   await page.waitForSelector('.thread-row', { timeout: 8000 });
 });
 
@@ -34,15 +27,15 @@ test.describe('Search', () => {
     await page.locator('#btn-search-toggle').click();
     await page.waitForTimeout(200);
     await page.locator('.search-input').fill('resume');
-    await page.waitForTimeout(600);
+    // Wait for FTS query to complete (200ms debounce + HTTP round-trip)
+    await page.waitForFunction(
+      (initial) => document.querySelectorAll('.thread-row:not(.category-row)').length < initial,
+      beforeCount,
+      { timeout: 5000 }
+    );
     const afterCount = await page.locator('.thread-row:not(.category-row)').count();
-    // NOTE: FTS5 is not available in sql.js WASM, so search may not filter in E2E.
-    // We verify at minimum the search doesn't crash and threads still render.
-    expect(afterCount).toBeGreaterThanOrEqual(0);
-    // If FTS5 works, count should be less
-    if (afterCount < beforeCount) {
-      expect(afterCount).toBeGreaterThan(0);
-    }
+    expect(afterCount).toBeLessThan(beforeCount);
+    expect(afterCount).toBeGreaterThan(0);
   });
 
   test('clearing search restores all threads', async ({ page }) => {
@@ -164,11 +157,23 @@ test.describe('View switching', () => {
   });
 
   test('switching views and back to Inbox restores thread count', async ({ page }) => {
-    const inboxCount = await page.locator('.thread-row').count();
-    await page.locator('.sidebar-btn[data-view="Sent"]').click();
-    await page.waitForTimeout(800);
-    await page.locator('.sidebar-btn[data-view="Inbox"]').click();
     await page.waitForSelector('.thread-row', { timeout: 5000 });
+    const inboxCount = await page.locator('.thread-row').count();
+    expect(inboxCount).toBeGreaterThanOrEqual(4);
+    // Switch to Sent
+    await page.evaluate(() => {
+      const btn = document.querySelector('#sidebar .sidebar-btn[data-view="Sent"]') as HTMLElement;
+      btn?.click();
+    });
+    await page.waitForSelector('#sidebar .sidebar-btn[data-view="Sent"].active', { timeout: 5000 });
+    // Switch back to Inbox
+    await page.evaluate(() => {
+      const btn = document.querySelector('#sidebar .sidebar-btn[data-view="Inbox"]') as HTMLElement;
+      btn?.click();
+    });
+    await page.waitForSelector('#sidebar .sidebar-btn[data-view="Inbox"].active', { timeout: 5000 });
+    await page.waitForSelector('.thread-row', { timeout: 8000 });
+    await page.waitForTimeout(300);
     const afterCount = await page.locator('.thread-row').count();
     expect(afterCount).toBeGreaterThanOrEqual(inboxCount - 1);
   });

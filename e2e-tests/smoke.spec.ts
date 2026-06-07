@@ -1,16 +1,9 @@
 import { test, expect } from '@playwright/test';
 
-// Reset IndexedDB before each test to start from seed state
+// Reset DB to seed state before each test
 test.beforeEach(async ({ page }) => {
+  await page.request.post('/__e2e_sql/reset');
   await page.goto('/');
-  await page.evaluate(() => {
-    return new Promise<void>((resolve) => {
-      const req = indexedDB.deleteDatabase('kept-e2e');
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-    });
-  });
-  await page.reload();
   await page.waitForSelector('.thread-row');
 });
 

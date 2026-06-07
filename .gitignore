@@ -16,3 +16,4 @@ e2e/kept.db
 test-results/
 playwright-report/
 blob-report/
+e2e/kept-live.db*

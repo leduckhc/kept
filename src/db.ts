@@ -1,4 +1,4 @@
-// db.ts — SQLite schema + migrations via @tauri-apps/plugin-sql (Tauri) or sql.js (browser E2E)
+// db.ts — SQLite schema + migrations via @tauri-apps/plugin-sql (Tauri) or HTTP proxy (browser E2E)
 
 type Database = {
   select<T>(query: string, bindValues?: unknown[]): Promise<T>;
@@ -116,7 +116,7 @@ async function migrate(db: Database): Promise<void> {
     USING fts5(subject, sender_name, snippet, content='threads', content_rowid='rowid')
   `).catch(() => {}); // no-op if fts5 module unavailable (older SQLite)
 
-  // Only create FTS triggers if the virtual table actually exists (sql.js WASM lacks FTS5)
+  // Only create FTS triggers if the virtual table actually exists (graceful fallback)
   const ftsExists = await db.select<{cnt: number}[]>(
     `SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='threads_fts'`
   );
