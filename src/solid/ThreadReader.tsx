@@ -4,8 +4,8 @@
  * Uses thread-message / reader-* CSS structure from styles.css.
  */
 import { Show, For, createSignal, createEffect } from 'solid-js';
-import { appState, selectedThread, selectThread, openCompose } from './store';
-import { doArchive, doToggleStar, doMarkRead, doMute } from './actions';
+import { appState, selectedThread, openCompose } from './store';
+import { doMarkRead } from './actions';
 import { fetchMessageBody } from '../gmail';
 import { icon } from '../icons';
 
@@ -119,41 +119,10 @@ export function ThreadReader() {
     openCompose('forward', { subject: `Fwd: ${t.subject}`, threadId: t.id });
   };
 
-  const handleArchive = () => {
-    const t = thread();
-    if (t) {
-      doArchive(t);
-      selectThread(null);
-    }
-  };
-
-  const handleStar = () => {
-    const t = thread();
-    if (t) doToggleStar(t);
-  };
-
-  const handleMute = () => {
-    const t = thread();
-    if (t) {
-      doMute(t);
-      selectThread(null);
-    }
-  };
 
   return (
     <Show when={thread()}>
-      {(t) => (
         <div class="reader-pane" id="reader-pane">
-          {/* Reader header with subject + actions */}
-          <div class="reader-header">
-            <span class="reader-subject">{t().subject}</span>
-            <div class="reader-actions-header">
-              <button class="btn-icon" title="Archive" onClick={handleArchive} innerHTML={icon.archive('16px')} />
-              <button class="btn-icon" title={t().isStarred ? 'Unstar' : 'Star'} onClick={handleStar} innerHTML={icon.star('16px')} />
-              <button class="btn-icon" title="Mute" onClick={handleMute} innerHTML={icon.mute('16px')} />
-            </div>
-          </div>
-
           {/* Thread summary bar */}
           <Show when={messages().length > 1}>
             <div class="thread-summary">
@@ -249,7 +218,6 @@ export function ThreadReader() {
             </div>
           </div>
         </div>
-      )}
     </Show>
   );
 }
