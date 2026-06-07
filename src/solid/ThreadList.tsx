@@ -363,9 +363,14 @@ export function ThreadList() {
   // When search is active, show flat list
   const isSearching = createMemo(() => appState.searchQuery.trim().length > 0);
 
+  // Views that should never show grouped/sectioned layout
+  const isFlatView = createMemo(() =>
+    appState.currentView === 'Trash' || appState.currentView === 'Archive'
+  );
+
   // Sectioned view for normal inbox
   const sections = createMemo(() => {
-    if (isFiltered() || isSearching()) return [];
+    if (isFiltered() || isSearching() || isFlatView()) return [];
     return groupBySection(
       threads(),
       appState.groupedSenders,
@@ -404,8 +409,8 @@ export function ThreadList() {
         <p class="sync-loading">Syncing inbox…</p>
       </Show>
 
-      {/* Filtered/search flat view */}
-      <Show when={(isFiltered() || isSearching()) && threads().length > 0}>
+      {/* Filtered/search/flat-view rendering */}
+      <Show when={(isFiltered() || isSearching() || isFlatView()) && threads().length > 0}>
         <For each={threads()}>
           {(thread) => <ThreadRow thread={thread} />}
         </For>
