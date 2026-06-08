@@ -96,23 +96,14 @@ test.describe('Inline Compose', () => {
     await expect(page.locator('.inline-compose')).not.toBeVisible();
   });
 
-  test('footer reply buttons hidden when inline compose is open', async ({ page }) => {
+  test('no footer buttons — per-message actions only', async ({ page }) => {
     await openFirstThread(page);
 
-    // Footer should be visible initially
-    await expect(page.locator('.reader-footer')).toBeVisible();
-
-    const msg = page.locator('.thread-message').last();
-    if (await msg.evaluate(el => el.classList.contains('thread-message-collapsed'))) {
-      await msg.locator('.thread-message-header').click();
-      await page.waitForTimeout(200);
-    }
-
-    await msg.hover();
-    await msg.locator('.msg-action-btn', { hasText: /^Reply$/ }).click();
-
-    // Footer should disappear
+    // Footer should NOT exist (Variant C: per-message text links replace footer)
     await expect(page.locator('.reader-footer')).not.toBeVisible();
+
+    // Per-message actions should be visible
+    await expect(page.locator('.msg-actions').first()).toBeVisible();
   });
 
   test('inline compose body is editable', async ({ page }) => {

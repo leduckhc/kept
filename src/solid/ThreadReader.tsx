@@ -171,8 +171,13 @@ export function ThreadReader() {
     const t = thread();
     if (!t) return;
     const sender = parseSender(msg.replyTo || msg.from);
+    // If we sent this message, reply to the recipient instead of ourselves
+    const myEmail = appState.account?.email;
+    const replyTo = (myEmail && sender.email.toLowerCase() === myEmail.toLowerCase() && msg.to)
+      ? parseSender(msg.to).email
+      : sender.email;
     openCompose('reply', {
-      to: sender.email,
+      to: replyTo,
       subject: t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`,
       threadId: t.id,
       messageId: msg.gmailMessageId,
@@ -226,24 +231,6 @@ export function ThreadReader() {
     window.getSelection()?.removeAllRanges();
   };
 
-  // Default footer reply (last message)
-  const handleFooterReply = () => {
-    const msgs = messages();
-    if (msgs.length === 0) return;
-    handleMsgReply(msgs[msgs.length - 1]);
-  };
-
-  const handleFooterReplyAll = () => {
-    const msgs = messages();
-    if (msgs.length === 0) return;
-    handleMsgReplyAll(msgs[msgs.length - 1]);
-  };
-
-  const handleFooterForward = () => {
-    const msgs = messages();
-    if (msgs.length === 0) return;
-    handleMsgForward(msgs[msgs.length - 1]);
-  };
 
   return (
     <Show when={thread()}>
@@ -365,22 +352,7 @@ export function ThreadReader() {
             )}
           </Show>
 
-          {/* Reply footer — default actions for last message */}
-          <Show when={!appState.composeInline}>
-            <div class="reader-footer">
-              <div class="reader-footer-actions">
-                <button class="btn-primary" onClick={handleFooterReply}>
-                  <span innerHTML={icon.reply('14px')} /> Reply
-                </button>
-                <button class="btn-primary" onClick={handleFooterReplyAll}>
-                  <span innerHTML={icon.reply('14px')} /> Reply All
-                </button>
-                <button class="btn-primary" onClick={handleFooterForward}>
-                  <span innerHTML={icon.reply('14px')} /> Forward
-                </button>
-              </div>
-            </div>
-          </Show>
+          {/* Footer removed — per-message actions (Variant C) replace it */}
 
           {/* Inline compose — card style (Variant C) */}
           <Show when={appState.composeInline && appState.composeOpen}>
