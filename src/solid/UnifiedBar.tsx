@@ -88,6 +88,7 @@ function SearchPill(): JSX.Element {
         onBlur={onBlur}
         onKeyDown={onKeyDown}
       />
+      {appState.serverSearching && <span class="search-spinner" />}
     </div>
   );
 }

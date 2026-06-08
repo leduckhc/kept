@@ -135,6 +135,10 @@ function createMockMailProvider(id: string, displayName: string): MailProvider &
       for (const e of emails) result[e] = `https://${id}.example.com/photos/${e}`;
       return result;
     },
+    async search(_account, _query, _maxResults) {
+      track('search', _account, _query, _maxResults);
+      return { threadIds: [], totalEstimate: 0 };
+    },
   };
 }
 

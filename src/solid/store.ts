@@ -60,6 +60,8 @@ export interface AppState {
   navDrawerOpen: boolean;
   darkMode: boolean;
   smartNotifications: boolean;
+  // Server search
+  serverSearching: boolean;
 }
 
 // Everything in one createRoot so memos can track the store
@@ -101,6 +103,7 @@ const root = createRoot(() => {
     navDrawerOpen: false,
     darkMode: (localStorage.getItem('theme') ?? 'light') === 'dark',
     smartNotifications: localStorage.getItem('smartNotifications') !== 'false',
+    serverSearching: false,
   });
 
   // ── Derived state (auto-recomputing memos) ──────────────────
@@ -231,6 +234,67 @@ export function switchView(view: ViewName) {
 
 export function setSearchQuery(query: string) {
   setAppState('searchQuery', query);
+  debouncedServerSearch(query);
+}
+
+// ── Server-side search with debounce ─────────────────────────
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let searchAbortController: AbortController | null = null;
+
+function debouncedServerSearch(query: string) {
+  if (searchTimer) clearTimeout(searchTimer);
+  if (searchAbortController) searchAbortController.abort();
+
+  if (!query.trim()) {
+    setAppState('serverSearching', false);
+    return;
+  }
+
+  searchTimer = setTimeout(() => {
+    void performServerSearch(query.trim());
+  }, 300);
+}
+
+async function performServerSearch(query: string) {
+  const account = appState.account;
+  if (!account) return;
+
+  setAppState('serverSearching', true);
+  searchAbortController = new AbortController();
+  const signal = searchAbortController.signal;
+
+  try {
+    const { getProviderForAccount } = await import('../providerRegistry');
+    const provider = getProviderForAccount(account);
+    const { threadIds } = await provider.search(account, query, 30);
+
+    if (signal.aborted) return;
+
+    if (threadIds.length > 0) {
+      // Sync matching threads so they appear in local DB
+      const { syncThreadById } = await import('../gmail');
+      const existing = new Set(appState.threads.map(t => t.id));
+      const newIds = threadIds.filter(id => !existing.has(id));
+
+      if (newIds.length > 0) {
+        await Promise.all(newIds.slice(0, 20).map(id => syncThreadById(account, id)));
+        if (signal.aborted) return;
+        // Reload threads so newly synced ones appear in the filtered list
+        const { loadThreads, loadThreadsUnified } = await import('../store');
+        const threads = appState.unifiedMode
+          ? await loadThreadsUnified(appState.accountFilter, 'ALL')
+          : await loadThreads(account.id, 'ALL');
+        setAppState('threads', threads);
+      }
+    }
+  } catch (err) {
+    if (signal.aborted) return;
+    console.warn('[server-search] failed:', err);
+  } finally {
+    if (!signal.aborted) {
+      setAppState('serverSearching', false);
+    }
+  }
 }
 
 export function setThreads(threads: Thread[]) {

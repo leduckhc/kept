@@ -102,4 +102,7 @@ export interface MailProvider {
 
   // Contacts
   loadSenderPhotos(account: Account, emails: string[]): Promise<Record<string, string>>;
+
+  // Search
+  search(account: Account, query: string, maxResults?: number): Promise<{ threadIds: string[]; totalEstimate: number }>;
 }

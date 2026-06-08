@@ -138,4 +138,9 @@ export class GmailProvider implements MailProvider {
     // Gmail uses Google People API for photos — implement later
     return {};
   }
+
+  async search(account: Account, query: string, maxResults?: number): Promise<{ threadIds: string[]; totalEstimate: number }> {
+    const { searchGmail } = await import('../gmail');
+    return searchGmail(account, query, maxResults);
+  }
 }

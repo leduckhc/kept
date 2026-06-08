@@ -552,6 +552,18 @@ body {
 .search-pill-input::placeholder {
   color: var(--text-muted);
 }
+/* Server search spinner */
+.search-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--text-muted);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 /* Hide compose when search is expanded */
 .search-pill-wrap.expanded ~ .btn-compose,
 .unified-bar-zone-context:has(.search-pill-wrap.expanded) ~ .unified-bar-zone-actions .btn-compose {

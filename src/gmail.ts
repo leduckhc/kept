@@ -303,6 +303,50 @@ async function syncThread(account: Account, gmailThreadId: string, accountId: st
 
 
 
+// ── Server-side Search ────────────────────────────────────
+
+export interface SearchResult {
+  threadIds: string[];
+  totalEstimate: number;
+}
+
+/**
+ * Search Gmail using the messages.list?q= endpoint.
+ * Returns deduplicated thread IDs matching the query.
+ * Supports all Gmail search operators: from:, to:, subject:, has:attachment, etc.
+ */
+export async function searchGmail(account: Account, query: string, maxResults = 50): Promise<SearchResult> {
+  const a = await ensureFreshToken(account);
+  const params = new URLSearchParams({ q: query, maxResults: String(maxResults) });
+  const res = await gmailGetRaw(a, `/users/me/messages?${params}`);
+  if (!res.ok) throw new Error(`Gmail API error ${res.status}: /users/me/messages?q=${query}`);
+  const data = await res.json() as {
+    messages?: Array<{ id: string; threadId: string }>;
+    resultSizeEstimate?: number;
+  };
+  const messages = data.messages ?? [];
+  // Deduplicate by threadId, preserve order
+  const seen = new Set<string>();
+  const threadIds: string[] = [];
+  for (const msg of messages) {
+    if (!seen.has(msg.threadId)) {
+      seen.add(msg.threadId);
+      threadIds.push(msg.threadId);
+    }
+  }
+  return { threadIds, totalEstimate: data.resultSizeEstimate ?? 0 };
+}
+
+/**
+ * Sync a single thread by ID — fetches metadata from Gmail and upserts to local DB.
+ * Used by server-side search to materialize results locally.
+ */
+export async function syncThreadById(account: Account, gmailThreadId: string): Promise<void> {
+  const a = await ensureFreshToken(account);
+  await syncThread(a, gmailThreadId, account.id);
+}
+
+
 // ── Actions ───────────────────────────────────────────────
 export async function markRead(account: Account, thread: Thread): Promise<void> {
   const db = await getDb();
