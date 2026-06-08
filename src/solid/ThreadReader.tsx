@@ -8,7 +8,7 @@
 import { Show, For, createSignal, createEffect, onCleanup } from 'solid-js';
 import { appState, setAppState, selectedThread, openCompose, closeCompose } from './store';
 import { doMarkRead } from './actions';
-import { fetchMessageBody, sendEmail } from '../gmail';
+import { fetchMessageBody, sendEmail, loadAttachments, type AttachmentMeta } from '../gmail';
 import { showToast } from '../toasts';
 import { icon } from '../icons';
 
@@ -69,6 +69,15 @@ export function ThreadReader() {
   const [loading, setLoading] = createSignal(false);
   const [collapsed, setCollapsed] = createSignal<Set<string>>(new Set<string>());
   const [quotePopup, setQuotePopup] = createSignal<{ x: number; y: number; text: string; msg: Message } | null>(null);
+  const [attachments, setAttachments] = createSignal<AttachmentMeta[]>([]);
+
+  // Load attachments when thread changes
+  createEffect(() => {
+    const t = thread();
+    if (t) {
+      loadAttachments(t.id).then(setAttachments).catch(() => setAttachments([]));
+    }
+  });
 
   // Fetch messages when thread changes
   createEffect(() => {
@@ -231,6 +240,27 @@ export function ThreadReader() {
     window.getSelection()?.removeAllRanges();
   };
 
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function attachmentIconForMime(mime: string): string {
+    if (mime.startsWith('image/')) return '🖼️';
+    if (mime === 'application/pdf') return '📄';
+    if (mime.includes('spreadsheet') || mime.includes('excel')) return '📊';
+    return '📎';
+  }
+
+  const handleDownloadAttachment = async (att: AttachmentMeta) => {
+    if (import.meta.env.VITE_E2E) {
+      showToast(`Download: ${att.filename} (${formatSize(att.size)})`);
+      return;
+    }
+    showToast(`Downloading ${att.filename}...`);
+  };
+
 
   return (
     <Show when={thread()}>
@@ -313,6 +343,24 @@ export function ThreadReader() {
                           class="email-body-rendered"
                           innerHTML={msg.sanitizedHtml || msg.htmlBody || ''}
                         />
+                      </Show>
+                      {/* Attachment chips for this message */}
+                      <Show when={attachments().filter(a => a.message_id === msg.gmailMessageId).length > 0}>
+                        <div class="attachment-section">
+                          <For each={attachments().filter(a => a.message_id === msg.gmailMessageId)}>
+                            {(att) => (
+                              <button
+                                class={`attachment-chip${att.mime_type.startsWith('image/') ? ' attachment-chip-image' : ''}`}
+                                onClick={() => handleDownloadAttachment(att)}
+                                title={`Download ${att.filename}`}
+                              >
+                                <span class="attachment-icon">{attachmentIconForMime(att.mime_type)}</span>
+                                <span class="attachment-name">{att.filename}</span>
+                                <span class="attachment-size">{formatSize(att.size)}</span>
+                              </button>
+                            )}
+                          </For>
+                        </div>
                       </Show>
                       {/* Per-message actions */}
                       <div class="msg-actions">

@@ -78,3 +78,14 @@ VALUES
 -- Settings (mark as synced before so the app doesn't try a fresh full sync)
 INSERT OR REPLACE INTO settings (key, account_id, value)
 VALUES ('historyId', 'test-user-1', '999999');
+
+-- Attachments
+INSERT OR REPLACE INTO attachments (id, message_id, thread_id, account_id, filename, mime_type, size, attachment_id)
+VALUES
+  ('att_m05_0', 'gmail-m05', 't05', 'test-user-1', 'invoice-january-2025.pdf', 'application/pdf', 245760, 'gmail-att-001'),
+  ('att_m06c_0', 'gmail-m06c', 't06', 'test-user-1', 'revised-schedule.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 38912, 'gmail-att-002'),
+  ('att_m07_0', 'gmail-m07', 't07', 'test-user-1', 'boarding-pass.pdf', 'application/pdf', 152000, 'gmail-att-003'),
+  ('att_m07_1', 'gmail-m07', 't07', 'test-user-1', 'prague-weather.png', 'image/png', 89000, 'gmail-att-004'),
+  ('att_m11_0', 'gmail-m11', 't11', 'test-user-1', 'resume-v3.pdf', 'application/pdf', 312000, 'gmail-att-005'),
+  ('att_m11_1', 'gmail-m11', 't11', 'test-user-1', 'headshot.jpg', 'image/jpeg', 156000, 'gmail-att-006'),
+  ('att_m16_0', 'gmail-m16', 't16', 'test-user-1', 'statement-december-2024.pdf', 'application/pdf', 98304, 'gmail-att-007');

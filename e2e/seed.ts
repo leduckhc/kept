@@ -77,8 +77,21 @@ const SCHEMA = `
     PRIMARY KEY (key, account_id)
   );
 
+  CREATE TABLE IF NOT EXISTS attachments (
+    id TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    attachment_id TEXT NOT NULL,
+    FOREIGN KEY (thread_id) REFERENCES threads(id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_threads_received ON threads(received_at DESC);
   CREATE INDEX IF NOT EXISTS idx_threads_sender ON threads(sender_email);
+  CREATE INDEX IF NOT EXISTS idx_attachments_thread ON attachments(thread_id);
 `;
 
 console.log(`Creating seeded database at: ${DB_PATH}`);
