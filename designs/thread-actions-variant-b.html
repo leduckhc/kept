@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thread Actions — Variant B: Superhuman Sleek</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: #ffffff;
+  color: #1a1a1a;
+  line-height: 1.6;
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.thread-header {
+  padding: 20px 0 28px;
+}
+.thread-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.thread-header .meta {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.message {
+  padding: 24px;
+  margin-bottom: 2px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  position: relative;
+}
+.message:first-of-type {
+  border-radius: 8px 8px 2px 2px;
+}
+.message:last-of-type {
+  border-radius: 2px 2px 8px 8px;
+}
+.message:only-of-type {
+  border-radius: 8px;
+}
+.message + .message {
+  margin-top: 2px;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: #fff;
+  flex-shrink: 0;
+}
+.avatar-blue { background: #2563eb; }
+.avatar-purple { background: #7c3aed; }
+.avatar-green { background: #059669; }
+
+.sender-info {
+  flex: 1;
+}
+.sender-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.message-date {
+  font-size: 12px;
+  color: #6b7280;
+}
+.message-body {
+  font-size: 14px;
+  color: #1a1a1a;
+  padding-left: 48px;
+}
+.message-body p {
+  margin-bottom: 8px;
+}
+.message-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* Floating action bar — glassmorphism */
+.floating-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+.action-bar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+}
+.action-bar button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.action-bar button:hover {
+  background: rgba(255,255,255,0.12);
+  color: #ffffff;
+}
+.action-bar button svg {
+  width: 16px;
+  height: 16px;
+}
+.action-bar .divider {
+  width: 1px;
+  background: rgba(255,255,255,0.15);
+  margin: 4px 8px;
+}
+
+/* Rich compose area */
+.compose-area {
+  margin-top: 32px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.compose-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e5e7eb;
+}
+.toolbar-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  transition: all 0.1s;
+}
+.toolbar-btn:hover {
+  background: #e5e7eb;
+  color: #1a1a1a;
+}
+.toolbar-btn.active {
+  background: #2563eb;
+  color: #fff;
+}
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: #e5e7eb;
+  margin: 0 6px;
+}
+.compose-body {
+  padding: 16px;
+  min-height: 120px;
+  font-size: 14px;
+  outline: none;
+}
+.compose-body[contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: #6b7280;
+}
+.compose-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #f8f9fa;
+}
+.send-btn {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 10px 28px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.send-btn:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+}
+.compose-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Quote popup — slide up */
+.quote-popup {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26, 26, 26, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
+}
+@keyframes slideUp {
+  from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+  to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+.quote-popup .quote-text {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-left: 2px solid #2563eb;
+  padding-left: 8px;
+}
+.quote-popup button {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+.quote-popup button:hover {
+  background: rgba(255,255,255,0.2);
+}
+.quote-popup button.primary {
+  background: #2563eb;
+}
+.quote-popup button.primary:hover {
+  background: #1d4ed8;
+}
+
+@media (max-width: 600px) {
+  body { padding: 16px; }
+  .message-body { padding-left: 0; margin-top: 8px; }
+  .action-bar { width: 100%; justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<div class="thread-header">
+  <h1>Q3 Product Roadmap Review</h1>
+  <div class="meta">3 messages · Sarah Mitchell, James Kim, Lisa Park</div>
+</div>
+
+<!-- Message 1 -->
+<div class="message">
+  <div class="message-header">
+    <div class="avatar avatar-blue">SM</div>
+    <div class="sender-info">
+      <div class="sender-name">Sarah Mitchell</div>
+      <div class="message-date">Jun 5, 2026 at 9:14 AM</div>
+    </div>
+  </div>
+  <div class="message-body">
+    <p>Hi team,</p>
+    <p>I've put together the Q3 roadmap draft based on our planning session last week. The key priorities are: shipping the new collaboration features, improving performance on mobile, and launching the API v2 beta.</p>
+    <p>Please review the attached doc and share any feedback by EOD Friday. I'd like to finalize this before the all-hands next Tuesday.</p>
+    <p>Thanks,<br>Sarah</p>
+  </div>
+</div>
+
+<!-- Message 2 -->
+<div class="message">
+  <div class="message-header">
+    <div class="avatar avatar-purple">JK</div>
+    <div class="sender-info">
+      <div class="sender-name">James Kim</div>
+      <div class="message-date">Jun 5, 2026 at 11:42 AM</div>
+    </div>
+  </div>
+  <div class="message-body">
+    <p>Sarah,</p>
+    <p>Looks great overall. One concern — the timeline for API v2 beta seems aggressive given we still have open questions about the auth flow redesign. Can we discuss whether to push that to mid-Q3 instead of early July?</p>
+    <p>Also, I'd suggest adding a line item for the accessibility audit. Legal flagged it as a priority last quarter.</p>
+    <p>— James</p>
+  </div>
+</div>
+
+<!-- Message 3 -->
+<div class="message">
+  <div class="message-header">
+    <div class="avatar avatar-green">LP</div>
+    <div class="sender-info">
+      <div class="sender-name">Lisa Park</div>
+      <div class="message-date">Jun 6, 2026 at 8:03 AM</div>
+    </div>
+  </div>
+  <div class="message-body">
+    <p>+1 on the accessibility audit — we've already scoped most of it so it shouldn't be a huge lift to include.</p>
+    <p>For the collab features, my team can start on the real-time cursors piece in week 2 if we get the design specs locked by end of next week. @Sarah can you confirm the design timeline?</p>
+  </div>
+</div>
+
+<!-- Floating Action Bar -->
+<div class="floating-actions">
+  <div class="action-bar">
+    <button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l7-7v4c8 0 11 4 12 9-2-3-5-4-12-4v4l-7-6z"/></svg>
+      Reply
+    </button>
+    <button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10l5-5v3c7 0 9 3 10 8-2-3-4-4-10-4v3l-5-5z"/><path d="M3 10l5-5M3 10l5 5"/></svg>
+      Reply All
+    </button>
+    <div class="divider"></div>
+    <button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10l-7-7v4c-8 0-11 4-12 9 2-3 5-4 12-4v4l7-6z"/></svg>
+      Forward
+    </button>
+  </div>
+</div>
+
+<!-- Rich Compose -->
+<div class="compose-area">
+  <div class="compose-toolbar">
+    <button class="toolbar-btn" title="Bold"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/></svg></button>
+    <button class="toolbar-btn" title="Italic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg></button>
+    <button class="toolbar-btn" title="Underline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v7a6 6 0 006 6 6 6 0 006-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg></button>
+    <div class="toolbar-divider"></div>
+    <button class="toolbar-btn" title="Bullet List"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg></button>
+    <button class="toolbar-btn" title="Link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></button>
+    <div class="toolbar-divider"></div>
+    <button class="toolbar-btn" title="Attach"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
+    <button class="toolbar-btn" title="Emoji"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
+  </div>
+  <div class="compose-body" contenteditable="true" data-placeholder="Write your reply..."></div>
+  <div class="compose-footer">
+    <div class="compose-meta">Replying to all · ⌘+Enter to send</div>
+    <button class="send-btn">Send</button>
+  </div>
+</div>
+
+<!-- Quote Popup (demo visible) -->
+<div class="quote-popup">
+  <div class="quote-text">"the timeline for API v2 beta seems aggressive"</div>
+  <button class="primary">Quote Reply</button>
+  <button>Copy</button>
+</div>
+
+</body>
+</html>

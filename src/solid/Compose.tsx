@@ -58,7 +58,7 @@ export function Compose() {
   };
 
   return (
-    <Show when={appState.composeOpen}>
+    <Show when={appState.composeOpen && !appState.composeInline}>
       <div
         class={`compose-panel${expanded() ? ' compose-panel-expanded' : ''}`}
         onKeyDown={handleKeyDown}

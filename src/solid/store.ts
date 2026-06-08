@@ -48,6 +48,8 @@ export interface AppState {
   composeSubject: string;
   composeBody: string;
   composeReplyThreadId: string | null;
+  composeReplyMessageId: string | null;
+  composeInline: boolean;
   composeCc: string;
   composeBcc: string;
   // Senders
@@ -93,6 +95,8 @@ const root = createRoot(() => {
     composeSubject: '',
     composeBody: '',
     composeReplyThreadId: null,
+    composeReplyMessageId: null,
+    composeInline: false,
     composeCc: '',
     composeBcc: '',
     knownSenders: [],
@@ -313,13 +317,15 @@ export function setDomainFilter(domain: string | null) {
   setAppState('domainFilter', domain);
 }
 
-export function openCompose(mode: ComposeMode = 'new', opts?: { to?: string; subject?: string; body?: string; threadId?: string; cc?: string; bcc?: string }) {
+export function openCompose(mode: ComposeMode = 'new', opts?: { to?: string; subject?: string; body?: string; threadId?: string; messageId?: string; cc?: string; bcc?: string; quotedText?: string; inline?: boolean }) {
   setAppState('composeOpen', true);
   setAppState('composeMode', mode);
   setAppState('composeTo', opts?.to ?? '');
   setAppState('composeSubject', opts?.subject ?? '');
-  setAppState('composeBody', opts?.body ?? '');
+  setAppState('composeBody', opts?.quotedText ? `\n\n${opts.quotedText}` : (opts?.body ?? ''));
   setAppState('composeReplyThreadId', opts?.threadId ?? null);
+  setAppState('composeReplyMessageId', opts?.messageId ?? null);
+  setAppState('composeInline', opts?.inline ?? false);
   setAppState('composeCc', opts?.cc ?? '');
   setAppState('composeBcc', opts?.bcc ?? '');
 }
@@ -330,6 +336,8 @@ export function closeCompose() {
   setAppState('composeSubject', '');
   setAppState('composeBody', '');
   setAppState('composeReplyThreadId', null);
+  setAppState('composeReplyMessageId', null);
+  setAppState('composeInline', false);
   setAppState('composeCc', '');
   setAppState('composeBcc', '');
 }
