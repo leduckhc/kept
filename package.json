@@ -11,13 +11,14 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
+    "test:ui": "playwright test",
+    "test:ui:update": "playwright test --update-snapshots",
+    "test:e2e": "bash e2e/pilot/run.sh",
+    "test:all": "vitest run && playwright test",
     "verify": "tsc --noEmit && eslint src/ && vitest run",
     "lint": "eslint src/",
-    "e2e:pilot": "bash e2e/pilot/run.sh",
-    "dev:pilot": "cargo tauri dev",
+    "dev:pilot": "cargo tauri dev --features pilot",
     "check": "tsc --noEmit && eslint src/ --max-warnings 0 && vitest run && node node_modules/vite/bin/vite.js build",
-    "test:e2e": "playwright test",
-    "test:e2e:update": "playwright test --update-snapshots",
     "preinstall": "npx only-allow pnpm"
   },
   "dependencies": {

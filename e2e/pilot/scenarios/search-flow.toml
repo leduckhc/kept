@@ -1,0 +1,37 @@
+# e2e/pilot/scenarios/search-flow.toml
+# Tests the complete search flow in the running Tauri app
+
+[meta]
+name = "search-flow"
+description = "Type a query, verify results filter, escape clears"
+
+[[steps]]
+action = "focus"
+selector = "#search"
+
+[[steps]]
+action = "type"
+text = "invoice"
+
+[[steps]]
+action = "wait"
+timeout_ms = 500
+
+[[steps]]
+action = "assert"
+selector = ".search-pill-wrap"
+has_class = "expanded"
+
+[[steps]]
+action = "key"
+key = "Escape"
+
+[[steps]]
+action = "assert"
+selector = ".search-pill-wrap"
+not_has_class = "expanded"
+
+[[steps]]
+action = "assert"
+selector = "#search"
+value = ""
