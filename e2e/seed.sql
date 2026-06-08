@@ -67,7 +67,10 @@ VALUES
   ('m07', 't07', 'test-user-1', 'Ryanair', 'confirmation@ryanair.com', 'testuser@gmail.com', 'Your flight confirmation - PRG → BCN', 'Booking confirmed', '<div style="background:#003087;color:white;padding:20px"><h2>Booking Confirmed ✈️</h2></div><div style="padding:20px"><p><strong>Booking Ref:</strong> XK7F2P</p><p><strong>Route:</strong> Prague (PRG) → Barcelona (BCN)</p><p><strong>Date:</strong> Feb 15, 2025</p><p><strong>Departure:</strong> 06:45 | <strong>Arrival:</strong> 09:30</p><p><strong>Passenger:</strong> Test User</p></div>', 1748640000000, 'gmail-m07'),
   ('m09', 't09', 'test-user-1', 'Prague Dental Clinic', 'appointments@praguedental.cz', 'testuser@gmail.com', 'Reminder: Dentist appointment tomorrow', 'Your appointment is confirmed.', '<p>Dear Test User,</p><p>This is a reminder that your appointment is confirmed for <strong>tomorrow at 10:30 AM</strong> with Dr. Novak.</p><p>Address: Václavské náměstí 12, Prague 1</p><p>Please arrive 10 minutes early.</p>', 1748620000000, 'gmail-m09'),
   ('m10', 't10', 'test-user-1', 'Gergely Orosz', 'gergely@pragmaticengineer.com', 'testuser@gmail.com', 'The Pragmatic Engineer Newsletter #287', 'This week in tech', '<div><h2>The Pragmatic Engineer #287</h2><h3>Why senior engineers are mass-quitting FAANG</h3><p>A deep dive into the exodus of L6+ engineers from big tech, what''s driving it, and where they''re going...</p><p><a href="#">Read the full article →</a></p></div>', 1748610000000, 'gmail-m10'),
-  ('m19', 't19', 'test-user-1', 'Tom Wright', 'tom.wright@hey.com', 'testuser@gmail.com', 'Hey, saw this and thought of you', 'Check out this talk', '<p>Hey!</p><p>Saw this talk by Rich Hickey and immediately thought of you: <a href="https://youtube.com/watch?v=SxdOUGdseq4">Simple Made Easy</a></p><p>The bit about complecting state and time at 23:00 is exactly what we were discussing last week.</p><p>— Tom</p>', 1747700000000, 'gmail-m19');
+  ('m19', 't19', 'test-user-1', 'Tom Wright', 'tom.wright@hey.com', 'testuser@gmail.com', 'Hey, saw this and thought of you', 'Check out this talk', '<p>Hey!</p><p>Saw this talk by Rich Hickey and immediately thought of you: <a href="https://youtube.com/watch?v=SxdOUGdseq4">Simple Made Easy</a></p><p>The bit about complecting state and time at 23:00 is exactly what we were discussing last week.</p><p>— Tom</p>', 1747700000000, 'gmail-m19'),
+  ('m11a', 't11', 'test-user-1', 'Test User', 'testuser@gmail.com', 'mike.torres@protonmail.com', 'Can you review my resume?', 'Hey Mike, could you take a look at my updated resume?', '<p>Hey Mike,</p><p>Could you take a look at my updated resume? Attached the latest version plus a new headshot for LinkedIn.</p><p>Thanks!</p>', 1748490000000, 'gmail-m11a'),
+  ('m11b', 't11', 'test-user-1', 'Mike Torres', 'mike.torres@protonmail.com', 'testuser@gmail.com', 'Re: Can you review my resume?', 'Sure thing! I made some suggestions in the attached doc.', '<p>Sure thing! I''ll take a look this weekend and send you some feedback.</p><p>The headshot looks great btw!</p>', 1748500000000, 'gmail-m11b'),
+  ('m16', 't16', 'test-user-1', 'Revolut', 'statements@revolut.com', 'testuser@gmail.com', 'Your credit card statement is ready', 'Your December statement is available.', '<p>Hi Test User,</p><p>Your December 2024 statement is ready.</p><p><strong>Total: €1,247.83</strong></p><p>View your statement in the attached PDF or in the Revolut app.</p>', 1748000000000, 'gmail-m16');
 
 -- Blocked senders
 INSERT OR REPLACE INTO blocked_senders (email, account_id, blocked_at)
@@ -82,10 +85,10 @@ VALUES ('historyId', 'test-user-1', '999999');
 -- Attachments
 INSERT OR REPLACE INTO attachments (id, message_id, thread_id, account_id, filename, mime_type, size, attachment_id)
 VALUES
-  ('att_m05_0', 'gmail-m05', 't05', 'test-user-1', 'invoice-january-2025.pdf', 'application/pdf', 245760, 'gmail-att-001'),
-  ('att_m06c_0', 'gmail-m06c', 't06', 'test-user-1', 'revised-schedule.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 38912, 'gmail-att-002'),
-  ('att_m07_0', 'gmail-m07', 't07', 'test-user-1', 'boarding-pass.pdf', 'application/pdf', 152000, 'gmail-att-003'),
-  ('att_m07_1', 'gmail-m07', 't07', 'test-user-1', 'prague-weather.png', 'image/png', 89000, 'gmail-att-004'),
-  ('att_m11_0', 'gmail-m11', 't11', 'test-user-1', 'resume-v3.pdf', 'application/pdf', 312000, 'gmail-att-005'),
-  ('att_m11_1', 'gmail-m11', 't11', 'test-user-1', 'headshot.jpg', 'image/jpeg', 156000, 'gmail-att-006'),
-  ('att_m16_0', 'gmail-m16', 't16', 'test-user-1', 'statement-december-2024.pdf', 'application/pdf', 98304, 'gmail-att-007');
+  ('att_m05_0', 'm05', 't05', 'test-user-1', 'invoice-january-2025.pdf', 'application/pdf', 245760, 'gmail-att-001'),
+  ('att_m06c_0', 'm06c', 't06', 'test-user-1', 'revised-schedule.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 38912, 'gmail-att-002'),
+  ('att_m07_0', 'm07', 't07', 'test-user-1', 'boarding-pass.pdf', 'application/pdf', 152000, 'gmail-att-003'),
+  ('att_m07_1', 'm07', 't07', 'test-user-1', 'prague-weather.png', 'image/png', 89000, 'gmail-att-004'),
+  ('att_m11_0', 'm11a', 't11', 'test-user-1', 'resume-v3.pdf', 'application/pdf', 312000, 'gmail-att-005'),
+  ('att_m11_1', 'm11a', 't11', 'test-user-1', 'headshot.jpg', 'image/jpeg', 156000, 'gmail-att-006'),
+  ('att_m16_0', 'm16', 't16', 'test-user-1', 'statement-december-2024.pdf', 'application/pdf', 98304, 'gmail-att-007');
