@@ -5,7 +5,8 @@
 import { onMount, onCleanup } from 'solid-js';
 import { appState, selectThread, focusThread, switchView, toggleBulkSelect, clearBulkSelection, openCompose, setSearchQuery, setCategoryFilter, setSenderFilter, setDomainFilter } from './store';
 import { filteredThreads, selectedThread } from './store';
-import { doArchive, doToggleStar, doMarkUnread, doMute, doSetAside, bulkArchive, bulkTrash } from './actions';
+import { bulkArchive, bulkTrash } from './actions';
+import { getActionsForView } from './viewActions';
 import { syncAndRender } from './sync';
 import { popUndo } from '../undoStack';
 import type { ViewName } from './store';
@@ -139,8 +140,13 @@ export function useKeyboardShortcuts() {
       if (appState.bulkMode) {
         bulkArchive();
       } else if (target) {
-        doArchive(target);
-        selectThread(null);
+        // View-aware: only fire if archive is valid for this view
+        const actions = getActionsForView(appState.currentView);
+        const archiveAction = actions.find(a => a.id === 'archive');
+        if (archiveAction) {
+          archiveAction.handler(target);
+          if (archiveAction.exitsReader) selectThread(null);
+        }
       }
       return;
     }
@@ -149,42 +155,26 @@ export function useKeyboardShortcuts() {
     if (key === '#' || (key === 'Backspace' && !meta)) {
       if (appState.bulkMode) {
         bulkTrash();
+      } else if (target) {
+        const actions = getActionsForView(appState.currentView);
+        const trashAction = actions.find(a => a.id === 'trash');
+        if (trashAction) {
+          trashAction.handler(target);
+          if (trashAction.exitsReader) selectThread(null);
+        }
       }
       return;
     }
 
-    // Star
-    if (key === 's' && !meta) {
-      if (target) {
-        doToggleStar(target);
+    // View-aware single-key actions (s, u, v, h, etc.)
+    if (!meta && target) {
+      const actions = getActionsForView(appState.currentView);
+      const matchedAction = actions.find(a => a.key === key);
+      if (matchedAction) {
+        matchedAction.handler(target);
+        if (matchedAction.exitsReader) selectThread(null);
+        return;
       }
-      return;
-    }
-
-    // Mark unread
-    if (key === 'u' && !meta) {
-      if (target) {
-        doMarkUnread(target);
-      }
-      return;
-    }
-
-    // Mute
-    if (key === 'm' && !meta) {
-      if (target) {
-        doMute(target);
-        selectThread(null);
-      }
-      return;
-    }
-
-    // Set aside
-    if (key === 'v' && !meta) {
-      if (target) {
-        doSetAside(target);
-        selectThread(null);
-      }
-      return;
     }
 
     // Bulk select

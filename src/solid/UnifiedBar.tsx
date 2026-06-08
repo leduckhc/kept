@@ -20,7 +20,8 @@ import {
   selectThread, setCategoryFilter, setSenderFilter, setDomainFilter,
   setSearchQuery, openCompose, toggleNavDrawer, switchView,
 } from './store';
-import { doArchive, doToggleStar, doMarkUnread, doMute, doSetAside, bulkArchive, bulkTrash, bulkMarkRead, bulkMarkUnread, bulkStar } from './actions';
+import { bulkArchive, bulkTrash, bulkMarkRead, bulkMarkUnread, bulkStar } from './actions';
+import { getActionsForView } from './viewActions';
 import { icon } from '../icons';
 
 // ── Types ───────────────────────────────────────────────────────
@@ -184,28 +185,25 @@ const ReaderContext: ZoneComponent = Object.assign(
 
 const ReaderActions: ZoneComponent = Object.assign(
   () => {
-    // Read isStarred from the store proxy directly for fine-grained reactivity
-    const isStarred = createMemo(() => {
-      const id = appState.selectedThreadId;
-      if (!id) return false;
-      const idx = appState.threads.findIndex(t => t.id === id);
-      return idx >= 0 ? appState.threads[idx].isStarred : false;
-    });
-    const handleAction = (action: string) => {
-      const t = selectedThread();
-      if (!t) return;
-      switch (action) {
-        case 'archive': doArchive(t); selectThread(null); break;
-        case 'prioritize': doToggleStar(t); break;
-        case 'mark-unread': doMarkUnread(t); selectThread(null); break;
-        case 'mute': doMute(t); selectThread(null); break;
-        case 'set-aside': doSetAside(t); selectThread(null); break;
-      }
-    };
+    const actions = createMemo(() => getActionsForView(appState.currentView));
+    const thread = createMemo(() => selectedThread());
+
     return (
       <div class="unified-bar-actions">
-        <button class="btn-icon" data-action="archive" title="Archive" innerHTML={icon.archive('16px')} onClick={() => handleAction('archive')} />
-        <button class="btn-icon" data-action="prioritize" title={isStarred() ? "Deprioritize" : "Prioritize"} innerHTML={isStarred() ? icon.starFilled('16px') : icon.star('16px')} onClick={() => handleAction('prioritize')} />
+        {actions().map(action => (
+          <button
+            class="btn-icon"
+            data-action={action.id}
+            title={typeof action.title === 'function' ? action.title() : action.title}
+            innerHTML={typeof action.icon === 'function' ? action.icon() : action.icon}
+            onClick={() => {
+              const t = thread();
+              if (!t) return;
+              action.handler(t);
+              if (action.exitsReader) selectThread(null);
+            }}
+          />
+        ))}
       </div>
     );
   },

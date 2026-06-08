@@ -4,7 +4,7 @@
  */
 import { type Account, getAccountById } from '../auth';
 import { type Thread, loadThreads, loadThreadsUnified, unsnoozeThread, unmuteThread, setAsideThread, unsetAsideThread, invalidateSectionCache } from '../store';
-import { markRead, markUnread, archiveThread, trashThread, untrashThread, blockSender, toggleStar, muteThread } from '../gmail';
+import { markRead, markUnread, archiveThread, trashThread, untrashThread, permanentlyDeleteThread, blockSender, toggleStar, muteThread } from '../gmail';
 import { showToast, showUndoToast } from '../toasts';
 import { appState, setAppState, setThreads } from './store';
 
@@ -269,4 +269,73 @@ export async function bulkStar() {
   setThreads(newThreads);
   setAppState('selectedIds', []);
   setAppState('bulkMode', false);
+}
+
+// ── View-specific actions ───────────────────────────────────
+
+/** Restore a thread from Trash back to Inbox */
+export async function doRestoreToInbox(t: Thread) {
+  const acct = accountFor(t);
+  if (!acct) return;
+  const prevThreads = [...appState.threads];
+  setThreads(appState.threads.filter(x => x.id !== t.id));
+  try {
+    await untrashThread(acct, t);
+    showToast('Restored to Inbox', 3000);
+  } catch (e) {
+    console.error('Restore failed:', e);
+    showToast('Restore failed');
+    setThreads(prevThreads);
+  }
+}
+
+/** Permanently delete a thread (irreversible) */
+export async function doDeletePermanently(t: Thread) {
+  const acct = accountFor(t);
+  if (!acct) return;
+  const prevThreads = [...appState.threads];
+  setThreads(appState.threads.filter(x => x.id !== t.id));
+  try {
+    await permanentlyDeleteThread(acct, t);
+    showToast('Permanently deleted', 3000);
+  } catch (e) {
+    console.error('Delete permanently failed:', e);
+    showToast('Delete failed');
+    setThreads(prevThreads);
+  }
+}
+
+/** Move a thread from Archive/SetAside back to Inbox (unarchive) */
+export async function doMoveToInbox(t: Thread) {
+  const acct = accountFor(t);
+  if (!acct) return;
+  const prevThreads = [...appState.threads];
+  setThreads(appState.threads.filter(x => x.id !== t.id));
+  try {
+    // Update local DB first
+    const { getDb } = await import('../db');
+    const db = await getDb();
+    await db.execute("UPDATE threads SET is_archived = 0, is_set_aside = 0, label = 'INBOX' WHERE id = ?", [t.id]);
+
+    if (import.meta.env.VITE_E2E !== '1') {
+      // Unarchive via Gmail API: add INBOX label
+      const { ensureFreshToken } = await import('../auth');
+      const a = await ensureFreshToken(acct);
+      const API = 'https://gmail.googleapis.com/gmail/v1';
+      const tauriFetch = ('__TAURI_INTERNALS__' in window)
+        ? (await import('@tauri-apps/plugin-http')).fetch as unknown as typeof globalThis.fetch
+        : globalThis.fetch.bind(globalThis);
+      const res = await tauriFetch(`${API}/users/me/threads/${t.gmailThreadId}/modify`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${a.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addLabelIds: ['INBOX'], removeLabelIds: [] }),
+      });
+      if (!res.ok) throw new Error(`Gmail error ${res.status}`);
+    }
+    showToast('Moved to Inbox', 3000);
+  } catch (e) {
+    console.error('Move to inbox failed:', e);
+    showToast('Move to inbox failed');
+    setThreads(prevThreads);
+  }
 }

@@ -433,7 +433,21 @@ export async function trashThreads(account: Account, threads: Thread[]): Promise
 }
 
 export async function untrashThread(account: Account, thread: Thread): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE threads SET is_archived = 0, label = 'INBOX' WHERE id = ?", [thread.id]);
+  if (import.meta.env.VITE_E2E === '1') return;
   await gmailPost(account, `/users/me/threads/${thread.gmailThreadId}/untrash`, {});
+}
+
+/** Permanently delete a thread (irreversible — bypasses Trash). */
+export async function permanentlyDeleteThread(account: Account, thread: Thread): Promise<void> {
+  const db = await getDb();
+  await db.execute('DELETE FROM attachments WHERE thread_id = ?', [thread.id]);
+  await db.execute('DELETE FROM messages WHERE thread_id = ?', [thread.id]);
+  await db.execute('DELETE FROM threads WHERE id = ?', [thread.id]);
+  if (import.meta.env.VITE_E2E === '1') return;
+  const a = await ensureFreshToken(account);
+  await gmailDelete(a, `/users/me/threads/${thread.gmailThreadId}`);
 }
 
 /** Batch untrash: chunked parallel API calls to avoid Gmail rate limits. */

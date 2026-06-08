@@ -6,9 +6,9 @@
  *
  * Verifies:
  * 1. Star button shows correct initial state (unstarred thread)
- * 2. Clicking star updates button title to "Deprioritize"
+ * 2. Clicking star updates button title to "Unstar"
  * 3. Star button shows filled icon for already-starred threads
- * 4. Toggling star back to unstarred updates title to "Prioritize"
+ * 4. Toggling star back to unstarred updates title to "Star"
  * 5. Star state persists in Starred view after toggle
  * 6. Keyboard shortcut 's' in reader triggers reactive star update
  */
@@ -21,54 +21,54 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('Star button reactivity in reader mode', () => {
-  test('star button shows "Prioritize" title for unstarred thread', async ({ page }) => {
+  test('star button shows "Star" title for unstarred thread', async ({ page }) => {
     // David Park (t06) is unstarred and rendered as individual row
     const unstarredRow = page.locator('.thread-row:not(.category-row)').filter({ hasText: 'David Park' });
     await unstarredRow.click();
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
 
-    const starBtn = page.locator('[data-action="prioritize"]');
+    const starBtn = page.locator('[data-action="star"]');
     await expect(starBtn).toBeVisible();
-    await expect(starBtn).toHaveAttribute('title', 'Prioritize');
+    await expect(starBtn).toHaveAttribute('title', 'Star');
   });
 
-  test('star button shows "Deprioritize" title for already-starred thread', async ({ page }) => {
+  test('star button shows "Unstar" title for already-starred thread', async ({ page }) => {
     // Tom Wright (t19) is starred in seed data and rendered as individual row
     const starredRow = page.locator('.thread-row:not(.category-row)').filter({ hasText: 'Tom Wright' });
     await starredRow.click();
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
 
-    const starBtn = page.locator('[data-action="prioritize"]');
+    const starBtn = page.locator('[data-action="star"]');
     await expect(starBtn).toBeVisible();
-    await expect(starBtn).toHaveAttribute('title', 'Deprioritize');
+    await expect(starBtn).toHaveAttribute('title', 'Unstar');
   });
 
-  test('clicking star toggles title from "Prioritize" to "Deprioritize"', async ({ page }) => {
+  test('clicking star toggles title from "Star" to "Unstar"', async ({ page }) => {
     // Open an unstarred thread (Mike Torres - t11)
     const unstarredRow = page.locator('.thread-row:not(.category-row)').filter({ hasText: 'Mike Torres' });
     await unstarredRow.click();
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
 
-    const starBtn = page.locator('[data-action="prioritize"]');
-    await expect(starBtn).toHaveAttribute('title', 'Prioritize');
+    const starBtn = page.locator('[data-action="star"]');
+    await expect(starBtn).toHaveAttribute('title', 'Star');
 
     // Click to star
     await starBtn.click();
-    await expect(starBtn).toHaveAttribute('title', 'Deprioritize', { timeout: 3000 });
+    await expect(starBtn).toHaveAttribute('title', 'Unstar', { timeout: 3000 });
   });
 
-  test('clicking star on starred thread toggles title to "Prioritize"', async ({ page }) => {
+  test('clicking star on starred thread toggles title to "Star"', async ({ page }) => {
     // Open starred thread (Tom Wright - t19)
     const starredRow = page.locator('.thread-row:not(.category-row)').filter({ hasText: 'Tom Wright' });
     await starredRow.click();
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
 
-    const starBtn = page.locator('[data-action="prioritize"]');
-    await expect(starBtn).toHaveAttribute('title', 'Deprioritize');
+    const starBtn = page.locator('[data-action="star"]');
+    await expect(starBtn).toHaveAttribute('title', 'Unstar');
 
     // Click to unstar
     await starBtn.click();
-    await expect(starBtn).toHaveAttribute('title', 'Prioritize', { timeout: 3000 });
+    await expect(starBtn).toHaveAttribute('title', 'Star', { timeout: 3000 });
   });
 
   test('star icon uses filled variant for starred state', async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe('Star button reactivity in reader mode', () => {
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
 
     // The filled star SVG has fill="currentColor" attribute
-    const starBtn = page.locator('[data-action="prioritize"]');
+    const starBtn = page.locator('[data-action="star"]');
     await expect(starBtn.locator('svg[fill="currentColor"]')).toBeVisible();
   });
 
@@ -86,7 +86,7 @@ test.describe('Star button reactivity in reader mode', () => {
     await page.locator('.thread-row:not(.category-row)').filter({ hasText: 'David Park' }).click();
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
 
-    await page.locator('[data-action="prioritize"]').click();
+    await page.locator('[data-action="star"]').click();
     await page.waitForTimeout(500);
 
     // Go back to inbox then switch to Starred view
@@ -104,15 +104,15 @@ test.describe('Star button reactivity in reader mode', () => {
     await page.locator('.thread-row:not(.category-row)').filter({ hasText: 'David Park' }).click();
     await expect(page.locator('#app-shell')).toHaveClass(/reader-open/);
 
-    const starBtn = page.locator('[data-action="prioritize"]');
-    await expect(starBtn).toHaveAttribute('title', 'Prioritize');
+    const starBtn = page.locator('[data-action="star"]');
+    await expect(starBtn).toHaveAttribute('title', 'Star');
 
     // Press 's' to star
     await page.keyboard.press('s');
-    await expect(starBtn).toHaveAttribute('title', 'Deprioritize', { timeout: 3000 });
+    await expect(starBtn).toHaveAttribute('title', 'Unstar', { timeout: 3000 });
 
     // Press 's' again to unstar
     await page.keyboard.press('s');
-    await expect(starBtn).toHaveAttribute('title', 'Prioritize', { timeout: 3000 });
+    await expect(starBtn).toHaveAttribute('title', 'Star', { timeout: 3000 });
   });
 });
