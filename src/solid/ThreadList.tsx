@@ -273,7 +273,18 @@ function ThreadRow(props: { thread: Thread }) {
         <span class="unread-dot" />
       </Show>
       <div class="avatar-wrap" onClick={onAvatarClick}>
-        <div class="avatar" style={{ 'background-color': avatarColor(t()) }} data-initial={senderInitial(t())}>{senderInitial(t())}</div>
+        {(() => {
+          const domain = getBaseDomain(t().senderEmail.split('@')[1] ?? '');
+          const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+          return (
+            <div class="avatar" style={{ 'background-color': avatarColor(t()) }} data-initial={senderInitial(t())} data-email={t().senderEmail}>
+              {senderInitial(t())}
+              <Show when={faviconUrl}>
+                <img class="avatar-favicon" src={faviconUrl} alt="" loading="lazy" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+              </Show>
+            </div>
+          );
+        })()}
       </div>
       <span class="thread-sender">{escapeHtml(t().senderName || t().senderEmail)}</span>
       <div class={`thread-mid${t().hasAttachment ? ' has-attachment' : ''}`}>

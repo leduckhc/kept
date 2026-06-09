@@ -39,8 +39,8 @@ function senderColor(name: string): string {
 
 function parseSender(from: string): { name: string; email: string } {
   const match = from.match(/^(.+?)\s*<(.+?)>$/);
-  if (match) return { name: match[1].trim(), email: match[2].trim() };
-  return { name: from, email: from };
+  if (match) return { name: match[1].replace(/^"|"$/g, '').trim(), email: match[2].trim() };
+  return { name: from.replace(/^"|"$/g, '').trim(), email: from };
 }
 
 function formatDate(ts: number): string {

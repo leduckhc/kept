@@ -795,7 +795,7 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
       [gmailThreadId]
     );
     const messages = rows.map(r => ({
-      from: r.from_name ? `${r.from_name} <${r.from_email}>` : r.from_email,
+      from: r.from_name ? `${(r.from_name as string).replace(/^"|"$/g, '').trim()} <${r.from_email}>` : r.from_email,
       to: r.to_addresses ?? '',
       cc: '',
       replyTo: '',
@@ -834,7 +834,7 @@ export async function fetchMessageBody(account: Account, gmailThreadId: string):
     );
     if (rows.length === 0) throw apiErr; // No local data either — re-throw original error
     const messages = rows.map(r => ({
-      from: r.from_name ? `${r.from_name} <${r.from_email}>` : r.from_email,
+      from: r.from_name ? `${(r.from_name as string).replace(/^"|"$/g, '').trim()} <${r.from_email}>` : r.from_email,
       to: r.to_addresses ?? '',
       cc: '',
       replyTo: '',
