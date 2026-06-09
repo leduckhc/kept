@@ -8,6 +8,7 @@ import { registerAuthProvider } from '../authProviderRegistry';
 import { applyTheme } from '../helpers';
 import { setupSnoozeResurface } from '../snooze';
 import { startScheduledSendDispatch } from '../scheduledSend';
+import { startScheduledJobDispatch } from './scheduledJobDispatch';
 import { sendEmail } from '../gmail';
 import { appState, setAppState } from './store';
 import { refreshAll, syncAndRender, refreshKnownSenders } from './sync';
@@ -58,8 +59,11 @@ export async function boot() {
         setAppState('threads', threads);
       });
 
-      // Start scheduled send dispatch
+      // Start scheduled send dispatch (legacy localStorage — will be removed)
       startScheduledSendDispatch(() => appState.account, sendEmail);
+
+      // Start new DB-backed scheduled job dispatch (KPT-092)
+      startScheduledJobDispatch(() => appState.account, sendEmail);
 
       // Background auto-sync every 60s
       syncInterval = setInterval(() => { syncAndRender().catch(() => {}); }, 60_000);
