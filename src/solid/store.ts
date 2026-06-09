@@ -7,6 +7,8 @@ import { createMemo, createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { Thread } from '../store';
 import type { Account } from '../auth';
+import type { SmartFolder, FilterableThread } from '../smartFolders';
+import { matchesThread } from '../smartFolders';
 
 // ── Types ───────────────────────────────────────────────────
 export type LayoutMode = '3-pane' | '2-pane';
@@ -64,6 +66,9 @@ export interface AppState {
   smartNotifications: boolean;
   // Server search
   serverSearching: boolean;
+  // Smart Folders
+  smartFolders: SmartFolder[];
+  activeSmartFolderId: string | null;
 }
 
 // Everything in one createRoot so memos can track the store
@@ -108,6 +113,8 @@ const root = createRoot(() => {
     darkMode: (localStorage.getItem('theme') ?? 'light') === 'dark',
     smartNotifications: localStorage.getItem('smartNotifications') !== 'false',
     serverSearching: false,
+    smartFolders: [],
+    activeSmartFolderId: null,
   });
 
   // ── Derived state (auto-recomputing memos) ──────────────────
@@ -176,6 +183,14 @@ const root = createRoot(() => {
         t.senderName.toLowerCase().includes(query) ||
         t.snippet.toLowerCase().includes(query)
       );
+    }
+
+    // Smart Folder filtering
+    if (appState.activeSmartFolderId) {
+      const folder = appState.smartFolders.find(f => f.id === appState.activeSmartFolderId);
+      if (folder) {
+        threads = threads.filter(t => matchesThread(t as FilterableThread, folder));
+      }
     }
 
     return threads;
@@ -360,4 +375,31 @@ export function closeNavDrawer() {
 
 export function setStatus(msg: string) {
   setAppState('statusMessage', msg);
+}
+
+// ── Smart Folders ─────────────────────────────────────────────
+
+export function setSmartFolders(folders: SmartFolder[]) {
+  setAppState('smartFolders', folders);
+}
+
+export function activateSmartFolder(id: string | null) {
+  setAppState('activeSmartFolderId', id);
+  // Clear other filters when entering smart folder view
+  if (id) {
+    setAppState('categoryFilter', null);
+    setAppState('senderFilter', null);
+    setAppState('domainFilter', null);
+  }
+}
+
+export function addSmartFolder(folder: SmartFolder) {
+  setAppState('smartFolders', [...appState.smartFolders, folder]);
+}
+
+export function removeSmartFolder(id: string) {
+  setAppState('smartFolders', appState.smartFolders.filter(f => f.id !== id));
+  if (appState.activeSmartFolderId === id) {
+    setAppState('activeSmartFolderId', null);
+  }
 }

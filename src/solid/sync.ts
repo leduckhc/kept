@@ -10,6 +10,7 @@ import { loadPhotoCache, resolvePhotos, hasCachedResult } from '../senderPhotos'
 import { patchAvatarsWithPhotos } from '../avatar';
 import { runAutoLabelsOnSync } from '../autoLabels';
 import { appState, setAppState, setThreads, setStatus } from './store';
+import { loadSmartFolders } from './smartFolderActions';
 
 let _syncAbort: AbortController | null = null;
 
@@ -75,6 +76,9 @@ export async function refreshAll() {
 
   const threads = await reloadThreads();
   setThreads(threads);
+
+  // Load saved smart folders
+  await loadSmartFolders();
 
   ensureNotificationPermission().catch(() => {});
 

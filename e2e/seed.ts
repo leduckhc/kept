@@ -96,6 +96,15 @@ const SCHEMA = `
     created_at INTEGER DEFAULT (unixepoch())
   );
 
+  CREATE TABLE IF NOT EXISTS smart_folders (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    conditions TEXT NOT NULL DEFAULT '[]',
+    match_mode TEXT NOT NULL DEFAULT 'all',
+    created_at INTEGER DEFAULT (unixepoch())
+  );
+
   CREATE INDEX IF NOT EXISTS idx_threads_received ON threads(received_at DESC);
   CREATE INDEX IF NOT EXISTS idx_threads_sender ON threads(sender_email);
   CREATE INDEX IF NOT EXISTS idx_attachments_thread ON attachments(thread_id);

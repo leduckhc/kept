@@ -276,4 +276,17 @@ async function migrate(db: Database): Promise<void> {
       PRIMARY KEY (account_id, email)
     )
   `).catch(() => {});
+
+  // KPT-090: Smart Folders (saved searches)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS smart_folders (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      conditions TEXT NOT NULL DEFAULT '[]',
+      match_mode TEXT NOT NULL DEFAULT 'all',
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (account_id) REFERENCES accounts(id)
+    )
+  `).catch(() => {});
 }

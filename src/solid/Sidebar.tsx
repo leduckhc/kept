@@ -1,10 +1,11 @@
 /**
  * Sidebar.tsx — Navigation sidebar with views list and account avatar.
  */
-import { For } from 'solid-js';
+import { For, createSignal } from 'solid-js';
 import { appState, switchView, openSettings, closeNavDrawer } from './store';
 import type { ViewName } from './store';
 import { icon } from '../icons';
+import { SmartFolderList, CreateSmartFolderDialog } from './SmartFolderSidebar';
 
 const VIEWS: Array<{ name: ViewName; icon: string }> = [
   { name: 'Inbox',     icon: icon.email('18px') },
@@ -26,6 +27,8 @@ function getAccountInitial(): string {
 }
 
 export function Sidebar() {
+  const [showCreateDialog, setShowCreateDialog] = createSignal(false);
+
   const onViewClick = (view: ViewName) => {
     switchView(view);
     closeNavDrawer();
@@ -44,8 +47,14 @@ export function Sidebar() {
           />
         )}
       </For>
-      <div class="sidebar-smart-folders" id="sidebar-smart-folders"></div>
-      <button class="sidebar-btn sidebar-add-folder" id="btn-add-smart-folder" title="New Smart Folder" innerHTML={icon.plus('18px')} />
+      <SmartFolderList />
+      <button
+        class="sidebar-btn sidebar-add-folder"
+        id="btn-add-smart-folder"
+        title="New Smart Folder"
+        innerHTML={icon.plus('18px')}
+        onClick={() => setShowCreateDialog(true)}
+      />
       <div class="sidebar-spacer"></div>
       <button
         class="sidebar-btn sidebar-settings"
@@ -56,6 +65,7 @@ export function Sidebar() {
       <button class="sidebar-btn sidebar-avatar" id="btn-account" title="Account">
         <span class="avatar-circle">{getAccountInitial()}</span>
       </button>
+      <CreateSmartFolderDialog open={showCreateDialog()} onClose={() => setShowCreateDialog(false)} />
     </nav>
   );
 }
