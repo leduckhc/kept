@@ -28,7 +28,9 @@ VALUES
   ('t17', 'test-user-1', 'Thanks for your order!', 'Order #ORD-98712 confirmed. Estimated delivery: 3-5 business days...', 'Alza.cz', 'orders@alza.cz', 1747900000000, 0, 0, 0, 'gmail-t17', 0, 1, 'INBOX', 'updates', 0),
   ('t18', 'test-user-1', 'Invitation: Team standup @ Mon Jan 13, 9:00 AM', 'David Park has invited you to a recurring event...', 'Google Calendar', 'calendar-notification@google.com', 1747800000000, 0, 0, 0, 'gmail-t18', 0, 1, 'INBOX', 'updates', 0),
   ('t19', 'test-user-1', 'Hey, saw this and thought of you', 'Check out this talk by Rich Hickey on simplicity...', 'Tom Wright', 'tom.wright@hey.com', 1747700000000, 0, 0, 0, 'gmail-t19', 1, 1, 'INBOX', 'personal', 0),
-  ('t20', 'test-user-1', 'Action required: Verify your email', 'Please verify your email address to complete registration...', 'Linear', 'notifications@linear.app', 1747600000000, 0, 0, 0, 'gmail-t20', 0, 1, 'INBOX', 'updates', 0);
+  ('t20', 'test-user-1', 'Action required: Verify your email', 'Please verify your email address to complete registration...', 'Linear', 'notifications@linear.app', 1747600000000, 0, 0, 0, 'gmail-t20', 0, 1, 'INBOX', 'updates', 0),
+  ('t21', 'test-user-1', 'Your new gadget is on its way!', 'Shipped today, tracking number inside...', '"Alza.cz"', 'info@letter.alza.cz', 1747500000000, 0, 0, 0, 'gmail-t21', 0, 1, 'INBOX', 'updates', 0),
+  ('t22', 'test-user-1', 'Weekly news digest', 'Top stories from this week...', '"Newsletter Team"', 'digest@news.bbc.com', 1747400000000, 0, 0, 0, 'gmail-t22', 0, 1, 'INBOX', 'newsletters', 0);
 
 -- Sent threads
 INSERT OR REPLACE INTO threads (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_archived, has_attachment, gmail_thread_id, is_starred, message_count, label, category, is_muted)
@@ -70,7 +72,8 @@ VALUES
   ('m19', 't19', 'test-user-1', 'Tom Wright', 'tom.wright@hey.com', 'testuser@gmail.com', 'Hey, saw this and thought of you', 'Check out this talk', '<p>Hey!</p><p>Saw this talk by Rich Hickey and immediately thought of you: <a href="https://youtube.com/watch?v=SxdOUGdseq4">Simple Made Easy</a></p><p>The bit about complecting state and time at 23:00 is exactly what we were discussing last week.</p><p>— Tom</p>', 1747700000000, 'gmail-m19'),
   ('m11a', 't11', 'test-user-1', 'Test User', 'testuser@gmail.com', 'mike.torres@protonmail.com', 'Can you review my resume?', 'Hey Mike, could you take a look at my updated resume?', '<p>Hey Mike,</p><p>Could you take a look at my updated resume? Attached the latest version plus a new headshot for LinkedIn.</p><p>Thanks!</p>', 1748490000000, 'gmail-m11a'),
   ('m11b', 't11', 'test-user-1', 'Mike Torres', 'mike.torres@protonmail.com', 'testuser@gmail.com', 'Re: Can you review my resume?', 'Sure thing! I made some suggestions in the attached doc.', '<p>Sure thing! I''ll take a look this weekend and send you some feedback.</p><p>The headshot looks great btw!</p>', 1748500000000, 'gmail-m11b'),
-  ('m16', 't16', 'test-user-1', 'Revolut', 'statements@revolut.com', 'testuser@gmail.com', 'Your credit card statement is ready', 'Your December statement is available.', '<p>Hi Test User,</p><p>Your December 2024 statement is ready.</p><p><strong>Total: €1,247.83</strong></p><p>View your statement in the attached PDF or in the Revolut app.</p>', 1748000000000, 'gmail-m16');
+  ('m16', 't16', 'test-user-1', 'Revolut', 'statements@revolut.com', 'testuser@gmail.com', 'Your credit card statement is ready', 'Your December statement is available.', '<p>Hi Test User,</p><p>Your December 2024 statement is ready.</p><p><strong>Total: €1,247.83</strong></p><p>View your statement in the attached PDF or in the Revolut app.</p>', 1748000000000, 'gmail-m16'),
+  ('m21', 't21', 'test-user-1', '"Alza.cz"', 'info@letter.alza.cz', 'testuser@gmail.com', 'Your new gadget is on its way!', 'Shipped today, tracking number inside.', '<p>Your order has been shipped! Track your package with the link below.</p>', 1747500000000, 'gmail-m21');
 
 -- Blocked senders
 INSERT OR REPLACE INTO blocked_senders (email, account_id, blocked_at)
