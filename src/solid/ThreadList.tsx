@@ -50,6 +50,17 @@ function avatarColor(thread: Thread): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+function hashName(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  return hash;
+}
+
+/** Display count capped at 9+ for the count bubble. */
+export function countDisplay(count: number): string {
+  return count > 9 ? '9+' : String(count);
+}
+
 // ── Section Header ───────────────────────────────────────────
 
 function SectionHeader(props: { label: string; threads: Thread[] }) {
@@ -162,9 +173,20 @@ function SenderGroupRow(props: { email: string; threads: Thread[] }) {
     >
       <span class={`unread-dot${hasUnread() ? ' filled' : ''}`} />
       <div class="avatar-wrap">
-        <div class="avatar stacked">{senderInitial(latest())}</div>
+        {(() => {
+          const domain = getBaseDomain(props.email.split('@')[1] ?? '');
+          const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+          return (
+            <div class="avatar" style={{ 'background-color': avatarColor(latest()) }} data-initial={senderInitial(latest())} data-email={props.email}>
+              {senderInitial(latest())}
+              <Show when={faviconUrl}>
+                <img class="avatar-favicon" src={faviconUrl} alt="" loading="lazy" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+              </Show>
+            </div>
+          );
+        })()}
         <Show when={props.threads.length > 1}>
-          <div class="avatar stacked-behind" />
+          <span class="count-bubble">{countDisplay(props.threads.length)}</span>
         </Show>
       </div>
       <span class="thread-sender">
@@ -211,9 +233,18 @@ function DomainGroupRow(props: { domain: string; threads: Thread[] }) {
     >
       <span class={`unread-dot${hasUnread() ? ' filled' : ''}`} />
       <div class="avatar-wrap">
-        <div class="avatar stacked">{props.domain.charAt(0).toUpperCase()}</div>
+        {(() => {
+          const faviconUrl = `https://www.google.com/s2/favicons?domain=${props.domain}&sz=32`;
+          const color = AVATAR_COLORS[Math.abs(hashName(props.domain)) % AVATAR_COLORS.length];
+          return (
+            <div class="avatar" style={{ 'background-color': color }} data-initial={props.domain.charAt(0).toUpperCase()}>
+              {props.domain.charAt(0).toUpperCase()}
+              <img class="avatar-favicon" src={faviconUrl} alt="" loading="lazy" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+            </div>
+          );
+        })()}
         <Show when={props.threads.length > 1}>
-          <div class="avatar stacked-behind" />
+          <span class="count-bubble">{countDisplay(props.threads.length)}</span>
         </Show>
       </div>
       <span class="thread-sender">

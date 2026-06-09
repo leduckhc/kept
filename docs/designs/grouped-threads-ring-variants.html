@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Grouped Threads — Ring Variants</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; padding: 40px; color: #1a1a1a; }
+h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.subtitle { color: #666; font-size: 14px; margin-bottom: 40px; line-height: 1.6; }
+.variant { background: #fff; border-radius: 12px; padding: 32px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.variant-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #7c3aed; margin-bottom: 16px; }
+.variant-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.variant-desc { font-size: 13px; color: #666; margin-bottom: 20px; line-height: 1.6; }
+.thread-list { border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; }
+.thread-row { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f0f0f0; gap: 12px; cursor: pointer; }
+.thread-row:last-child { border-bottom: none; }
+.thread-row:hover { background: #fafafa; }
+.thread-row.unread { background: #fefcff; }
+.unread-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.unread-dot.filled { background: #7c3aed; }
+.thread-sender { font-weight: 500; font-size: 14px; white-space: nowrap; min-width: 120px; }
+.thread-mid { flex: 1; min-width: 0; display: flex; gap: 8px; }
+.thread-subject { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-snippet { font-size: 13px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-date { font-size: 12px; color: #888; white-space: nowrap; }
+.count-badge { font-size: 11px; color: #666; background: #f0f0f0; border-radius: 10px; padding: 2px 7px; margin-left: 4px; }
+
+/* ═══ SHARED ═══ */
+.avatar-wrap { position: relative; width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.avatar-inner { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #fff; position: relative; }
+.avatar-inner img.favicon { position: absolute; bottom: -2px; right: -2px; width: 14px; height: 14px; border-radius: 3px; border: 2px solid #fff; }
+
+/* ═══ VARIANT A: Segmented Ring (progress/pie) ═══ */
+.ring-segmented { position: absolute; inset: 0; }
+.ring-segmented svg { width: 40px; height: 40px; transform: rotate(-90deg); }
+
+/* ═══ VARIANT B: Dashed Ring ═══ */
+.ring-dashed { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed #7c3aed; }
+.ring-dashed.account-blue { border-color: #3b82f6; }
+.ring-dashed.account-green { border-color: #10b981; }
+/* Individual thread uses solid ring for comparison */
+.ring-solid { position: absolute; inset: 0; border-radius: 50%; border: 2px solid #3b82f6; }
+
+/* ═══ VARIANT C: Double Ring ═══ */
+.ring-double-outer { position: absolute; inset: 0; border-radius: 50%; border: 2px solid #3b82f6; }
+.ring-double-inner { position: absolute; inset: 3px; border-radius: 50%; border: 1.5px solid rgba(59, 130, 246, 0.4); }
+
+/* ═══ VARIANT D: Ring with embedded count ═══ */
+.ring-count-wrap { position: absolute; inset: 0; }
+.ring-count-wrap svg { width: 40px; height: 40px; }
+.ring-count-number { position: absolute; top: -3px; right: -3px; background: #fff; border: 1.5px solid #3b82f6; color: #3b82f6; font-size: 9px; font-weight: 700; border-radius: 8px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+
+<h1>Grouped Threads — Ring-Based Variants</h1>
+<p class="subtitle">Constraint: colored ring already signals receiving account (blue = work, green = personal, etc.).<br>
+How do we signal "this is a group of N threads" using the ring without conflicting?</p>
+
+<!-- VARIANT A: Segmented Ring -->
+<div class="variant">
+  <div class="variant-label">Variant A</div>
+  <div class="variant-title">Segmented ring — unread ratio as arc fill</div>
+  <div class="variant-desc">The account ring becomes a progress indicator: filled arc = unread proportion. A group with 3/4 unread shows 75% filled arc in the account color. Single threads show full ring (as today). Signals both "which account" and "how much is unread" in one element.</div>
+  <div class="thread-list">
+    <!-- Group: 3/4 unread -->
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <svg class="ring-segmented" viewBox="0 0 40 40">
+          <!-- Background track (faint) -->
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#e5e7eb" stroke-width="2"/>
+          <!-- Filled arc: 75% = 3/4 unread. strokeDasharray = 2πr = 113, 75% = 85 -->
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="85 113" stroke-linecap="round" style="transform:rotate(-90deg);transform-origin:center"/>
+        </svg>
+        <div class="avatar-inner" style="background:#7c3aed">A
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=alza.cz&sz=32" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">Alza.cz <span class="count-badge">#4</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package delivery status...</span>
+      </div>
+      <span class="thread-date">2h ago</span>
+    </div>
+    <!-- Group: 2/7 unread -->
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <svg class="ring-segmented" viewBox="0 0 40 40">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#e5e7eb" stroke-width="2"/>
+          <!-- 29% = 2/7 unread -->
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="32 113" stroke-linecap="round" style="transform:rotate(-90deg);transform-origin:center"/>
+        </svg>
+        <div class="avatar-inner" style="background:#0891b2">L
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=linear.app&sz=32" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">Linear <span class="count-badge">#7</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify your email address...</span>
+      </div>
+      <span class="thread-date">5h ago</span>
+    </div>
+    <!-- Individual thread for comparison: full ring -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <svg class="ring-segmented" viewBox="0 0 40 40">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/>
+        </svg>
+        <div class="avatar-inner" style="background:#e11d48">S</div>
+      </div>
+      <span class="thread-sender">Sarah Chen</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Lunch tomorrow?</span>
+        <span class="thread-snippet">— Hey, are you free for lunch...</span>
+      </div>
+      <span class="thread-date">1d ago</span>
+    </div>
+  </div>
+</div>
+
+<!-- VARIANT B: Dashed Ring -->
+<div class="variant">
+  <div class="variant-label">Variant B</div>
+  <div class="variant-title">Dashed ring = group, solid ring = individual</div>
+  <div class="variant-desc">Groups use a dashed ring in the account color. Individuals keep solid ring. Instantly distinguishes "one thread" from "multiple threads" at a glance. The dash pattern itself communicates "collection." Simple CSS change, no SVG needed.</div>
+  <div class="thread-list">
+    <!-- Group: dashed ring -->
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring-dashed account-blue"></div>
+        <div class="avatar-inner" style="background:#7c3aed">A
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=alza.cz&sz=32" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">Alza.cz <span class="count-badge">#4</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package delivery status...</span>
+      </div>
+      <span class="thread-date">2h ago</span>
+    </div>
+    <!-- Group: dashed ring, different account -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <div class="ring-dashed account-green"></div>
+        <div class="avatar-inner" style="background:#0891b2">L
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=linear.app&sz=32" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">Linear <span class="count-badge">#7</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify your email address...</span>
+      </div>
+      <span class="thread-date">5h ago</span>
+    </div>
+    <!-- Individual: solid ring -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <div class="ring-solid"></div>
+        <div class="avatar-inner" style="background:#e11d48">S</div>
+      </div>
+      <span class="thread-sender">Sarah Chen</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Lunch tomorrow?</span>
+        <span class="thread-snippet">— Hey, are you free for lunch...</span>
+      </div>
+      <span class="thread-date">1d ago</span>
+    </div>
+  </div>
+</div>
+
+<!-- VARIANT C: Double Ring -->
+<div class="variant">
+  <div class="variant-label">Variant C</div>
+  <div class="variant-title">Double ring = group (outer full, inner faded)</div>
+  <div class="variant-desc">Groups get a second inner ring (faded version of account color). Like a bullseye — signals "there's more behind this." Subtle, doesn't clash with the account color system. Individual threads stay single ring.</div>
+  <div class="thread-list">
+    <!-- Group: double ring -->
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring-double-outer"></div>
+        <div class="ring-double-inner"></div>
+        <div class="avatar-inner" style="background:#7c3aed">A
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=alza.cz&sz=32" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">Alza.cz <span class="count-badge">#4</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package delivery status...</span>
+      </div>
+      <span class="thread-date">2h ago</span>
+    </div>
+    <!-- Group: double ring, different account color -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <div class="ring-double-outer" style="border-color:#10b981"></div>
+        <div class="ring-double-inner" style="border-color:rgba(16,185,129,0.4)"></div>
+        <div class="avatar-inner" style="background:#0891b2">L
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=linear.app&sz=32" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">Linear <span class="count-badge">#7</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify your email address...</span>
+      </div>
+      <span class="thread-date">5h ago</span>
+    </div>
+    <!-- Individual: single ring -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <div class="ring-solid"></div>
+        <div class="avatar-inner" style="background:#e11d48">S</div>
+      </div>
+      <span class="thread-sender">Sarah Chen</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Lunch tomorrow?</span>
+        <span class="thread-snippet">— Hey, are you free for lunch...</span>
+      </div>
+      <span class="thread-date">1d ago</span>
+    </div>
+  </div>
+</div>
+
+<!-- VARIANT D: Ring with count notch -->
+<div class="variant">
+  <div class="variant-label">Variant D</div>
+  <div class="variant-title">Account ring + count bubble at 2 o'clock</div>
+  <div class="variant-desc">Keep the solid account ring as-is. Add a tiny count bubble (like a notification badge) sitting ON the ring at 2 o'clock position. The ring stays the same visual language, the badge adds "group" semantics without changing the ring itself.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring-count-wrap">
+          <svg viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="ring-count-number">4</div>
+        <div class="avatar-inner" style="background:#7c3aed">A
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=alza.cz&sz=32" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">Alza.cz</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package delivery status...</span>
+      </div>
+      <span class="thread-date">2h ago</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring-count-wrap">
+          <svg viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="18" fill="none" stroke="#10b981" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="ring-count-number" style="border-color:#10b981; color:#10b981;">7</div>
+        <div class="avatar-inner" style="background:#0891b2">L
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=linear.app&sz=32" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">Linear</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify your email address...</span>
+      </div>
+      <span class="thread-date">5h ago</span>
+    </div>
+    <!-- Individual: ring, no count bubble -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <div class="ring-count-wrap">
+          <svg viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="avatar-inner" style="background:#e11d48">S</div>
+      </div>
+      <span class="thread-sender">Sarah Chen</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Lunch tomorrow?</span>
+        <span class="thread-snippet">— Hey, are you free for lunch...</span>
+      </div>
+      <span class="thread-date">1d ago</span>
+    </div>
+  </div>
+</div>
+
+<!-- Decision -->
+<div class="variant" style="background:#f9fafb; border: 2px dashed #d1d5db;">
+  <div class="variant-label" style="color:#666">Decision notes</div>
+  <div class="variant-desc" style="margin-bottom:0; line-height: 2;">
+    <strong>A — Segmented arc:</strong> Most info-dense. Shows account color + unread ratio in one ring. But adds visual complexity — could feel "app-y" or fitness-tracker-ish.<br>
+    <strong>B — Dashed ring:</strong> Simplest implementation (CSS only). Dashed = group is intuitive (like a "collection" boundary). Clean, minimal. But dashes at small size may look noisy.<br>
+    <strong>C — Double ring:</strong> Subtle "bullseye" effect. Gentle signal, doesn't change the primary ring. But may be too subtle — easy to miss at a glance.<br>
+    <strong>D — Ring + count bubble:</strong> Keeps the solid ring untouched, adds iOS-style count badge sitting on it. Most familiar pattern (notifications). Clear, immediate, no ambiguity.<br><br>
+    <strong>Recommendation:</strong> <strong>D</strong> — it's the only one that doesn't modify the ring itself (which already has account-color semantics). The count bubble is additive, not conflicting. Everyone already knows what a notification badge means.
+  </div>
+</div>
+
+</body>
+</html>

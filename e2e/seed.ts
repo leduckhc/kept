@@ -89,6 +89,13 @@ const SCHEMA = `
     FOREIGN KEY (thread_id) REFERENCES threads(id)
   );
 
+  CREATE TABLE IF NOT EXISTS grouped_senders (
+    email TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    group_type TEXT NOT NULL DEFAULT 'sender',
+    created_at INTEGER DEFAULT (unixepoch())
+  );
+
   CREATE INDEX IF NOT EXISTS idx_threads_received ON threads(received_at DESC);
   CREATE INDEX IF NOT EXISTS idx_threads_sender ON threads(sender_email);
   CREATE INDEX IF NOT EXISTS idx_attachments_thread ON attachments(thread_id);

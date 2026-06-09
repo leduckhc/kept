@@ -81,6 +81,24 @@ VALUES
   ('spam@marketing-blast.com', 'test-user-1', 1747000000),
   ('noreply@annoying-notifications.io', 'test-user-1', 1747100000);
 
+-- Grouped senders (for sender-group rows with count bubble)
+INSERT OR REPLACE INTO grouped_senders (email, account_id, group_type)
+VALUES ('sarah.chen@gmail.com', 'test-user-1', 'sender');
+
+-- Extra threads from Sarah Chen (same sender → creates a sender group with t02)
+-- category=personal so they don't get absorbed by CategoryRow
+INSERT OR REPLACE INTO threads (id, account_id, subject, snippet, sender_name, sender_email, received_at, is_unread, is_archived, has_attachment, gmail_thread_id, is_starred, message_count, label, category, is_muted)
+VALUES
+  ('t30', 'test-user-1', 'Re: Recipe for that pasta', 'Here is the recipe I promised! Super easy to make...', 'Sarah Chen', 'sarah.chen@gmail.com', 1748698000000, 1, 0, 0, 'gmail-t30', 0, 1, 'INBOX', 'personal', 0),
+  ('t31', 'test-user-1', 'Photos from Saturday', 'Attached the best ones from the hike!', 'Sarah Chen', 'sarah.chen@gmail.com', 1748696000000, 0, 0, 1, 'gmail-t31', 0, 1, 'INBOX', 'personal', 0),
+  ('t32', 'test-user-1', 'Book recommendation', 'You should read Project Hail Mary, you will love it...', 'Sarah Chen', 'sarah.chen@gmail.com', 1748694000000, 0, 0, 0, 'gmail-t32', 0, 1, 'INBOX', 'personal', 0);
+
+INSERT OR REPLACE INTO messages (id, thread_id, account_id, gmail_message_id, from_name, from_email, to_addresses, subject, body_text, received_at)
+VALUES
+  ('m30', 't30', 'test-user-1', 'gmail-m30', 'Sarah Chen', 'sarah.chen@gmail.com', 'testuser@gmail.com', 'Re: Recipe for that pasta', 'Here is the recipe I promised! Super easy to make...', 1748698000000),
+  ('m31', 't31', 'test-user-1', 'gmail-m31', 'Sarah Chen', 'sarah.chen@gmail.com', 'testuser@gmail.com', 'Photos from Saturday', 'Attached the best ones from the hike!', 1748696000000),
+  ('m32', 't32', 'test-user-1', 'gmail-m32', 'Sarah Chen', 'sarah.chen@gmail.com', 'testuser@gmail.com', 'Book recommendation', 'You should read Project Hail Mary, you will love it...', 1748694000000);
+
 -- Settings (mark as synced before so the app doesn't try a fresh full sync)
 INSERT OR REPLACE INTO settings (key, account_id, value)
 VALUES ('historyId', 'test-user-1', '999999');

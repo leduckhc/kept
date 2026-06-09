@@ -1048,6 +1048,28 @@ body {
 .stacked-avatar:nth-child(2) { opacity: 0.7; }
 .stacked-avatar:nth-child(3) { opacity: 0.4; }
 
+/* Count bubble on group rows — 2 o'clock position on ring */
+.count-bubble {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1.5px solid #7c3aed;
+  color: #7c3aed;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
 /* Middle column — subject + snippet inline */
 .thread-mid {
   min-width: 0;

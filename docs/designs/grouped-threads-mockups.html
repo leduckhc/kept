@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Grouped Thread Rows — Design Variants</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; padding: 40px; color: #1a1a1a; }
+h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.subtitle { color: #666; font-size: 14px; margin-bottom: 40px; }
+.variant { background: #fff; border-radius: 12px; padding: 32px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.variant-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #7c3aed; margin-bottom: 16px; }
+.variant-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.variant-desc { font-size: 13px; color: #666; margin-bottom: 20px; }
+.thread-list { border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; }
+.thread-row { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f0f0f0; gap: 12px; cursor: pointer; }
+.thread-row:last-child { border-bottom: none; }
+.thread-row:hover { background: #fafafa; }
+.thread-row.unread { background: #fefcff; }
+.unread-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.unread-dot.filled { background: #7c3aed; }
+.thread-sender { font-weight: 500; font-size: 14px; white-space: nowrap; min-width: 140px; }
+.thread-mid { flex: 1; min-width: 0; display: flex; gap: 8px; }
+.thread-subject { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-snippet { font-size: 13px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-date { font-size: 12px; color: #888; white-space: nowrap; }
+.count-badge { font-size: 11px; color: #666; background: #f0f0f0; border-radius: 10px; padding: 2px 7px; margin-left: 6px; }
+
+/* ═══ VARIANT A: Count Badge Avatar ═══ */
+.avatar-count-wrap { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
+.avatar-a { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #fff; position: relative; }
+.avatar-a img.favicon { position: absolute; bottom: -2px; right: -2px; width: 16px; height: 16px; border-radius: 4px; border: 2px solid #fff; }
+.avatar-count-badge { position: absolute; top: -4px; right: -6px; background: #7c3aed; color: #fff; font-size: 10px; font-weight: 700; border-radius: 10px; padding: 1px 5px; min-width: 18px; text-align: center; border: 2px solid #fff; }
+
+/* ═══ VARIANT B: Favicon Strip ═══ */
+.favicon-strip-wrap { display: flex; align-items: center; gap: 0; flex-shrink: 0; width: 44px; }
+.avatar-b { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #fff; flex-shrink: 0; }
+.favicon-strip { display: flex; flex-direction: column; gap: 2px; margin-left: -4px; }
+.favicon-strip img { width: 14px; height: 14px; border-radius: 3px; }
+.favicon-strip .more { font-size: 9px; color: #888; }
+
+/* ═══ VARIANT C: Single Icon + Metadata Line ═══ */
+.avatar-c { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.avatar-c svg { width: 20px; height: 20px; }
+.sender-meta { display: flex; flex-direction: column; min-width: 140px; }
+.sender-meta .sender-name { font-weight: 500; font-size: 14px; }
+.sender-meta .sender-sub { font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px; }
+.sender-meta .sender-sub img { width: 12px; height: 12px; border-radius: 2px; }
+
+/* ═══ CURRENT (for comparison) ═══ */
+.stacked-wrap { position: relative; width: 40px; height: 36px; flex-shrink: 0; }
+.stacked-main { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #fff; position: absolute; top: 2px; left: 0; z-index: 2; }
+.stacked-behind { width: 32px; height: 32px; border-radius: 50%; position: absolute; top: 0; left: 6px; z-index: 1; opacity: 0.4; }
+</style>
+</head>
+<body>
+
+<h1>Grouped Thread Rows — Design Exploration</h1>
+<p class="subtitle">Reworking how sender/domain groups appear in Inbox. Current stacked avatars look bad when identical.</p>
+
+<!-- CURRENT -->
+<div class="variant">
+  <div class="variant-label">Current (broken)</div>
+  <div class="variant-title">Stacked identical avatars</div>
+  <div class="variant-desc">When the same sender has multiple emails, you get two identical purple circles stacked — looks like a rendering bug.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="stacked-wrap">
+        <div class="stacked-main" style="background:#7c3aed">A</div>
+        <div class="stacked-behind" style="background:#7c3aed"></div>
+      </div>
+      <span class="thread-sender">Alza.cz <span class="count-badge">#4</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package delivery status...</span>
+      </div>
+      <span class="thread-date">2h ago</span>
+    </div>
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="stacked-wrap">
+        <div class="stacked-main" style="background:#0891b2">L</div>
+        <div class="stacked-behind" style="background:#0891b2"></div>
+      </div>
+      <span class="thread-sender">Linear <span class="count-badge">#7</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify your email address...</span>
+      </div>
+      <span class="thread-date">5h ago</span>
+    </div>
+  </div>
+</div>
+
+<!-- VARIANT A: Count Badge -->
+<div class="variant">
+  <div class="variant-label">Variant A</div>
+  <div class="variant-title">Single avatar + count badge</div>
+  <div class="variant-desc">One avatar (with favicon overlay), count badge top-right like iOS notification badges. Clean, familiar, no redundancy. The badge signals "grouped" without duplicating the visual.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-count-wrap">
+        <div class="avatar-a" style="background:#7c3aed">A
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=alza.cz&sz=32" alt="">
+        </div>
+        <div class="avatar-count-badge">4</div>
+      </div>
+      <span class="thread-sender">Alza.cz</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package delivery status...</span>
+      </div>
+      <span class="thread-date">2h ago</span>
+    </div>
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-count-wrap">
+        <div class="avatar-a" style="background:#0891b2">L
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=linear.app&sz=32" alt="">
+        </div>
+        <div class="avatar-count-badge">7</div>
+      </div>
+      <span class="thread-sender">Linear</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify your email address...</span>
+      </div>
+      <span class="thread-date">5h ago</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-count-wrap">
+        <div class="avatar-a" style="background:#e11d48">R
+          <img class="favicon" src="https://www.google.com/s2/favicons?domain=revolut.com&sz=32" alt="">
+        </div>
+        <div class="avatar-count-badge">2</div>
+      </div>
+      <span class="thread-sender">Revolut</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your December statement is ready</span>
+        <span class="thread-snippet">— View your credit card statement...</span>
+      </div>
+      <span class="thread-date">1d ago</span>
+    </div>
+  </div>
+</div>
+
+<!-- VARIANT B: Favicon Strip -->
+<div class="variant">
+  <div class="variant-label">Variant B</div>
+  <div class="variant-title">Avatar + vertical favicon strip (domain groups)</div>
+  <div class="variant-desc">For domain groups with multiple senders: main avatar shows the domain initial, a small vertical strip of favicons shows distinct senders within. Better for "3 from alza.cz (orders, newsletter, support)".</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="favicon-strip-wrap">
+        <div class="avatar-b" style="background:#7c3aed">A</div>
+        <div class="favicon-strip">
+          <img src="https://www.google.com/s2/favicons?domain=alza.cz&sz=16" alt="">
+          <img src="https://www.google.com/s2/favicons?domain=alza.cz&sz=16" alt="">
+          <span class="more">+2</span>
+        </div>
+      </div>
+      <span class="thread-sender">alza.cz <span class="count-badge">4 emails, 2 senders</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package delivery status...</span>
+      </div>
+      <span class="thread-date">2h ago</span>
+    </div>
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="favicon-strip-wrap">
+        <div class="avatar-b" style="background:#0891b2">L</div>
+        <div class="favicon-strip">
+          <img src="https://www.google.com/s2/favicons?domain=linear.app&sz=16" alt="">
+        </div>
+      </div>
+      <span class="thread-sender">linear.app <span class="count-badge">7 emails</span></span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify your email address...</span>
+      </div>
+      <span class="thread-date">5h ago</span>
+    </div>
+  </div>
+</div>
+
+<!-- VARIANT C: Icon + Metadata -->
+<div class="variant">
+  <div class="variant-label">Variant C</div>
+  <div class="variant-title">Rounded-square icon + metadata sub-line</div>
+  <div class="variant-desc">Ditch the circle avatar entirely for groups. Use a rounded-square with the domain's favicon as the icon. Sub-line shows "4 emails · 2 unread" — treats the group as a folder/bucket, not a person. Spark/Superhuman-inspired.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-c" style="background:#f3f0ff">
+        <img src="https://www.google.com/s2/favicons?domain=alza.cz&sz=32" alt="" style="width:20px;height:20px">
+      </div>
+      <div class="sender-meta">
+        <span class="sender-name">Alza.cz</span>
+        <span class="sender-sub">4 emails · 2 unread</span>
+      </div>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package delivery status...</span>
+      </div>
+      <span class="thread-date">2h ago</span>
+    </div>
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-c" style="background:#f0fafb">
+        <img src="https://www.google.com/s2/favicons?domain=linear.app&sz=32" alt="" style="width:20px;height:20px">
+      </div>
+      <div class="sender-meta">
+        <span class="sender-name">Linear</span>
+        <span class="sender-sub">7 emails · all read</span>
+      </div>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify your email address...</span>
+      </div>
+      <span class="thread-date">5h ago</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-c" style="background:#fef2f2">
+        <img src="https://www.google.com/s2/favicons?domain=revolut.com&sz=32" alt="" style="width:20px;height:20px">
+      </div>
+      <div class="sender-meta">
+        <span class="sender-name">Revolut</span>
+        <span class="sender-sub"><img src="https://www.google.com/s2/favicons?domain=revolut.com&sz=16" alt=""> 2 emails · 1 unread</span>
+      </div>
+      <div class="thread-mid">
+        <span class="thread-subject">Your December statement is ready</span>
+        <span class="thread-snippet">— View your credit card statement...</span>
+      </div>
+      <span class="thread-date">1d ago</span>
+    </div>
+  </div>
+</div>
+
+<div class="variant" style="background:#f9fafb; border: 2px dashed #d1d5db;">
+  <div class="variant-label" style="color:#666">Decision notes</div>
+  <div class="variant-desc" style="margin-bottom:0; line-height: 1.8;">
+    <strong>A — Count badge:</strong> Simplest change. Removes the stacked-behind div, adds iOS-style badge. Works for both sender groups and domain groups identically.<br>
+    <strong>B — Favicon strip:</strong> Best for domain groups where multiple distinct senders exist. More complex, may be overkill for single-sender groups.<br>
+    <strong>C — Rounded square + metadata:</strong> Biggest departure. Signals "this is a group/bucket, not a person." Cleanest at scale but different visual language from individual thread rows.<br><br>
+    <strong>Recommendation:</strong> A for sender-groups (same person, multiple threads), C for domain-groups (bucket of senders). Hybrid approach keeps individual threads round, groups square — instant visual differentiation.
+  </div>
+</div>
+
+</body>
+</html>

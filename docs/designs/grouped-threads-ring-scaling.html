@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Variant D — Count Scaling</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; padding: 40px; color: #1a1a1a; }
+h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.subtitle { color: #666; font-size: 14px; margin-bottom: 40px; line-height: 1.6; }
+.variant { background: #fff; border-radius: 12px; padding: 32px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.variant-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #7c3aed; margin-bottom: 16px; }
+.variant-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.variant-desc { font-size: 13px; color: #666; margin-bottom: 20px; line-height: 1.6; }
+.thread-list { border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; }
+.thread-row { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f0f0f0; gap: 12px; cursor: pointer; }
+.thread-row:last-child { border-bottom: none; }
+.thread-row:hover { background: #fafafa; }
+.thread-row.unread { background: #fefcff; }
+.unread-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.unread-dot.filled { background: #7c3aed; }
+.thread-sender { font-weight: 500; font-size: 14px; white-space: nowrap; min-width: 120px; }
+.thread-mid { flex: 1; min-width: 0; display: flex; gap: 8px; }
+.thread-subject { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-snippet { font-size: 13px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-date { font-size: 12px; color: #888; white-space: nowrap; }
+
+/* ═══ AVATAR + RING ═══ */
+.avatar-wrap { position: relative; width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.avatar-inner { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #fff; position: relative; }
+.avatar-inner img.favicon { position: absolute; bottom: -2px; right: -2px; width: 14px; height: 14px; border-radius: 3px; border: 2px solid #fff; }
+.ring svg { position: absolute; inset: 0; width: 40px; height: 40px; }
+
+/* ═══ COUNT BUBBLE — NUMERIC ═══ */
+.count-bubble { position: absolute; top: -3px; right: -3px; background: #fff; border: 1.5px solid #3b82f6; color: #3b82f6; font-size: 9px; font-weight: 700; border-radius: 8px; min-width: 16px; height: 16px; padding: 0 3px; display: flex; align-items: center; justify-content: center; }
+.count-bubble.green { border-color: #10b981; color: #10b981; }
+.count-bubble.purple { border-color: #7c3aed; color: #7c3aed; }
+
+/* ═══ ALT 1: CAP AT 9+ ═══ */
+.count-bubble.capped { min-width: 16px; }
+
+/* ═══ ALT 2: THICKER RING (no bubble) ═══ */
+.ring-thick svg circle.group-ring { stroke-width: 3.5; }
+.ring-thick svg circle.normal-ring { stroke-width: 2; }
+
+/* ═══ ALT 3: FILLED DOT (no number) ═══ */
+.group-dot { position: absolute; top: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%; background: #3b82f6; border: 2px solid #fff; }
+.group-dot.green { background: #10b981; }
+
+/* ═══ ALT 4: ARC GAP ═══ */
+
+.note { font-size: 12px; color: #999; padding: 8px 16px; background: #fafafa; border-top: 1px solid #f0f0f0; }
+</style>
+</head>
+<body>
+
+<h1>Variant D — Scaling to 2-3 Digit Counts</h1>
+<p class="subtitle">Problem: the count bubble grows awkwardly with 2+ digits. Four sub-options for handling high counts.</p>
+
+<!-- RAW D: showing the scaling problem -->
+<div class="variant">
+  <div class="variant-label">Problem</div>
+  <div class="variant-title">Raw count bubble at different sizes</div>
+  <div class="variant-desc">1-digit is perfect. 2-digit starts to feel large. 3-digit is a pill that overshadows the avatar.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="count-bubble">4</div>
+        <div class="avatar-inner" style="background:#7c3aed">A</div>
+      </div>
+      <span class="thread-sender">Alza.cz</span>
+      <div class="thread-mid">
+        <span class="thread-subject">1 digit — looks great</span>
+      </div>
+      <span class="thread-date">2h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="count-bubble">24</div>
+        <div class="avatar-inner" style="background:#0891b2">L</div>
+      </div>
+      <span class="thread-sender">Linear</span>
+      <div class="thread-mid">
+        <span class="thread-subject">2 digits — getting wide</span>
+      </div>
+      <span class="thread-date">5h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="count-bubble">142</div>
+        <div class="avatar-inner" style="background:#e11d48">G</div>
+      </div>
+      <span class="thread-sender">GitHub</span>
+      <div class="thread-mid">
+        <span class="thread-subject">3 digits — overshadows the avatar</span>
+      </div>
+      <span class="thread-date">1d</span>
+    </div>
+  </div>
+</div>
+
+<!-- ALT 1: Cap at 9+ -->
+<div class="variant">
+  <div class="variant-label">Option 1</div>
+  <div class="variant-title">Cap at 9+ (like iOS badges)</div>
+  <div class="variant-desc">Show exact count for 1-9. Anything 10+ becomes "9+". Badge stays fixed-width always. This is what iOS does for app icon badges when they get large. Actual count shown in the text label beside sender name.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="count-bubble">4</div>
+        <div class="avatar-inner" style="background:#7c3aed">A</div>
+      </div>
+      <span class="thread-sender">Alza.cz</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package...</span>
+      </div>
+      <span class="thread-date">2h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="count-bubble" style="font-size:8px">9+</div>
+        <div class="avatar-inner" style="background:#0891b2">L</div>
+      </div>
+      <span class="thread-sender">Linear</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify...</span>
+      </div>
+      <span class="thread-date">5h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="count-bubble" style="font-size:8px">9+</div>
+        <div class="avatar-inner" style="background:#e11d48">G</div>
+      </div>
+      <span class="thread-sender">GitHub</span>
+      <div class="thread-mid">
+        <span class="thread-subject">New issue: fix build pipeline</span>
+        <span class="thread-snippet">— CI is failing on...</span>
+      </div>
+      <span class="thread-date">1d</span>
+    </div>
+  </div>
+  <div class="note">✅ Badge never grows. ❌ Loses precision above 9.</div>
+</div>
+
+<!-- ALT 2: Thicker ring = more threads -->
+<div class="variant">
+  <div class="variant-label">Option 2</div>
+  <div class="variant-title">Ring thickness = thread count (no number at all)</div>
+  <div class="variant-desc">Instead of a count bubble, the ring itself gets thicker as count grows. 1 thread = 2px (normal). 2-5 = 3px. 6+ = 4px. No numbers — the thickness is a "weight" signal. Count shown in text only.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap ring-thick">
+        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2.5"/></svg>
+        <div class="avatar-inner" style="background:#7c3aed">A</div>
+      </div>
+      <span class="thread-sender">Alza.cz · 4</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package...</span>
+      </div>
+      <span class="thread-date">2h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap ring-thick">
+        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="3.5"/></svg>
+        <div class="avatar-inner" style="background:#0891b2">L</div>
+      </div>
+      <span class="thread-sender">Linear · 24</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify...</span>
+      </div>
+      <span class="thread-date">5h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap ring-thick">
+        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="4.5"/></svg>
+        <div class="avatar-inner" style="background:#e11d48">G</div>
+      </div>
+      <span class="thread-sender">GitHub · 142</span>
+      <div class="thread-mid">
+        <span class="thread-subject">New issue: fix build pipeline</span>
+        <span class="thread-snippet">— CI is failing on...</span>
+      </div>
+      <span class="thread-date">1d</span>
+    </div>
+    <!-- Individual for comparison -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <svg viewBox="0 0 40 40" style="position:absolute;inset:0;width:40px;height:40px"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg>
+        <div class="avatar-inner" style="background:#f59e0b">S</div>
+      </div>
+      <span class="thread-sender">Sarah Chen</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Lunch tomorrow?</span>
+        <span class="thread-snippet">— Hey, are you free...</span>
+      </div>
+      <span class="thread-date">1d</span>
+    </div>
+  </div>
+  <div class="note">✅ Never overflows, scales infinitely. ❌ Subtle — might not read as "count." More of a "weight/importance" signal.</div>
+</div>
+
+<!-- ALT 3: Filled dot (boolean) + count in text -->
+<div class="variant">
+  <div class="variant-label">Option 3</div>
+  <div class="variant-title">Simple filled dot (boolean "is group") + count in sender label</div>
+  <div class="variant-desc">Scrap the number from the badge entirely. Just a small filled circle in account color at 2 o'clock = "this is a group." The count goes after the sender name as "· 4". Minimal, clean, never scales awkwardly.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="group-dot"></div>
+        <div class="avatar-inner" style="background:#7c3aed">A</div>
+      </div>
+      <span class="thread-sender">Alza.cz · 4</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package...</span>
+      </div>
+      <span class="thread-date">2h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="group-dot"></div>
+        <div class="avatar-inner" style="background:#0891b2">L</div>
+      </div>
+      <span class="thread-sender">Linear · 24</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify...</span>
+      </div>
+      <span class="thread-date">5h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#10b981" stroke-width="2"/></svg></div>
+        <div class="group-dot green"></div>
+        <div class="avatar-inner" style="background:#e11d48">G</div>
+      </div>
+      <span class="thread-sender">GitHub · 142</span>
+      <div class="thread-mid">
+        <span class="thread-subject">New issue: fix build pipeline</span>
+        <span class="thread-snippet">— CI is failing on...</span>
+      </div>
+      <span class="thread-date">1d</span>
+    </div>
+    <!-- Individual -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <div class="ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/></svg></div>
+        <div class="avatar-inner" style="background:#f59e0b">S</div>
+      </div>
+      <span class="thread-sender">Sarah Chen</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Lunch tomorrow?</span>
+        <span class="thread-snippet">— Hey, are you free...</span>
+      </div>
+      <span class="thread-date">1d</span>
+    </div>
+  </div>
+  <div class="note">✅ Never scales. Cleanest. ❌ Dot alone doesn't communicate "how many" — just "grouped."</div>
+</div>
+
+<!-- ALT 4: Arc gap with count -->
+<div class="variant">
+  <div class="variant-label">Option 4 (my pick)</div>
+  <div class="variant-title">Ring with gap + count sitting in the gap</div>
+  <div class="variant-desc">The account ring has a small gap at 2 o'clock. The count number sits inside the gap, as if "breaking through" the ring. For high counts: cap at 99+. The number is part of the ring, not floating above it. Elegant, contained, never overflows.</div>
+  <div class="thread-list">
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <svg viewBox="0 0 40 40" style="position:absolute;inset:0;width:40px;height:40px">
+          <!-- Ring with gap: dasharray = circumference - gap. 2πr = 113.1, gap ~15 -->
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="98 15" stroke-dashoffset="-5" stroke-linecap="round"/>
+        </svg>
+        <span style="position:absolute;top:1px;right:2px;font-size:9px;font-weight:700;color:#3b82f6">4</span>
+        <div class="avatar-inner" style="background:#7c3aed">A</div>
+      </div>
+      <span class="thread-sender">Alza.cz</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Your order has shipped</span>
+        <span class="thread-snippet">— Track your package...</span>
+      </div>
+      <span class="thread-date">2h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <svg viewBox="0 0 40 40" style="position:absolute;inset:0;width:40px;height:40px">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="95 18" stroke-dashoffset="-5" stroke-linecap="round"/>
+        </svg>
+        <span style="position:absolute;top:1px;right:0px;font-size:9px;font-weight:700;color:#3b82f6">24</span>
+        <div class="avatar-inner" style="background:#0891b2">L</div>
+      </div>
+      <span class="thread-sender">Linear</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Action required: Verify your email</span>
+        <span class="thread-snippet">— Please verify...</span>
+      </div>
+      <span class="thread-date">5h</span>
+    </div>
+    <div class="thread-row unread">
+      <span class="unread-dot filled"></span>
+      <div class="avatar-wrap">
+        <svg viewBox="0 0 40 40" style="position:absolute;inset:0;width:40px;height:40px">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="93 20" stroke-dashoffset="-5" stroke-linecap="round"/>
+        </svg>
+        <span style="position:absolute;top:0px;right:-2px;font-size:8px;font-weight:700;color:#10b981">99+</span>
+        <div class="avatar-inner" style="background:#e11d48">G</div>
+      </div>
+      <span class="thread-sender">GitHub</span>
+      <div class="thread-mid">
+        <span class="thread-subject">New issue: fix build pipeline</span>
+        <span class="thread-snippet">— CI is failing on...</span>
+      </div>
+      <span class="thread-date">1d</span>
+    </div>
+    <!-- Individual: full ring, no gap -->
+    <div class="thread-row">
+      <span class="unread-dot"></span>
+      <div class="avatar-wrap">
+        <svg viewBox="0 0 40 40" style="position:absolute;inset:0;width:40px;height:40px">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#3b82f6" stroke-width="2"/>
+        </svg>
+        <div class="avatar-inner" style="background:#f59e0b">S</div>
+      </div>
+      <span class="thread-sender">Sarah Chen</span>
+      <div class="thread-mid">
+        <span class="thread-subject">Lunch tomorrow?</span>
+        <span class="thread-snippet">— Hey, are you free...</span>
+      </div>
+      <span class="thread-date">1d</span>
+    </div>
+  </div>
+  <div class="note">✅ Count is part of the ring composition, not floating. Caps at 99+. ❌ Slightly more complex SVG. Gap means ring isn't "complete" — could feel broken to some.</div>
+</div>
+
+<!-- Decision -->
+<div class="variant" style="background:#f9fafb; border: 2px dashed #d1d5db;">
+  <div class="variant-label" style="color:#666">Summary</div>
+  <div class="variant-desc" style="margin-bottom:0; line-height: 2;">
+    <strong>Option 1 (9+ cap):</strong> Simplest. Fixed badge size. Loses precision above 9.<br>
+    <strong>Option 2 (thick ring):</strong> No numbers at all — weight = importance. Subtle, ambient.<br>
+    <strong>Option 3 (boolean dot):</strong> Cleanest. Dot = "is group", count in text. Never scales.<br>
+    <strong>Option 4 (ring gap):</strong> Count lives inside the ring's gap. Elegant, contained, caps at 99+.<br><br>
+    <strong>My pick: Option 4 (ring gap)</strong> — it treats the count as part of the ring's design language rather than slapping a badge on top. The gap is intentional, the number fills it. Scales to 99+ cleanly. Individual threads = closed ring (no gap) = obvious differentiation.
+  </div>
+</div>
+
+</body>
+</html>
