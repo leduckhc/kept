@@ -13,6 +13,9 @@ import { refreshAll } from './sync';
 
 export function Settings() {
   const [signature, setSignature] = createSignal('');
+  const [backgroundSend, setBackgroundSend] = createSignal(
+    localStorage.getItem('backgroundSendEnabled') === 'true'
+  );
 
   onMount(() => {
     // Load current signature
@@ -35,6 +38,17 @@ export function Settings() {
     const next = !smartNotif();
     setAppState('smartNotifications', next);
     localStorage.setItem('smartNotifications', String(next));
+  };
+
+  const toggleBackgroundSend = async () => {
+    const next = !backgroundSend();
+    setBackgroundSend(next);
+    localStorage.setItem('backgroundSendEnabled', String(next));
+    // Tell Tauri to install/uninstall the LaunchAgent
+    if ('__TAURI_INTERNALS__' in window) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('toggle_background_dispatch', { enabled: next }).catch(() => {});
+    }
   };
 
   const handleAddAccount = async () => {
@@ -139,6 +153,27 @@ export function Settings() {
                 role="switch"
                 aria-checked={smartNotif() ? 'true' : 'false' as 'true' | 'false'}
                 onClick={toggleSmartNotifications}
+              >
+                <span class="settings-toggle-thumb"></span>
+              </button>
+            </div>
+          </div>
+
+          {/* Background Send */}
+          <div class="settings-section">
+            <div class="settings-section-label">Background Send</div>
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-label">Send when closed</div>
+                <div class="settings-row-sub">
+                  {backgroundSend() ? 'Scheduled emails send even when Kept is closed' : 'Emails only send while Kept is open'}
+                </div>
+              </div>
+              <button
+                class={`settings-toggle${backgroundSend() ? ' on' : ''}`}
+                role="switch"
+                aria-checked={backgroundSend() ? 'true' : 'false' as 'true' | 'false'}
+                onClick={toggleBackgroundSend}
               >
                 <span class="settings-toggle-thumb"></span>
               </button>
