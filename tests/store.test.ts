@@ -115,6 +115,23 @@ describe('loadThreads', () => {
     await loadThreads('acc_1', 'SENT');
     expect(mockSelect.mock.calls[0][1]).toContain('SENT');
   });
+
+  it('strips double quotes from sender_name', async () => {
+    const rows = [
+      makeDbRow({ id: 'th_q1', sender_name: '"Alza.cz"' }),
+      makeDbRow({ id: 'th_q2', sender_name: '"Newsletter Team"' }),
+      makeDbRow({ id: 'th_q3', sender_name: 'Normal Name' }),
+      makeDbRow({ id: 'th_q4', sender_name: '"Only Leading' }),
+      makeDbRow({ id: 'th_q5', sender_name: 'Only Trailing"' }),
+    ];
+    mockSelect.mockResolvedValueOnce(rows);
+    const result = await loadThreads('acc_1');
+    expect(result[0].senderName).toBe('Alza.cz');
+    expect(result[1].senderName).toBe('Newsletter Team');
+    expect(result[2].senderName).toBe('Normal Name');
+    expect(result[3].senderName).toBe('Only Leading');
+    expect(result[4].senderName).toBe('Only Trailing');
+  });
 });
 
 describe('loadThreadsUnified', () => {

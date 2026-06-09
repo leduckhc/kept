@@ -204,7 +204,7 @@ export function Compose() {
           type="file"
           multiple
           style="display:none"
-          ref={fileInput}
+          ref={(el) => { fileInput = el; }}
           onChange={(e) => { if (e.currentTarget.files) addFiles(e.currentTarget.files); e.currentTarget.value = ''; }}
         />
 

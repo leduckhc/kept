@@ -49,7 +49,7 @@ export function rowToThread(r: Record<string, unknown>): Thread {
     id: r.id as string,
     subject: (r.subject as string) ?? '(no subject)',
     snippet: (r.snippet as string) ?? '',
-    senderName: (r.sender_name as string) ?? '',
+    senderName: ((r.sender_name as string) ?? '').replace(/^"|"$/g, '').trim(),
     senderEmail: r.sender_email as string,
     receivedAt: r.received_at as number,
     isUnread: (r.is_unread as number) === 1,
