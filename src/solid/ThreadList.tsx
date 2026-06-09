@@ -11,6 +11,7 @@ import {
 import { doArchive, doTrash, doMarkRead } from './actions';
 import { groupBySection } from '../store';
 import { icon } from '../icons';
+import { getBaseDomain } from '../avatar';
 import type { Thread } from '../store';
 import { Newspaper, Megaphone } from 'lucide-static';
 
@@ -110,7 +111,7 @@ function CategoryRow(props: { type: 'newsletters' | 'updates'; threads: Thread[]
         <div class="category-senders">
           <For each={senderBadges()}>
             {(badge) => {
-              const domain = badge.email.split('@')[1] ?? '';
+              const domain = getBaseDomain(badge.email.split('@')[1] ?? '');
               const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
               return (
                 <span

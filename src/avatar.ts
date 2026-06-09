@@ -18,6 +18,20 @@ export function hashStr(s: string): number {
   return Math.abs(h);
 }
 
+/** Extract registrable domain (strip subdomains like mail., letter., news.). */
+const MULTI_PART_TLDS = new Set(['co.uk','co.jp','co.kr','com.au','com.br','co.nz','co.za','org.uk','net.au','ac.uk']);
+export function getBaseDomain(domain: string): string {
+  if (!domain) return '';
+  const parts = domain.toLowerCase().split('.');
+  if (parts.length <= 2) return domain;
+  // Check for multi-part TLD (e.g. co.uk)
+  const lastTwo = parts.slice(-2).join('.');
+  if (MULTI_PART_TLDS.has(lastTwo)) {
+    return parts.slice(-3).join('.');
+  }
+  return parts.slice(-2).join('.');
+}
+
 // SHA-256 for Gravatar URLs (sync, pure JS — not security-sensitive).
 export function sha256Sync(str: string): string {
   const utf8 = new TextEncoder().encode(str);
@@ -80,7 +94,7 @@ export function avatarHtml(t: Thread): string {
   const label = t.senderName || t.senderEmail;
   const initial = label[0].toUpperCase();
   const color = AVATAR_COLORS[hashStr(t.senderEmail) % AVATAR_COLORS.length];
-  const domain = t.senderEmail.split('@')[1] ?? '';
+  const domain = getBaseDomain(t.senderEmail.split('@')[1] ?? '');
   const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
   const googlePhoto = getCachedPhotoUrl(t.senderEmail);
   const gravatar = !googlePhoto && t.senderEmail ? gravatarUrl(t.senderEmail) : '';
@@ -106,7 +120,7 @@ export function stackedAvatarsHtml(threads: Thread[], maxCount = 3): string {
     const label = t.senderName || t.senderEmail;
     const initial = label[0].toUpperCase();
     const color = AVATAR_COLORS[hashStr(t.senderEmail) % AVATAR_COLORS.length];
-    const domain = t.senderEmail.split('@')[1] ?? '';
+    const domain = getBaseDomain(t.senderEmail.split('@')[1] ?? '');
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
     const googlePhoto = getCachedPhotoUrl(t.senderEmail);
     const gravatar = !googlePhoto && t.senderEmail ? gravatarUrl(t.senderEmail) : '';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sha256Sync, gravatarUrl } from '../src/avatar';
+import { sha256Sync, gravatarUrl, getBaseDomain } from '../src/avatar';
 
 describe('sha256Sync', () => {
   it('matches Gravatar docs test vector', () => {
@@ -25,5 +25,28 @@ describe('gravatarUrl', () => {
     const url = gravatarUrl('  Test@Example.COM  ');
     const expected = gravatarUrl('test@example.com');
     expect(url).toBe(expected);
+  });
+});
+
+describe('getBaseDomain', () => {
+  it('returns simple domains unchanged', () => {
+    expect(getBaseDomain('alza.cz')).toBe('alza.cz');
+    expect(getBaseDomain('gmail.com')).toBe('gmail.com');
+  });
+
+  it('strips subdomains', () => {
+    expect(getBaseDomain('letter.alza.cz')).toBe('alza.cz');
+    expect(getBaseDomain('mail.google.com')).toBe('google.com');
+    expect(getBaseDomain('news.bbc.com')).toBe('bbc.com');
+    expect(getBaseDomain('newsletter.shop.example.com')).toBe('example.com');
+  });
+
+  it('handles multi-part TLDs', () => {
+    expect(getBaseDomain('mail.example.co.uk')).toBe('example.co.uk');
+    expect(getBaseDomain('news.site.com.au')).toBe('site.com.au');
+  });
+
+  it('returns empty for empty input', () => {
+    expect(getBaseDomain('')).toBe('');
   });
 });
