@@ -7,6 +7,10 @@
     "core:default",
     "opener:default",
     "shell:allow-open",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [{ "name": "kept-dispatch", "cmd": "", "sidecar": true }]
+    },
     "oauth:allow-start",
     "oauth:allow-cancel",
     "sql:allow-load",

@@ -12,7 +12,25 @@ pub struct UnreadState(pub Mutex<u32>);
 
 /// Toggle background dispatch: install/uninstall the OS scheduler entry.
 #[tauri::command]
-fn toggle_background_dispatch(enabled: bool) -> Result<(), String> {
+fn toggle_background_dispatch(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    // Resolve the bundled sidecar path (codesigned alongside the main app)
+    let dispatch_bin = app
+        .path()
+        .resource_dir()
+        .map_err(|e| e.to_string())?
+        .parent()
+        .ok_or("no parent dir".to_string())?
+        .join("MacOS")
+        .join("kept-dispatch");
+
+    // Fallback for Linux: binary sits next to the main exe
+    #[cfg(target_os = "linux")]
+    let dispatch_bin = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .parent()
+        .ok_or("no parent dir".to_string())?
+        .join("kept-dispatch");
+
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var("HOME").map_err(|e| e.to_string())?;
@@ -20,12 +38,6 @@ fn toggle_background_dispatch(enabled: bool) -> Result<(), String> {
         let plist_path = plist_dir.join("com.kept.dispatch.plist");
 
         if enabled {
-            let dispatch_bin = std::env::current_exe()
-                .map_err(|e| e.to_string())?
-                .parent()
-                .ok_or("no parent dir".to_string())?
-                .join("kept-dispatch");
-
             let plist_content =
                 include_str!("../../crates/kept-dispatch/resources/com.kept.dispatch.plist")
                     .replace("__KEPT_DISPATCH_PATH__", &dispatch_bin.to_string_lossy());
@@ -55,12 +67,6 @@ fn toggle_background_dispatch(enabled: bool) -> Result<(), String> {
         let service_path = timer_dir.join("kept-dispatch.service");
 
         if enabled {
-            let dispatch_bin = std::env::current_exe()
-                .map_err(|e| e.to_string())?
-                .parent()
-                .ok_or("no parent dir".to_string())?
-                .join("kept-dispatch");
-
             std::fs::create_dir_all(&timer_dir).map_err(|e| e.to_string())?;
 
             let service = format!(
@@ -88,6 +94,7 @@ fn toggle_background_dispatch(enabled: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let _ = enabled;
+        let _ = dispatch_bin;
     }
 
     Ok(())
