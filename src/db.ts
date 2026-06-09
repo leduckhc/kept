@@ -289,4 +289,22 @@ async function migrate(db: Database): Promise<void> {
       FOREIGN KEY (account_id) REFERENCES accounts(id)
     )
   `).catch(() => {});
+
+  // KPT-092: Scheduled Jobs (background send, snooze wake, reminders)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS scheduled_jobs (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      job_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      fire_at INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (account_id) REFERENCES accounts(id)
+    )
+  `).catch(() => {});
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_jobs_due ON scheduled_jobs(fire_at) WHERE status = 'pending'`).catch(() => {});
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_jobs_account ON scheduled_jobs(account_id, status)`).catch(() => {});
 }
