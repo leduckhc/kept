@@ -29,7 +29,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-sql": "2.4.0",
-    "dompurify": "^3.4.7",
+    "dompurify": "^3.4.13",
     "lucide-static": "^1.17.0",
     "solid-js": "^1.9.13",
     "tauri-plugin-keyring-api": "^0.1.1"
